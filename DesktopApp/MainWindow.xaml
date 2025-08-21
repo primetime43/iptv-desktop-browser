@@ -70,7 +70,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- Button style -->
+        <!-- Primary button -->
         <Style TargetType="Button" x:Key="PrimaryButton">
             <Setter Property="Background" Value="#3D6EFF"/>
             <Setter Property="Foreground" Value="White"/>
@@ -100,27 +100,65 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Subtle icon button style -->
+        <Style TargetType="Button" x:Key="IconButton">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Foreground" Value="#9DB1C5"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" CornerRadius="6" Background="{TemplateBinding Background}" BorderThickness="0">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#1E2936"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#273644"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Grid Background="{StaticResource BgGradient}">
-        <Grid.Effect>
-            <BlurEffect Radius="0"/>
-        </Grid.Effect>
-
-        <!-- Decorative subtle radial light -->
         <Ellipse Width="650" Height="650" Fill="#182A44" Opacity="0.35" IsHitTestVisible="False">
             <Ellipse.Effect>
                 <BlurEffect Radius="160"/>
             </Ellipse.Effect>
         </Ellipse>
-
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-            <TextBlock Text="Xtream Codes Login" FontSize="28" FontWeight="Bold" Foreground="#F0F6FC" Margin="0 28 0 0" HorizontalAlignment="Center"/>
-            <Border Grid.Row="1" Width="620" Padding="40 46" Background="#131C27" CornerRadius="18" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0 18 0 0">
+            <!-- Header refined -->
+            <Grid Margin="12 10 20 4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Xtream Codes" FontSize="30" FontWeight="Bold" Foreground="#F0F6FC" Margin="0 0 10 0"/>
+                    <Border Background="#243347" CornerRadius="4" Padding="8 4" VerticalAlignment="Center">
+                        <TextBlock Text="Login" FontSize="14" Foreground="#9FB3C7"/>
+                    </Border>
+                </StackPanel>
+                <Button Grid.Column="1" Style="{StaticResource IconButton}" Click="OpenCredentialManager_Click" ToolTip="Manage Credentials">
+                    <TextBlock Text="⚙" FontSize="16"/>
+                </Button>
+            </Grid>
+            <Border Grid.Row="1" Width="620" Padding="40 46" Background="#131C27" CornerRadius="18" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0 8 0 0">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="28" ShadowDepth="0" Color="#141C26" Opacity="0.85"/>
                 </Border.Effect>
@@ -155,7 +193,7 @@
                             <PasswordBox x:Name="PasswordBoxInput" Style="{StaticResource PasswordBoxStyle}"/>
                             <DockPanel Margin="0 0 0 10">
                                 <CheckBox x:Name="RememberCheckBox" Content="Remember me" Foreground="#DDE6F2"/>
-                                <TextBlock DockPanel.Dock="Right" Text="Need help?" Foreground="#5A82FF" Cursor="Hand" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8 0 0 0"/>
+                                <TextBlock DockPanel.Dock="Right" Text="Manage" Foreground="#5A82FF" Cursor="Hand" MouseLeftButtonUp="OpenCredentialManager_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8 0 0 0"/>
                             </DockPanel>
                             <Button x:Name="LoginButton" Style="{StaticResource PrimaryButton}" Content="Sign In" Height="46" Click="LoginButton_Click"/>
                             <TextBlock x:Name="StatusText" Margin="4 14 0 4" Foreground="#6C8298" FontSize="12" TextWrapping="Wrap"/>

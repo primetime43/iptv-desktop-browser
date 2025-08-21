@@ -3,8 +3,20 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace DesktopApp.Models;
+
+public sealed class CredentialProfile
+{
+    public string Server { get; set; } = string.Empty;
+    public int Port { get; set; }
+    public bool UseSsl { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty; // plain only when returned to caller, never persisted
+    public string Display => $"{Username}@{Server}:{Port}{(UseSsl ? "+ssl" : string.Empty)}";
+}
 
 public static class CredentialStore
 {
@@ -18,51 +30,152 @@ public static class CredentialStore
         public DateTime SavedUtc { get; set; }
     }
 
-    private static readonly string FilePath = Path.Combine(AppContext.BaseDirectory, "credentials.json");
-
-    public static void Save(string server, int port, bool useSsl, string username, string password)
+    private sealed class PersistedCollection
     {
-        try
-        {
-            var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(password), null, DataProtectionScope.CurrentUser);
-            var model = new PersistedModel
-            {
-                Server = server,
-                Port = port,
-                UseSsl = useSsl,
-                Username = username,
-                PasswordProtected = Convert.ToBase64String(protectedBytes),
-                SavedUtc = DateTime.UtcNow
-            };
-            var json = JsonSerializer.Serialize(model, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(FilePath, json);
-        }
-        catch { /* swallow - persistence is best effort */ }
+        public List<PersistedModel> Profiles { get; set; } = new();
     }
 
-    public static bool TryLoad(out string server, out int port, out bool useSsl, out string username, out string password)
+    private static readonly string FilePath = Path.Combine(AppContext.BaseDirectory, "credentials.json");
+
+    // Backwards compatibility: legacy single-object file
+    private static bool TryMigrateLegacyFormat(string jsonText, out PersistedCollection migrated)
     {
-        server = username = password = string.Empty; port = 0; useSsl = false;
+        migrated = new PersistedCollection();
         try
         {
-            if (!File.Exists(FilePath)) return false;
+            var legacy = JsonSerializer.Deserialize<PersistedModel>(jsonText);
+            if (legacy?.Server != null && legacy.Username != null && legacy.PasswordProtected != null)
+            {
+                migrated.Profiles.Add(legacy);
+                SaveCollection(migrated); // overwrite file with new format
+                return true;
+            }
+            return false;
+        }
+        catch { return false; }
+    }
+
+    private static PersistedCollection LoadCollection()
+    {
+        try
+        {
+            if (!File.Exists(FilePath)) return new PersistedCollection();
             var json = File.ReadAllText(FilePath);
-            var model = JsonSerializer.Deserialize<PersistedModel>(json);
-            if (model == null || string.IsNullOrEmpty(model.Server) || string.IsNullOrEmpty(model.Username) || string.IsNullOrEmpty(model.PasswordProtected)) return false;
-            var protectedBytes = Convert.FromBase64String(model.PasswordProtected);
+            // Detect array or object format
+            if (json.TrimStart().StartsWith("{"))
+            {
+                try
+                {
+                    var col = JsonSerializer.Deserialize<PersistedCollection>(json);
+                    if (col?.Profiles != null) return col;
+                }
+                catch
+                {
+                    // maybe legacy single object
+                    if (TryMigrateLegacyFormat(json, out var migrated)) return migrated;
+                }
+            }
+            else if (json.TrimStart().StartsWith("["))
+            {
+                var list = JsonSerializer.Deserialize<List<PersistedModel>>(json) ?? new();
+                return new PersistedCollection { Profiles = list };
+            }
+        }
+        catch { }
+        return new PersistedCollection();
+    }
+
+    private static void SaveCollection(PersistedCollection collection)
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(collection, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(FilePath, json);
+        }
+        catch { }
+    }
+
+    public static IReadOnlyList<CredentialProfile> GetAll()
+    {
+        var col = LoadCollection();
+        return col.Profiles
+            .OrderBy(p => p.Server)
+            .ThenBy(p => p.Username)
+            .Select(p => new CredentialProfile { Server = p.Server ?? string.Empty, Port = p.Port, UseSsl = p.UseSsl, Username = p.Username ?? string.Empty })
+            .ToList();
+    }
+
+    public static bool TryGet(string server, string username, out CredentialProfile profile)
+    {
+        profile = new CredentialProfile();
+        var col = LoadCollection();
+        var match = col.Profiles.FirstOrDefault(p => string.Equals(p.Server, server, StringComparison.OrdinalIgnoreCase) && string.Equals(p.Username, username, StringComparison.OrdinalIgnoreCase));
+        if (match == null || match.PasswordProtected == null) return false;
+        try
+        {
+            var protectedBytes = Convert.FromBase64String(match.PasswordProtected);
             var plainBytes = ProtectedData.Unprotect(protectedBytes, null, DataProtectionScope.CurrentUser);
-            password = Encoding.UTF8.GetString(plainBytes);
-            server = model.Server;
-            port = model.Port;
-            useSsl = model.UseSsl;
-            username = model.Username;
+            profile = new CredentialProfile
+            {
+                Server = match.Server ?? string.Empty,
+                Port = match.Port,
+                UseSsl = match.UseSsl,
+                Username = match.Username ?? string.Empty,
+                Password = Encoding.UTF8.GetString(plainBytes)
+            };
             return true;
         }
         catch { return false; }
     }
 
-    public static void Delete()
+    public static void SaveOrUpdate(string server, int port, bool useSsl, string username, string password)
+    {
+        try
+        {
+            var col = LoadCollection();
+            var existing = col.Profiles.FirstOrDefault(p => string.Equals(p.Server, server, StringComparison.OrdinalIgnoreCase) && string.Equals(p.Username, username, StringComparison.OrdinalIgnoreCase));
+            var protectedBytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(password), null, DataProtectionScope.CurrentUser);
+            if (existing == null)
+            {
+                existing = new PersistedModel { Server = server, Username = username };
+                col.Profiles.Add(existing);
+            }
+            existing.Port = port;
+            existing.UseSsl = useSsl;
+            existing.PasswordProtected = Convert.ToBase64String(protectedBytes);
+            existing.SavedUtc = DateTime.UtcNow;
+            SaveCollection(col);
+        }
+        catch { }
+    }
+
+    public static void Delete(string server, string username)
+    {
+        try
+        {
+            var col = LoadCollection();
+            col.Profiles.RemoveAll(p => string.Equals(p.Server, server, StringComparison.OrdinalIgnoreCase) && string.Equals(p.Username, username, StringComparison.OrdinalIgnoreCase));
+            SaveCollection(col);
+        }
+        catch { }
+    }
+
+    public static void DeleteAll()
     {
         try { if (File.Exists(FilePath)) File.Delete(FilePath); } catch { }
+    }
+
+    // Backwards compatible single-profile helpers (still used by MainWindow existing flow)
+    public static void Save(string server, int port, bool useSsl, string username, string password) => SaveOrUpdate(server, port, useSsl, username, password);
+    public static bool TryLoad(out string server, out int port, out bool useSsl, out string username, out string password)
+    {
+        server = username = password = string.Empty; port = 0; useSsl = false;
+        var first = GetAll().FirstOrDefault();
+        if (first == null) return false;
+        if (TryGet(first.Server, first.Username, out var prof))
+        {
+            server = prof.Server; port = prof.Port; useSsl = prof.UseSsl; username = prof.Username; password = prof.Password; return true;
+        }
+        return false;
     }
 }

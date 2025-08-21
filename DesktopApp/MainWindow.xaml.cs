@@ -33,12 +33,29 @@ namespace DesktopApp
             TryLoadStoredCredentials();
         }
 
+        public void ApplyCredentials(CredentialProfile profile)
+        {
+            ServerTextBox.Text = profile.Server;
+            PortTextBox.Text = profile.Port.ToString();
+            SslCheckBox.IsChecked = profile.UseSsl;
+            UsernameTextBox.Text = profile.Username;
+            PasswordBoxInput.Password = profile.Password; // password is filled from TryGet
+            RememberCheckBox.IsChecked = true;
+            SetStatus($"Loaded {profile.Username}@{profile.Server}", BrushInfo);
+        }
+
+        private void OpenCredentialManager_Click(object sender, RoutedEventArgs e)
+        {
+            var mgr = new CredentialManagerWindow { Owner = this };
+            mgr.ShowDialog();
+        }
+
         private void TryLoadStoredCredentials()
         {
             if (CredentialStore.TryLoad(out var server, out var port, out var useSsl, out var user, out var pass))
             {
                 ServerTextBox.Text = server;
-                PortTextBox.Text = port == 0 ? "" : port.ToString();
+                PortTextBox.Text = port == 0 ? string.Empty : port.ToString();
                 SslCheckBox.IsChecked = useSsl;
                 UsernameTextBox.Text = user;
                 PasswordBoxInput.Password = pass;
@@ -238,13 +255,8 @@ namespace DesktopApp
             Session.UserInfo = successUserInfo;
 
             if (RememberCheckBox.IsChecked == true)
-                CredentialStore.Save(serverRaw!, port, ssl, username!, password!);
-            else
-                CredentialStore.Delete();
-
-            // Navigate to dashboard
-            var dash = new DashboardWindow();
-            dash.Owner = this;
+                CredentialStore.SaveOrUpdate(serverRaw!, port, ssl, username!, password!);
+            var dash = new DashboardWindow { Owner = this };
             dash.Show();
             this.Hide();
 
