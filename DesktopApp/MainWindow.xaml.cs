@@ -9,6 +9,7 @@ using System.Net;
 using System.Text;
 using System.Windows.Media;
 using DesktopApp.Models;
+using DesktopApp.Views;
 
 namespace DesktopApp
 {
@@ -76,12 +77,11 @@ namespace DesktopApp
             };
 
             var sw = Stopwatch.StartNew();
-            StringBuilder diag = new();
+            var diag = new StringBuilder();
             diag.AppendLine($"Timestamp: {DateTime.UtcNow:O}");
             diag.AppendLine($"Host: {host}");
             diag.AppendLine($"Scheme: {scheme}  Port: {port}");
-            diag.AppendLine($"Username: {username}");
-            diag.AppendLine();
+            diag.AppendLine($"Username: {username}\n");
 
             bool authed = false;
             string? lastError = null;
@@ -103,7 +103,7 @@ namespace DesktopApp
                     foreach (var h in resp.Content.Headers)
                         diag.AppendLine($"  CH: {h.Key}: {string.Join(",", h.Value)}");
                     var body = await resp.Content.ReadAsStringAsync();
-                    var snippet = body.Length > 4000 ? body.Substring(0, 4000) + "...<truncated>" : body;
+                    var snippet = body.Length > 4000 ? body[..4000] + "...<truncated>" : body;
                     diag.AppendLine("---- BODY START ----");
                     diag.AppendLine(snippet);
                     diag.AppendLine("---- BODY END ----");
@@ -114,7 +114,6 @@ namespace DesktopApp
                         {
                             try
                             {
-                                // Use JsonDocument for robust auth detection (0/1, "1", true)
                                 using var doc = JsonDocument.Parse(body);
                                 if (doc.RootElement.TryGetProperty("user_info", out var ui))
                                 {
@@ -132,7 +131,6 @@ namespace DesktopApp
                                     if (isAuth)
                                     {
                                         authed = true;
-                                        // Map minimal user_info fields into our model for display.
                                         successUserInfo = new UserInfo
                                         {
                                             status = ui.TryGetProperty("status", out var st) && st.ValueKind == JsonValueKind.String ? st.GetString() : null,
@@ -172,7 +170,7 @@ namespace DesktopApp
                     else
                     {
                         lastError = $"HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}";
-                        if ((int)resp.StatusCode >= 300 && (int)resp.StatusCode < 400 && resp.Headers.Location != null)
+                        if ((int)resp.StatusCode is >= 300 and < 400 && resp.Headers.Location != null)
                             lastError += $" -> Location: {resp.Headers.Location}";
                     }
                 }
@@ -205,15 +203,30 @@ namespace DesktopApp
             }
 
             sw.Stop();
+            DiagnosticsText.Text = diag.ToString();
+            DiagnosticsExpander.Visibility = Visibility.Visible;
+            if (!authed) DiagnosticsExpander.IsExpanded = true;
+
             if (!authed)
             {
                 SetStatus((lastError is null ? "Login failed (unknown)." : lastError) + $" ({sw.ElapsedMilliseconds} ms)", BrushError);
+                LoginButton.IsEnabled = true;
+                return;
             }
 
-            DiagnosticsText.Text = diag.ToString();
-            DiagnosticsExpander.Visibility = Visibility.Visible;
-            if (!authed)
-                DiagnosticsExpander.IsExpanded = true;
+            // Persist session state
+            Session.Host = host;
+            Session.Port = port;
+            Session.UseSsl = ssl;
+            Session.Username = username!;
+            Session.Password = password!;
+            Session.UserInfo = successUserInfo;
+
+            // Navigate to dashboard
+            var dash = new DashboardWindow();
+            dash.Owner = this;
+            dash.Show();
+            this.Hide();
 
             LoginButton.IsEnabled = true;
         }
