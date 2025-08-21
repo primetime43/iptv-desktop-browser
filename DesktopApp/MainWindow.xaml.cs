@@ -30,6 +30,21 @@ namespace DesktopApp
         public MainWindow()
         {
             InitializeComponent();
+            TryLoadStoredCredentials();
+        }
+
+        private void TryLoadStoredCredentials()
+        {
+            if (CredentialStore.TryLoad(out var server, out var port, out var useSsl, out var user, out var pass))
+            {
+                ServerTextBox.Text = server;
+                PortTextBox.Text = port == 0 ? "" : port.ToString();
+                SslCheckBox.IsChecked = useSsl;
+                UsernameTextBox.Text = user;
+                PasswordBoxInput.Password = pass;
+                RememberCheckBox.IsChecked = true;
+                SetStatus("Loaded saved credentials.", BrushInfo);
+            }
         }
 
         private async void LoginButton_Click(object sender, RoutedEventArgs e)
@@ -221,6 +236,11 @@ namespace DesktopApp
             Session.Username = username!;
             Session.Password = password!;
             Session.UserInfo = successUserInfo;
+
+            if (RememberCheckBox.IsChecked == true)
+                CredentialStore.Save(serverRaw!, port, ssl, username!, password!);
+            else
+                CredentialStore.Delete();
 
             // Navigate to dashboard
             var dash = new DashboardWindow();
