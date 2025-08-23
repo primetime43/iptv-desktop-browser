@@ -115,6 +115,7 @@
                                                                 </Border>
                                                                 <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 6 0 2"/>
                                                                 <TextBlock Text="{Binding NowTitle}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap"/>
+                                                                <TextBlock Text="{Binding NowTimeRange}" FontSize="10" Foreground="#8BA1B9"/>
                                                             </StackPanel>
                                                         </Border>
                                                     </Button>

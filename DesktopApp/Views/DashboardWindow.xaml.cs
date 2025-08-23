@@ -148,6 +148,17 @@ namespace DesktopApp.Views
                 _channels.Clear();
                 foreach (var c in parsed) _channels.Add(c);
                 _ = Task.Run(() => PreloadLogosAsync(parsed), _cts.Token);
+
+                // Preload current program info for ALL channels (no concurrency limit per user request)
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var tasks = _channels.Select(ch => Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch)).Task).ToList();
+                        await Task.WhenAll(tasks);
+                    }
+                    catch { }
+                }, _cts.Token);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading channels: " + ex.Message + "\n"); }
@@ -218,6 +229,16 @@ namespace DesktopApp.Views
                 var json = await resp.Content.ReadAsStringAsync(_cts.Token);
                 Log("(length=" + json.Length + ")\n\n");
                 if (_cts.IsCancellationRequested) return;
+
+                // Quick non-JSON guard (avoid parsing HTML error pages that start with '<')
+                var trimmed = json.AsSpan().TrimStart();
+                if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
+                {
+                    Log("EPG non-JSON response skipped\n");
+                    ch.EpgLoaded = true;
+                    return;
+                }
+
                 var nowUtc = DateTime.UtcNow;
                 try
                 {
@@ -226,28 +247,21 @@ namespace DesktopApp.Views
                     {
                         foreach (var el in listings.EnumerateArray())
                         {
+                            var start = GetUnix(el, "start_timestamp");
+                            var end = GetUnix(el, "stop_timestamp");
                             bool nowFlag = el.TryGetProperty("now_playing", out var np) && (np.ValueKind == JsonValueKind.Number ? np.GetInt32() == 1 : (np.ValueKind == JsonValueKind.String && np.GetString() == "1"));
-                            DateTime start = DateTime.MinValue, end = DateTime.MinValue;
-                            if (!nowFlag)
-                            {
-                                start = GetUnix(el, "start_timestamp");
-                                end = GetUnix(el, "stop_timestamp");
-                                if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
-                                if (!(nowUtc >= start && nowUtc < end)) continue;
-                            }
+                            bool isCurrent = nowFlag;
+                            if (!isCurrent && start != DateTime.MinValue && end != DateTime.MinValue)
+                                isCurrent = nowUtc >= start && nowUtc < end;
+                            if (!isCurrent) continue;
+                            if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
                             string titleRaw = el.TryGetProperty("title", out var tEl) ? tEl.GetString() ?? string.Empty : string.Empty;
                             string descRaw = el.TryGetProperty("description", out var dEl) ? dEl.GetString() ?? string.Empty : string.Empty;
                             string title = DecodeMaybeBase64(titleRaw);
                             string desc = DecodeMaybeBase64(descRaw);
-                            if (!nowFlag)
-                            {
-                                if (start == DateTime.MinValue) start = nowUtc;
-                                if (end == DateTime.MinValue) end = start.AddMinutes(1);
-                            }
                             ch.NowTitle = title;
                             ch.NowDescription = desc;
-                            if (start == DateTime.MinValue || end == DateTime.MinValue) { start = nowUtc; end = nowUtc.AddMinutes(1); }
-                            ch.NowTimeRange = $"{start.ToLocalTime():HH:mm} - {end.ToLocalTime():HH:mm}"; // simplified
+                            ch.NowTimeRange = $"{start.ToLocalTime():h:mm tt} - {end.ToLocalTime():h:mm tt}";
                             NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
                             break;
                         }
