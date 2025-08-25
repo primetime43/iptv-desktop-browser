@@ -13,6 +13,7 @@ using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using System.IO;
 using System.Threading;
+using System.Diagnostics;
 
 namespace DesktopApp.Views
 {
@@ -368,7 +369,35 @@ namespace DesktopApp.Views
         private void ChannelTile_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is Channel ch)
+            {
                 SelectedChannel = ch;
+                TryLaunchChannelInVlc(ch);
+            }
+        }
+
+        private void TryLaunchChannelInVlc(Channel ch)
+        {
+            try
+            {
+                var url = Session.BuildStreamUrl(ch.Id, "ts");
+                Log($"Launching VLC: {url}\n");
+                string? exe = string.IsNullOrWhiteSpace(Session.VlcPath) ? "vlc" : Session.VlcPath;
+                var psi = new ProcessStartInfo
+                {
+                    FileName = exe!,
+                    Arguments = $"\"{url}\" --meta-title=\"{ch.Name.Replace("\"", "'" )}\"",
+                    UseShellExecute = string.IsNullOrWhiteSpace(Session.VlcPath), // if we have a full path we can still use ShellExecute=false but PATH resolution easier with true
+                    RedirectStandardError = false,
+                    RedirectStandardOutput = false,
+                    CreateNoWindow = false
+                };
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                Log("Failed to launch VLC: " + ex.Message + "\n");
+                try { MessageBox.Show(this, "Unable to start VLC. Ensure it is installed and in PATH.", "VLC Error", MessageBoxButton.OK, MessageBoxImage.Error); } catch { }
+            }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
