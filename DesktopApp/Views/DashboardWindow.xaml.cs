@@ -28,6 +28,8 @@ namespace DesktopApp.Views
         private readonly SemaphoreSlim _logoSemaphore = new(6);
         private readonly ObservableCollection<EpgEntry> _epgEntries = new();
         public ObservableCollection<EpgEntry> EpgEntries => _epgEntries;
+        private readonly ObservableCollection<EpgEntry> _upcomingEntries = new();
+        public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries; // bound in XAML
         private string _selectedCategoryName = string.Empty;
         public string SelectedCategoryName { get => _selectedCategoryName; set { if (value != _selectedCategoryName) { _selectedCategoryName = value; OnPropertyChanged(); } } }
         private string _categoriesCountText = string.Empty;
@@ -44,7 +46,14 @@ namespace DesktopApp.Views
                     OnPropertyChanged();
                     SelectedChannelName = value?.Name ?? string.Empty;
                     if (value != null)
+                    {
                         _ = EnsureEpgLoadedAsync(value);
+                        _ = LoadFullEpgForSelectedChannelAsync(value); // new: load upcoming
+                    }
+                    else
+                    {
+                        _upcomingEntries.Clear();
+                    }
                 }
             }
         }
@@ -276,6 +285,53 @@ namespace DesktopApp.Views
             finally { ch.EpgLoading = false; }
         }
 
+        private async Task LoadFullEpgForSelectedChannelAsync(Channel ch)
+        {
+            if (string.IsNullOrWhiteSpace(ch.EpgChannelId) || _cts.IsCancellationRequested) { _upcomingEntries.Clear(); return; }
+            try
+            {
+                var url = Session.BuildApi("get_simple_data_table") + "&stream_id=" + ch.Id;
+                Log($"GET {url} (full for selected)\n");
+                using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, _cts.Token);
+                var json = await resp.Content.ReadAsStringAsync(_cts.Token);
+                Log("(length=" + json.Length + ")\n\n");
+                var trimmed = json.AsSpan().TrimStart();
+                if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '[')) return;
+                List<EpgEntry> upcoming = new();
+                var nowUtc = DateTime.UtcNow;
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("epg_listings", out var listings) && listings.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in listings.EnumerateArray())
+                        {
+                            var start = GetUnix(el, "start_timestamp");
+                            var end = GetUnix(el, "stop_timestamp");
+                            if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
+                            string titleRaw = el.TryGetProperty("title", out var tEl) ? tEl.GetString() ?? string.Empty : string.Empty;
+                            string descRaw = el.TryGetProperty("description", out var dEl) ? dEl.GetString() ?? string.Empty : string.Empty;
+                            string title = DecodeMaybeBase64(titleRaw);
+                            string desc = DecodeMaybeBase64(descRaw);
+                            bool isNow = nowUtc >= start && nowUtc < end;
+                            if (!isNow && start >= nowUtc)
+                            {
+                                upcoming.Add(new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc });
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex) { Log("PARSE ERROR (full epg selected): " + ex.Message + "\n"); }
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    _upcomingEntries.Clear();
+                    foreach (var e in upcoming.OrderBy(e => e.StartUtc).Take(10)) _upcomingEntries.Add(e);
+                });
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log("ERROR loading full epg: " + ex.Message + "\n"); }
+        }
+
         private static DateTime GetUnix(JsonElement el, string prop)
         {
             if (el.TryGetProperty(prop, out var tsEl))
@@ -368,10 +424,27 @@ namespace DesktopApp.Views
 
         private void ChannelTile_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is Channel ch)
+            // No longer used (single click disabled)
+        }
+
+        private DateTime _lastChannelClickTime;
+        private FrameworkElement? _lastChannelClickedElement;
+        private void ChannelTile_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is not FrameworkElement fe || fe.DataContext is not Channel ch) return;
+            var now = DateTime.UtcNow;
+            const int doubleClickMs = 400;
+            if (_lastChannelClickedElement == fe && (now - _lastChannelClickTime).TotalMilliseconds <= doubleClickMs)
             {
                 SelectedChannel = ch;
                 TryLaunchChannelInVlc(ch);
+                _lastChannelClickedElement = null; // reset
+            }
+            else
+            {
+                SelectedChannel = ch; // single click just selects
+                _lastChannelClickedElement = fe;
+                _lastChannelClickTime = now;
             }
         }
 
@@ -385,8 +458,8 @@ namespace DesktopApp.Views
                 var psi = new ProcessStartInfo
                 {
                     FileName = exe!,
-                    Arguments = $"\"{url}\" --meta-title=\"{ch.Name.Replace("\"", "'" )}\"",
-                    UseShellExecute = string.IsNullOrWhiteSpace(Session.VlcPath), // if we have a full path we can still use ShellExecute=false but PATH resolution easier with true
+                    Arguments = $"\"{url}\" --meta-title=\"{ch.Name.Replace("\"", "'") }\"",
+                    UseShellExecute = string.IsNullOrWhiteSpace(Session.VlcPath),
                     RedirectStandardError = false,
                     RedirectStandardOutput = false,
                     CreateNoWindow = false

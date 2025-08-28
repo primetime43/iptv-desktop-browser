@@ -32,6 +32,23 @@
                         <TextBlock Text="Selected Channel:" Foreground="#8BA1B9"/>
                         <TextBlock Text="{Binding SelectedChannelName}" FontWeight="Bold" Foreground="#F0F6FC" TextWrapping="Wrap"/>
                         <TextBlock Text="{Binding NowProgramText}" Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap"/>
+                        <!-- Channel current program description -->
+                        <TextBlock Text="Description:" Margin="0 8 0 2" Foreground="#8BA1B9"/>
+                        <TextBlock Text="{Binding SelectedChannel.NowDescription}" Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap" />
+                        <!-- Upcoming programs -->
+                        <Separator Margin="0 10 0 8"/>
+                        <TextBlock Text="Upcoming:" FontWeight="Bold" Foreground="#F0F6FC"/>
+                        <ItemsControl ItemsSource="{Binding UpcomingEntries}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0 6 0 6">
+                                        <TextBlock Text="{Binding Title}" Foreground="#DDE6F2" FontSize="12" TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding TimeRangeLocal}" Foreground="#8BA1B9" FontSize="10"/>
+                                        <TextBlock Text="{Binding Description}" Foreground="#647A90" FontSize="10" TextWrapping="Wrap" Visibility="{Binding Description, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -104,7 +121,7 @@
                                             </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate>
-                                                    <Button Padding="0" Margin="6" Cursor="Hand" Click="ChannelTile_Click" MouseEnter="ChannelTile_MouseEnter" ToolTipService.ShowDuration="30000" ToolTip="{Binding TooltipText}">
+                                                    <Button Padding="0" Margin="6" Cursor="Hand" PreviewMouseLeftButtonDown="ChannelTile_PreviewMouseLeftButtonDown" MouseEnter="ChannelTile_MouseEnter" ToolTipService.ShowDuration="30000" ToolTip="{Binding TooltipText}">
                                                         <Border Width="160" Height="130" Background="#182433" CornerRadius="8" Padding="8" BorderBrush="#223247" BorderThickness="1">
                                                             <StackPanel>
                                                                 <Border Height="55" Background="#223247" CornerRadius="4">
