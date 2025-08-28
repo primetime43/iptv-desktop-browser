@@ -47,12 +47,13 @@ namespace DesktopApp.Views
                     SelectedChannelName = value?.Name ?? string.Empty;
                     if (value != null)
                     {
-                        _ = EnsureEpgLoadedAsync(value);
-                        _ = LoadFullEpgForSelectedChannelAsync(value); // new: load upcoming
+                        _ = EnsureEpgLoadedAsync(value, force: true); // force reload when changing selection
+                        _ = LoadFullEpgForSelectedChannelAsync(value); // load upcoming
                     }
                     else
                     {
                         _upcomingEntries.Clear();
+                        NowProgramText = string.Empty;
                     }
                 }
             }
@@ -221,26 +222,42 @@ namespace DesktopApp.Views
             finally { if (_logoSemaphore.CurrentCount < 6) _logoSemaphore.Release(); }
         }
 
-        private async Task EnsureEpgLoadedAsync(Channel ch)
+        private async Task EnsureEpgLoadedAsync(Channel ch, bool force = false)
         {
-            if (ch.EpgLoaded || ch.EpgLoading || _cts.IsCancellationRequested) return;
-            await LoadEpgCurrentOnlyAsync(ch);
+            if (_cts.IsCancellationRequested) return;
+            if (!force && (ch.EpgLoaded || ch.EpgLoading)) return;
+            // If previous attempt produced no title, allow a retry (max 3 attempts)
+            if (!force && ch.EpgAttempts >= 3 && !string.IsNullOrEmpty(ch.NowTitle)) return;
+            await LoadEpgCurrentOnlyAsync(ch, force);
         }
 
-        private async Task LoadEpgCurrentOnlyAsync(Channel ch)
+        private static string TryGetString(JsonElement el, params string[] names)
+        {
+            foreach (var n in names)
+            {
+                if (el.TryGetProperty(n, out var p))
+                {
+                    if (p.ValueKind == JsonValueKind.String) return p.GetString() ?? string.Empty;
+                    if (p.ValueKind == JsonValueKind.Number) return p.ToString();
+                }
+            }
+            return string.Empty;
+        }
+
+        private async Task LoadEpgCurrentOnlyAsync(Channel ch, bool force)
         {
             ch.EpgLoading = true;
+            ch.EpgAttempts++;
             try
             {
-                if (string.IsNullOrWhiteSpace(ch.EpgChannelId) || _cts.IsCancellationRequested) { ch.EpgLoaded = true; ch.EpgLoading = false; return; }
+                if (_cts.IsCancellationRequested) { ch.EpgLoaded = true; ch.EpgLoading = false; return; }
                 var url = Session.BuildApi("get_simple_data_table") + "&stream_id=" + ch.Id;
-                Log($"GET {url} (current only)\n");
+                Log($"GET {url} (current only, attempt {ch.EpgAttempts})\n");
                 using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, _cts.Token);
                 var json = await resp.Content.ReadAsStringAsync(_cts.Token);
                 Log("(length=" + json.Length + ")\n\n");
                 if (_cts.IsCancellationRequested) return;
 
-                // Quick non-JSON guard (avoid parsing HTML error pages that start with '<')
                 var trimmed = json.AsSpan().TrimStart();
                 if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
                 {
@@ -250,6 +267,8 @@ namespace DesktopApp.Views
                 }
 
                 var nowUtc = DateTime.UtcNow;
+                bool found = false;
+                EpgEntry? fallbackFirstFuture = null;
                 try
                 {
                     using var doc = JsonDocument.Parse(json);
@@ -259,35 +278,71 @@ namespace DesktopApp.Views
                         {
                             var start = GetUnix(el, "start_timestamp");
                             var end = GetUnix(el, "stop_timestamp");
-                            bool nowFlag = el.TryGetProperty("now_playing", out var np) && (np.ValueKind == JsonValueKind.Number ? np.GetInt32() == 1 : (np.ValueKind == JsonValueKind.String && np.GetString() == "1"));
-                            bool isCurrent = nowFlag;
-                            if (!isCurrent && start != DateTime.MinValue && end != DateTime.MinValue)
-                                isCurrent = nowUtc >= start && nowUtc < end;
-                            if (!isCurrent) continue;
                             if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
-                            string titleRaw = el.TryGetProperty("title", out var tEl) ? tEl.GetString() ?? string.Empty : string.Empty;
-                            string descRaw = el.TryGetProperty("description", out var dEl) ? dEl.GetString() ?? string.Empty : string.Empty;
+
+                            string titleRaw = TryGetString(el, "title", "name", "programme", "program");
+                            string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
                             string title = DecodeMaybeBase64(titleRaw);
                             string desc = DecodeMaybeBase64(descRaw);
-                            ch.NowTitle = title;
-                            ch.NowDescription = desc;
-                            ch.NowTimeRange = $"{start.ToLocalTime():h:mm tt} - {end.ToLocalTime():h:mm tt}";
-                            NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
-                            break;
+
+                            bool nowFlag = el.TryGetProperty("now_playing", out var np) && (np.ValueKind == JsonValueKind.Number ? np.GetInt32() == 1 : (np.ValueKind == JsonValueKind.String && np.GetString() == "1"));
+                            bool isCurrent = nowFlag || (nowUtc >= start && nowUtc < end);
+                            if (isCurrent && !string.IsNullOrWhiteSpace(title))
+                            {
+                                ApplyNow(ch, title, desc, start, end);
+                                found = true;
+                                break;
+                            }
+
+                            if (!isCurrent && start > nowUtc && fallbackFirstFuture == null && !string.IsNullOrWhiteSpace(title))
+                            {
+                                fallbackFirstFuture = new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc };
+                            }
                         }
                     }
                 }
                 catch (Exception ex) { Log("PARSE ERROR (current epg): " + ex.Message + "\n"); }
-                ch.EpgLoaded = true;
+
+                if (!found && fallbackFirstFuture != null)
+                {
+                    ApplyNow(ch, fallbackFirstFuture.Title, fallbackFirstFuture.Description ?? string.Empty, fallbackFirstFuture.StartUtc, fallbackFirstFuture.EndUtc);
+                    found = true;
+                }
+
+                if (!found)
+                {
+                    ch.EpgLoaded = false; // allow retry later
+                    // schedule retry if attempts below threshold
+                    if (ch.EpgAttempts < 3 && !force)
+                    {
+                        _ = Task.Delay(1500, _cts.Token).ContinueWith(t =>
+                        {
+                            if (!t.IsCanceled) _ = Dispatcher.InvokeAsync(() => EnsureEpgLoadedAsync(ch));
+                        });
+                    }
+                }
+                else
+                {
+                    ch.EpgLoaded = true;
+                }
             }
             catch (OperationCanceledException) { ch.EpgLoaded = true; }
             catch (Exception ex) { Log("ERROR loading epg: " + ex.Message + "\n"); ch.EpgLoaded = true; }
             finally { ch.EpgLoading = false; }
         }
 
+        private void ApplyNow(Channel ch, string title, string desc, DateTime startUtc, DateTime endUtc)
+        {
+            ch.NowTitle = title;
+            ch.NowDescription = desc;
+            ch.NowTimeRange = $"{startUtc.ToLocalTime():h:mm tt} - {endUtc.ToLocalTime():h:mm tt}";
+            if (ReferenceEquals(ch, SelectedChannel))
+                NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
+        }
+
         private async Task LoadFullEpgForSelectedChannelAsync(Channel ch)
         {
-            if (string.IsNullOrWhiteSpace(ch.EpgChannelId) || _cts.IsCancellationRequested) { _upcomingEntries.Clear(); return; }
+            if (_cts.IsCancellationRequested) { _upcomingEntries.Clear(); return; }
             try
             {
                 var url = Session.BuildApi("get_simple_data_table") + "&stream_id=" + ch.Id;
@@ -309,8 +364,8 @@ namespace DesktopApp.Views
                             var start = GetUnix(el, "start_timestamp");
                             var end = GetUnix(el, "stop_timestamp");
                             if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
-                            string titleRaw = el.TryGetProperty("title", out var tEl) ? tEl.GetString() ?? string.Empty : string.Empty;
-                            string descRaw = el.TryGetProperty("description", out var dEl) ? dEl.GetString() ?? string.Empty : string.Empty;
+                            string titleRaw = TryGetString(el, "title", "name", "programme", "program");
+                            string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
                             string title = DecodeMaybeBase64(titleRaw);
                             string desc = DecodeMaybeBase64(descRaw);
                             bool isNow = nowUtc >= start && nowUtc < end;

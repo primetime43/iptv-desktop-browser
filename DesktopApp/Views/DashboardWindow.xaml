@@ -32,7 +32,7 @@
                         <TextBlock Text="Selected Channel:" Foreground="#8BA1B9"/>
                         <TextBlock Text="{Binding SelectedChannelName}" FontWeight="Bold" Foreground="#F0F6FC" TextWrapping="Wrap"/>
                         <TextBlock Text="{Binding NowProgramText}" Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap"/>
-                        <!-- Channel current program description -->
+                        <TextBlock Text="{Binding SelectedChannel.NowTitle}" Foreground="#DDE6F2" FontWeight="Bold" Margin="0 10 0 2" TextWrapping="Wrap"/>
                         <TextBlock Text="Description:" Margin="0 8 0 2" Foreground="#8BA1B9"/>
                         <TextBlock Text="{Binding SelectedChannel.NowDescription}" Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap" />
                         <!-- Upcoming programs -->
