@@ -1,0 +1,40 @@
+<Window x:Class="DesktopApp.Views.RecordingStatusWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Recording Status" Height="270" Width="440" WindowStartupLocation="CenterOwner" Background="#0D1117" ResizeMode="NoResize">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <TextBlock Text="Current Recording" FontSize="18" FontWeight="Bold" Foreground="#F0F6FC"/>
+        <StackPanel Grid.Row="1" Margin="0 12 0 12">
+            <TextBlock Text="Channel:" Foreground="#8BA1B9"/>
+            <TextBlock Text="{Binding ChannelName}" Foreground="#DDE6F2" FontWeight="SemiBold" Margin="0 0 0 6"/>
+            <TextBlock Text="Started:" Foreground="#8BA1B9"/>
+            <TextBlock Text="{Binding StartedDisplay}" Foreground="#DDE6F2" Margin="0 0 0 6"/>
+            <TextBlock Text="File:" Foreground="#8BA1B9"/>
+            <TextBlock Text="{Binding FilePath}" Foreground="#DDE6F2" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" Margin="0 0 0 6"/>
+            <UniformGrid Columns="3" Margin="0 6 0 0">
+                <StackPanel>
+                    <TextBlock Text="Duration" Foreground="#8BA1B9" FontSize="11"/>
+                    <TextBlock Text="{Binding DurationDisplay}" Foreground="#DDE6F2" FontWeight="Bold" FontSize="16"/>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Size" Foreground="#8BA1B9" FontSize="11"/>
+                    <TextBlock Text="{Binding SizeDisplay}" Foreground="#DDE6F2" FontWeight="Bold" FontSize="16"/>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Bitrate" Foreground="#8BA1B9" FontSize="11"/>
+                    <TextBlock Text="{Binding BitrateDisplay}" Foreground="#DDE6F2" FontWeight="Bold" FontSize="16"/>
+                </StackPanel>
+            </UniformGrid>
+        </StackPanel>
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Open Folder" Margin="0 0 8 0" Padding="14 6" Click="OpenFolder_Click"/>
+            <Button Content="Stop" x:Name="StopBtn" Background="#CC3333" Foreground="White" Padding="16 6" Click="Stop_Click"/>
+            <Button Content="Close" Margin="8 0 0 0" Padding="16 6" Click="Close_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>

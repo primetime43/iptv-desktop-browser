@@ -20,6 +20,7 @@ namespace DesktopApp.Views
 {
     public partial class DashboardWindow : Window, INotifyPropertyChanged
     {
+        private RecordingStatusWindow? _recordingWindow;
         // NOTE: Duplicate recording fields and OnClosed removed. This is the consolidated file.
         // Collections / state
         private readonly HttpClient _http = new();
@@ -609,35 +610,55 @@ namespace DesktopApp.Views
         private async Task RunApiCall(string action)
         { if (Session.Mode != SessionMode.Xtream) { Log("API calls disabled in M3U mode.\n"); return; } try { var url = Session.BuildApi(action); Log($"GET {url}\n"); var json = await _http.GetStringAsync(url, _cts.Token); if (json.Length > 50_000) json = json[..50_000] + "...<truncated>"; Log(json + "\n\n"); } catch (OperationCanceledException) { } catch (Exception ex) { Log("ERROR: " + ex.Message + "\n"); } }
 
+        private void OpenRecordingStatus_Click(object sender, RoutedEventArgs e)
+        {
+            if (_recordingWindow == null || !_recordingWindow.IsVisible)
+            {
+                _recordingWindow = new RecordingStatusWindow { Owner = this };
+                RecordingStatusWindow.RecordingStoppedRequested += OnRecordingStoppedRequested;
+                _recordingWindow.Closed += (_, _) =>
+                {
+                    RecordingStatusWindow.RecordingStoppedRequested -= OnRecordingStoppedRequested;
+                    _recordingWindow = null;
+                };
+                _recordingWindow.Show();
+            }
+            else
+            {
+                _recordingWindow.Activate();
+            }
+        }
+        private void OnRecordingStoppedRequested()
+        {
+            Dispatcher.Invoke(() => { if (_recordProcess != null) StopRecording(); });
+        }
+
         private void StartRecording()
         {
-            if (_recordProcess != null) return;
-            if (SelectedChannel == null) { Log("No channel selected to record.\n"); return; }
+            if (_recordProcess != null) return; if (SelectedChannel == null) { Log("No channel selected to record.\n"); return; }
             string streamUrl = Session.Mode == SessionMode.M3u ? Session.PlaylistChannels.FirstOrDefault(p => p.Id == SelectedChannel.Id)?.StreamUrl ?? string.Empty : Session.BuildStreamUrl(SelectedChannel.Id, "ts");
             if (string.IsNullOrWhiteSpace(streamUrl)) { Log("Stream URL not found for recording.\n"); return; }
             if (string.IsNullOrWhiteSpace(Session.FfmpegPath) || !File.Exists(Session.FfmpegPath)) { Log("FFmpeg path not set (Settings).\n"); MessageBox.Show(this, "Set FFmpeg path in Settings.", "Recording", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
-            string baseDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
-            try { Directory.CreateDirectory(baseDir); } catch { }
+            string baseDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos); try { Directory.CreateDirectory(baseDir); } catch { }
             string safeName = string.Join("_", (SelectedChannel.Name ?? "channel").Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries)).Trim('_');
-            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            _currentRecordingFile = Path.Combine(baseDir, safeName + "_" + timestamp + ".ts");
-            var psi = Session.BuildFfmpegRecordProcess(streamUrl, SelectedChannel.Name, _currentRecordingFile);
-            if (psi == null) { Log("Unable to build FFmpeg process.\n"); return; }
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss"); _currentRecordingFile = Path.Combine(baseDir, safeName + "_" + timestamp + ".ts");
+            var psi = Session.BuildFfmpegRecordProcess(streamUrl, SelectedChannel.Name, _currentRecordingFile); if (psi == null) { Log("Unable to build FFmpeg process.\n"); return; }
             Log($"Recording start: {_currentRecordingFile}\n");
             _recordProcess = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            _recordProcess.Exited += (_, _) => Dispatcher.Invoke(() => StopRecordingInternal(updateButton:false));
             _recordProcess.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
             _recordProcess.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
-            if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
+            if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name); if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
             else { Log("Failed to start FFmpeg.\n"); _recordProcess.Dispose(); _recordProcess = null; }
         }
-        private void StopRecording()
+        private void StopRecording() => StopRecordingInternal(updateButton:true);
+        private void StopRecordingInternal(bool updateButton)
         {
             if (_recordProcess == null) return;
-            try { if (!_recordProcess.HasExited) { _recordProcess.Kill(true); _recordProcess.WaitForExit(2000); } }
-            catch { }
+            try { if (!_recordProcess.HasExited) { _recordProcess.Kill(true); _recordProcess.WaitForExit(1500); } } catch { }
             Log("Recording saved: " + _currentRecordingFile + "\n");
-            _recordProcess.Dispose(); _recordProcess = null; _currentRecordingFile = null;
-            if (FindName("RecordBtnText") is TextBlock t) t.Text = "Record";
+            _recordProcess.Dispose(); _recordProcess = null; _currentRecordingFile = null; RecordingManager.Instance.Stop();
+            if (updateButton && FindName("RecordBtnText") is TextBlock t) t.Text = "Record";
         }
 
         private void RecordBtn_Click(object sender, RoutedEventArgs e)
