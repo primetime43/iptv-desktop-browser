@@ -168,7 +168,12 @@ namespace DesktopApp
                                             status = ui.TryGetProperty("status", out var st) && st.ValueKind == JsonValueKind.String ? st.GetString() : null,
                                             exp_date = ui.TryGetProperty("exp_date", out var exp) && exp.ValueKind == JsonValueKind.String ? exp.GetString() : null,
                                             is_trial = ui.TryGetProperty("is_trial", out var tr) && tr.ValueKind == JsonValueKind.String ? tr.GetString() : (ui.TryGetProperty("is_trial", out var tr2) && tr2.ValueKind == JsonValueKind.Number ? tr2.GetRawText() : null),
-                                            username = ui.TryGetProperty("username", out var un) && un.ValueKind == JsonValueKind.String ? un.GetString() : username
+                                            username = ui.TryGetProperty("username", out var un) && un.ValueKind == JsonValueKind.String ? un.GetString() : username,
+                                            max_connections = ui.TryGetProperty("max_connections", out var mc) && (mc.ValueKind == JsonValueKind.String || mc.ValueKind == JsonValueKind.Number) ? mc.ToString() : null,
+                                            active_cons = ui.TryGetProperty("active_cons", out var ac) && (ac.ValueKind == JsonValueKind.String || ac.ValueKind == JsonValueKind.Number) ? ac.ToString() : null,
+                                            password = ui.TryGetProperty("password", out var pw) && pw.ValueKind == JsonValueKind.String ? pw.GetString() : null,
+                                            created_at = ui.TryGetProperty("created_at", out var ca) && ca.ValueKind == JsonValueKind.String ? ca.GetString() : null,
+                                            message = ui.TryGetProperty("message", out var msgp) && msgp.ValueKind == JsonValueKind.String ? msgp.GetString() : null
                                         };
                                         SetStatus(BuildSuccessStatus(successUserInfo, sw.ElapsedMilliseconds), BrushSuccess);
                                         break; // stop trying more URLs

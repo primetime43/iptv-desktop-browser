@@ -68,6 +68,22 @@ namespace DesktopApp.Views
         private DateTime _nextScheduledEpgRefreshUtc;
         private string _lastEpgUpdateText = "(never)";
         public string LastEpgUpdateText { get => _lastEpgUpdateText; set { if (value != _lastEpgUpdateText) { _lastEpgUpdateText = value; OnPropertyChanged(); } } }
+        private string _profileUsername = string.Empty;
+        public string ProfileUsername { get => _profileUsername; set { if (value != _profileUsername) { _profileUsername = value; OnPropertyChanged(); } } }
+        private string _profileStatus = string.Empty;
+        public string ProfileStatus { get => _profileStatus; set { if (value != _profileStatus) { _profileStatus = value; OnPropertyChanged(); } } }
+        private string _profileTrialText = string.Empty;
+        public string ProfileTrialText { get => _profileTrialText; set { if (value != _profileTrialText) { _profileTrialText = value; OnPropertyChanged(); } } }
+        private string _profileExpiryText = string.Empty;
+        public string ProfileExpiryText { get => _profileExpiryText; set { if (value != _profileExpiryText) { _profileExpiryText = value; OnPropertyChanged(); } } }
+        private string _profileDaysRemaining = string.Empty;
+        public string ProfileDaysRemaining { get => _profileDaysRemaining; set { if (value != _profileDaysRemaining) { _profileDaysRemaining = value; OnPropertyChanged(); } } }
+        private string _profileMaxConnections = string.Empty;
+        public string ProfileMaxConnections { get => _profileMaxConnections; set { if (value != _profileMaxConnections) { _profileMaxConnections = value; OnPropertyChanged(); } } }
+        private string _profileActiveConnections = string.Empty;
+        public string ProfileActiveConnections { get => _profileActiveConnections; set { if (value != _profileActiveConnections) { _profileActiveConnections = value; OnPropertyChanged(); } } }
+        private string _profileRawJson = string.Empty;
+        public string ProfileRawJson { get => _profileRawJson; set { if (value != _profileRawJson) { _profileRawJson = value; OnPropertyChanged(); } } }
 
         public DashboardWindow()
         {
@@ -75,6 +91,7 @@ namespace DesktopApp.Views
             DataContext = this;
             UserNameText.Text = Session.Username;
             LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
+            ApplyProfileFromSession();
             Loaded += async (_, __) =>
             {
                 Session.EpgRefreshRequested += OnEpgRefreshRequested;
@@ -82,6 +99,41 @@ namespace DesktopApp.Views
                 _ = RunEpgSchedulerLoopAsync();
                 await LoadCategoriesAsync();
             };
+        }
+
+        private void ApplyProfileFromSession()
+        {
+            var ui = Session.UserInfo;
+            if (ui == null) return;
+            ProfileUsername = ui.username ?? Session.Username;
+            ProfileStatus = ui.status ?? string.Empty;
+            if (!string.IsNullOrEmpty(ui.is_trial))
+            {
+                ProfileTrialText = (ui.is_trial == "1" || ui.is_trial.Equals("true", StringComparison.OrdinalIgnoreCase)) ? "Yes" : "No";
+            }
+            else ProfileTrialText = string.Empty;
+            if (!string.IsNullOrEmpty(ui.exp_date) && long.TryParse(ui.exp_date, out var unix) && unix > 0)
+            {
+                try
+                {
+                    var dt = DateTimeOffset.FromUnixTimeSeconds(unix).LocalDateTime;
+                    ProfileExpiryText = dt.ToString("yyyy-MM-dd HH:mm");
+                    var remaining = dt - DateTime.Now;
+                    if (remaining.TotalSeconds > 0)
+                    {
+                        ProfileDaysRemaining = Math.Floor(remaining.TotalDays).ToString();
+                    }
+                    else ProfileDaysRemaining = "Expired";
+                }
+                catch { }
+            }
+            ProfileMaxConnections = ui.max_connections ?? string.Empty;
+            ProfileActiveConnections = ui.active_cons ?? string.Empty;
+            try
+            {
+                ProfileRawJson = JsonSerializer.Serialize(ui, new JsonSerializerOptions { WriteIndented = true });
+            }
+            catch { }
         }
 
         private async Task RunEpgSchedulerLoopAsync()
