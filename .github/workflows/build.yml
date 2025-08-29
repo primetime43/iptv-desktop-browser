@@ -1,5 +1,8 @@
 name: Build DesktopApp
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ master, main ]
