@@ -19,6 +19,7 @@ namespace DesktopApp.Views
 {
     public partial class DashboardWindow : Window, INotifyPropertyChanged
     {
+        // Core collections / state
         private readonly HttpClient _http = new();
         private readonly ObservableCollection<Category> _categories = new();
         public ObservableCollection<Category> Categories => _categories;
@@ -30,6 +31,7 @@ namespace DesktopApp.Views
         public ObservableCollection<EpgEntry> EpgEntries => _epgEntries;
         private readonly ObservableCollection<EpgEntry> _upcomingEntries = new();
         public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries; // bound in XAML
+
         private string _selectedCategoryName = string.Empty;
         public string SelectedCategoryName { get => _selectedCategoryName; set { if (value != _selectedCategoryName) { _selectedCategoryName = value; OnPropertyChanged(); } } }
         private string _categoriesCountText = string.Empty;
@@ -47,8 +49,8 @@ namespace DesktopApp.Views
                     SelectedChannelName = value?.Name ?? string.Empty;
                     if (value != null)
                     {
-                        _ = EnsureEpgLoadedAsync(value, force: true); // force reload when changing selection
-                        _ = LoadFullEpgForSelectedChannelAsync(value); // load upcoming
+                        _ = EnsureEpgLoadedAsync(value, force: true);
+                        _ = LoadFullEpgForSelectedChannelAsync(value);
                     }
                     else
                     {
@@ -62,28 +64,26 @@ namespace DesktopApp.Views
         public string SelectedChannelName { get => _selectedChannelName; set { if (value != _selectedChannelName) { _selectedChannelName = value; OnPropertyChanged(); } } }
         private string _nowProgramText = string.Empty;
         public string NowProgramText { get => _nowProgramText; set { if (value != _nowProgramText) { _nowProgramText = value; OnPropertyChanged(); } } }
+
         private bool _logoutRequested;
         private bool _isClosing;
         private readonly CancellationTokenSource _cts = new();
         private DateTime _nextScheduledEpgRefreshUtc;
         private string _lastEpgUpdateText = "(never)";
         public string LastEpgUpdateText { get => _lastEpgUpdateText; set { if (value != _lastEpgUpdateText) { _lastEpgUpdateText = value; OnPropertyChanged(); } } }
-        private string _profileUsername = string.Empty;
-        public string ProfileUsername { get => _profileUsername; set { if (value != _profileUsername) { _profileUsername = value; OnPropertyChanged(); } } }
-        private string _profileStatus = string.Empty;
-        public string ProfileStatus { get => _profileStatus; set { if (value != _profileStatus) { _profileStatus = value; OnPropertyChanged(); } } }
-        private string _profileTrialText = string.Empty;
-        public string ProfileTrialText { get => _profileTrialText; set { if (value != _profileTrialText) { _profileTrialText = value; OnPropertyChanged(); } } }
-        private string _profileExpiryText = string.Empty;
-        public string ProfileExpiryText { get => _profileExpiryText; set { if (value != _profileExpiryText) { _profileExpiryText = value; OnPropertyChanged(); } } }
-        private string _profileDaysRemaining = string.Empty;
-        public string ProfileDaysRemaining { get => _profileDaysRemaining; set { if (value != _profileDaysRemaining) { _profileDaysRemaining = value; OnPropertyChanged(); } } }
-        private string _profileMaxConnections = string.Empty;
-        public string ProfileMaxConnections { get => _profileMaxConnections; set { if (value != _profileMaxConnections) { _profileMaxConnections = value; OnPropertyChanged(); } } }
-        private string _profileActiveConnections = string.Empty;
-        public string ProfileActiveConnections { get => _profileActiveConnections; set { if (value != _profileActiveConnections) { _profileActiveConnections = value; OnPropertyChanged(); } } }
-        private string _profileRawJson = string.Empty;
-        public string ProfileRawJson { get => _profileRawJson; set { if (value != _profileRawJson) { _profileRawJson = value; OnPropertyChanged(); } } }
+
+        // Profile props
+        private string _profileUsername = string.Empty; public string ProfileUsername { get => _profileUsername; set { if (value != _profileUsername) { _profileUsername = value; OnPropertyChanged(); } } }
+        private string _profileStatus = string.Empty; public string ProfileStatus { get => _profileStatus; set { if (value != _profileStatus) { _profileStatus = value; OnPropertyChanged(); } } }
+        private string _profileTrialText = string.Empty; public string ProfileTrialText { get => _profileTrialText; set { if (value != _profileTrialText) { _profileTrialText = value; OnPropertyChanged(); } } }
+        private string _profileExpiryText = string.Empty; public string ProfileExpiryText { get => _profileExpiryText; set { if (value != _profileExpiryText) { _profileExpiryText = value; OnPropertyChanged(); } } }
+        private string _profileDaysRemaining = string.Empty; public string ProfileDaysRemaining { get => _profileDaysRemaining; set { if (value != _profileDaysRemaining) { _profileDaysRemaining = value; OnPropertyChanged(); } } }
+        private string _profileMaxConnections = string.Empty; public string ProfileMaxConnections { get => _profileMaxConnections; set { if (value != _profileMaxConnections) { _profileMaxConnections = value; OnPropertyChanged(); } } }
+        private string _profileActiveConnections = string.Empty; public string ProfileActiveConnections { get => _profileActiveConnections; set { if (value != _profileActiveConnections) { _profileActiveConnections = value; OnPropertyChanged(); } } }
+        private string _profileRawJson = string.Empty; public string ProfileRawJson { get => _profileRawJson; set { if (value != _profileRawJson) { _profileRawJson = value; OnPropertyChanged(); } } }
+
+        private string _currentViewKey = "categories";
+        public string CurrentViewKey { get => _currentViewKey; set { if (value != _currentViewKey) { _currentViewKey = value; OnPropertyChanged(); UpdateViewVisibility(); UpdateNavButtons(); } } }
 
         public DashboardWindow()
         {
@@ -98,8 +98,39 @@ namespace DesktopApp.Views
                 _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
                 _ = RunEpgSchedulerLoopAsync();
                 await LoadCategoriesAsync();
+                UpdateViewVisibility();
+                UpdateNavButtons();
             };
         }
+
+        private void UpdateNavButtons()
+        {
+            void StyleBtn(Button? b, bool active)
+            {
+                if (b == null) return;
+                b.Background = active ? (System.Windows.Media.Brush)new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x34, 0x7D, 0xFF)) : System.Windows.Media.Brushes.Transparent;
+                b.BorderBrush = active ? b.Background : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x32, 0x47));
+                b.Foreground = active ? System.Windows.Media.Brushes.White : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDD, 0xE6, 0xF2));
+            }
+            StyleBtn(NavCategoriesBtn, CurrentViewKey == "categories");
+            StyleBtn(NavGuideBtn, CurrentViewKey == "guide");
+            StyleBtn(NavProfileBtn, CurrentViewKey == "profile");
+            StyleBtn(NavOutputBtn, CurrentViewKey == "output");
+        }
+
+        private void UpdateViewVisibility()
+        {
+            if (CategoriesView == null) return;
+            CategoriesView.Visibility = CurrentViewKey == "categories" ? Visibility.Visible : Visibility.Collapsed;
+            GuideView.Visibility = CurrentViewKey == "guide" ? Visibility.Visible : Visibility.Collapsed;
+            ProfileView.Visibility = CurrentViewKey == "profile" ? Visibility.Visible : Visibility.Collapsed;
+            OutputView.Visibility = CurrentViewKey == "output" ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void NavCategories_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "categories";
+        private void NavGuide_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "guide";
+        private void NavProfile_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "profile";
+        private void NavOutput_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "output";
 
         private void ApplyProfileFromSession()
         {
@@ -182,7 +213,6 @@ namespace DesktopApp.Views
             var settings = new SettingsWindow { Owner = this };
             if (settings.ShowDialog() == true)
             {
-                // update next scheduled time based on possibly changed interval
                 _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
             }
         }
@@ -194,10 +224,8 @@ namespace DesktopApp.Views
                 if (_isClosing || OutputText == null) return;
                 OutputText.AppendText(text);
             }
-            catch { /* ignore logging errors during shutdown */ }
+            catch { }
         }
-
-        private async void LoadCategories_Click(object sender, RoutedEventArgs e) => await LoadCategoriesAsync(); // no longer used, could be removed
 
         private async Task LoadCategoriesAsync()
         {
@@ -273,15 +301,12 @@ namespace DesktopApp.Views
                 foreach (var c in parsed) _channels.Add(c);
                 _ = Task.Run(() => PreloadLogosAsync(parsed), _cts.Token);
 
-                // Preload current program info for ALL channels (no concurrency limit per user request)
                 _ = Task.Run(async () =>
                 {
                     try
                     {
                         var tasks = _channels.Select(ch => Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch)).Task).ToList();
                         await Task.WhenAll(tasks);
-
-                        // Mark initial EPG timestamp after bulk load if not yet set
                         if (Session.LastEpgUpdateUtc == null)
                         {
                             Session.LastEpgUpdateUtc = DateTime.UtcNow;
@@ -346,7 +371,6 @@ namespace DesktopApp.Views
         {
             if (_cts.IsCancellationRequested) return;
             if (!force && (ch.EpgLoaded || ch.EpgLoading)) return;
-            // If previous attempt produced no title, allow a retry (max 3 attempts)
             if (!force && ch.EpgAttempts >= 3 && !string.IsNullOrEmpty(ch.NowTitle)) return;
             await LoadEpgCurrentOnlyAsync(ch, force);
         }
@@ -431,8 +455,7 @@ namespace DesktopApp.Views
 
                 if (!found)
                 {
-                    ch.EpgLoaded = false; // allow retry later
-                    // schedule retry if attempts below threshold
+                    ch.EpgLoaded = false;
                     if (ch.EpgAttempts < 3 && !force)
                     {
                         _ = Task.Delay(1500, _cts.Token).ContinueWith(t =>
@@ -594,8 +617,7 @@ namespace DesktopApp.Views
             {
                 SelectedCategoryName = cat.Name;
                 await LoadChannelsForCategoryAsync(cat);
-                // Switch to Guide tab automatically
-                try { MainTabs.SelectedIndex = 1; } catch { }
+                CurrentViewKey = "guide"; // switch to guide
             }
         }
 
@@ -605,10 +627,7 @@ namespace DesktopApp.Views
                 await EnsureEpgLoadedAsync(ch);
         }
 
-        private void ChannelTile_Click(object sender, RoutedEventArgs e)
-        {
-            // No longer used (single click disabled)
-        }
+        private void ChannelTile_Click(object sender, RoutedEventArgs e) { }
 
         private DateTime _lastChannelClickTime;
         private FrameworkElement? _lastChannelClickedElement;
@@ -621,11 +640,11 @@ namespace DesktopApp.Views
             {
                 SelectedChannel = ch;
                 TryLaunchChannelInPlayer(ch);
-                _lastChannelClickedElement = null; // reset
+                _lastChannelClickedElement = null;
             }
             else
             {
-                SelectedChannel = ch; // single click just selects
+                SelectedChannel = ch;
                 _lastChannelClickedElement = fe;
                 _lastChannelClickTime = now;
             }

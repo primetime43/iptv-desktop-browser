@@ -13,6 +13,13 @@
                     <TextBlock Text="IPTV Dashboard" FontSize="18" FontWeight="Bold" Foreground="#F0F6FC"/>
                     <TextBlock Text="  -  Last EPG:" Foreground="#8BA1B9" Margin="14 0 4 0"/>
                     <TextBlock Text="{Binding LastEpgUpdateText}" Foreground="#DDE6F2"/>
+                    <!-- Top navigation buttons -->
+                    <StackPanel Orientation="Horizontal" Margin="40 0 0 0">
+                        <Button x:Name="NavCategoriesBtn" Content="Categories" Click="NavCategories_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
+                        <Button x:Name="NavGuideBtn" Content="Guide" Click="NavGuide_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
+                        <Button x:Name="NavProfileBtn" Content="Profile" Click="NavProfile_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
+                        <Button x:Name="NavOutputBtn" Content="Raw Output" Click="NavOutput_Click" Margin="0 0 0 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
+                    </StackPanel>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button Content="Settings" Margin="0 0 12 0" Click="OpenSettings_Click" ToolTip="Open settings"/>
@@ -40,7 +47,6 @@
                         <TextBlock Text="{Binding SelectedChannel.NowTitle}" Foreground="#DDE6F2" FontWeight="Bold" Margin="0 10 0 2" TextWrapping="Wrap"/>
                         <TextBlock Text="Description:" Margin="0 8 0 2" Foreground="#8BA1B9"/>
                         <TextBlock Text="{Binding SelectedChannel.NowDescription}" Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap" />
-                        <!-- Upcoming programs -->
                         <Separator Margin="0 10 0 8"/>
                         <TextBlock Text="Upcoming:" FontWeight="Bold" Foreground="#F0F6FC"/>
                         <ItemsControl ItemsSource="{Binding UpcomingEntries}">
@@ -58,20 +64,67 @@
                 </ScrollViewer>
             </Border>
             <Border Grid.Column="1" Background="#131C27" CornerRadius="10" >
-                <TabControl x:Name="MainTabs" Background="#131C27" BorderThickness="0">
-                    <TabItem Header="Categories">
-                        <Border Background="#131C27">
-                            <Grid Margin="12">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition/>
-                                </Grid.RowDefinitions>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Categories" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14"/>
-                                    <TextBlock Margin="12 0 0 0" Foreground="#8BA1B9" Text="{Binding CategoriesCountText}"/>
-                                </StackPanel>
-                                <ScrollViewer Grid.Row="1" Margin="0 10 0 0" VerticalScrollBarVisibility="Auto">
-                                    <ItemsControl ItemsSource="{Binding Categories}">
+                <!-- Overlaid views; full width since nav moved to header -->
+                <Grid>
+                    <!-- Categories View -->
+                    <Grid x:Name="CategoriesView" Visibility="Visible">
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Categories" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14"/>
+                                <TextBlock Margin="12 0 0 0" Foreground="#8BA1B9" Text="{Binding CategoriesCountText}"/>
+                            </StackPanel>
+                            <ScrollViewer Grid.Row="1" Margin="0 10 0 0" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding Categories}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel IsItemsHost="True" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Click="CategoryTile_Click" Padding="0" Margin="6" Cursor="Hand" ToolTip="{Binding Name}">
+                                                <Border Width="150" Height="110" Background="#182433" CornerRadius="8" Padding="8" BorderBrush="#223247" BorderThickness="1">
+                                                    <StackPanel>
+                                                        <Border Height="50" Background="#223247" CornerRadius="4">
+                                                            <Grid>
+                                                                <Image Source="{Binding ImageUrl}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="No Image" Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding ImageUrl, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                            </Grid>
+                                                        </Border>
+                                                        <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 6 0 0"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                        </Grid>
+                    </Grid>
+                    <!-- Guide View -->
+                    <Grid x:Name="GuideView" Visibility="Collapsed">
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Channels" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14"/>
+                                <TextBlock Margin="12 0 0 0" Foreground="#8BA1B9" Text="{Binding Channels.Count, StringFormat={}{0} channels}"/>
+                            </StackPanel>
+                            <Grid Grid.Row="1" Margin="0 10 0 0">
+                                <Grid x:Name="GuideLoadingPanel" Background="#131C27">
+                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="180">
+                                        <ProgressBar IsIndeterminate="True" Height="10" Margin="0 0 0 12" />
+                                        <TextBlock Text="Loading channels..." Foreground="#8BA1B9" FontStyle="Italic" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </Grid>
+                                <ScrollViewer x:Name="GuideScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+                                    <ItemsControl ItemsSource="{Binding Channels}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
                                                 <WrapPanel IsItemsHost="True" />
@@ -79,136 +132,86 @@
                                         </ItemsControl.ItemsPanel>
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Button Click="CategoryTile_Click" Padding="0" Margin="6" Cursor="Hand" ToolTip="{Binding Name}">
-                                                    <Border Width="150" Height="110" Background="#182433" CornerRadius="8" Padding="8" BorderBrush="#223247" BorderThickness="1">
+                                                <Button Padding="0" Margin="6" Cursor="Hand" PreviewMouseLeftButtonDown="ChannelTile_PreviewMouseLeftButtonDown" MouseEnter="ChannelTile_MouseEnter" ToolTipService.ShowDuration="30000" ToolTip="{Binding TooltipText}">
+                                                    <Border Width="160" Height="130" Background="#182433" CornerRadius="8" Padding="8" BorderBrush="#223247" BorderThickness="1">
                                                         <StackPanel>
-                                                            <Border Height="50" Background="#223247" CornerRadius="4">
+                                                            <Border Height="55" Background="#223247" CornerRadius="4">
                                                                 <Grid>
-                                                                    <Image Source="{Binding ImageUrl}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                                    <TextBlock Text="No Image" Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding ImageUrl, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                                    <Image x:Name="LogoImg" Source="{Binding LogoImage}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Visible"/>
+                                                                    <TextBlock x:Name="LogoPlaceholder" Text="Loading..." Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
                                                                 </Grid>
                                                             </Border>
-                                                            <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 6 0 0"/>
+                                                            <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 6 0 2"/>
+                                                            <TextBlock Text="{Binding NowTitle}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap"/>
+                                                            <TextBlock Text="{Binding NowTimeRange}" FontSize="10" Foreground="#8BA1B9"/>
                                                         </StackPanel>
                                                     </Border>
                                                 </Button>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding LogoImage}" Value="{x:Null}">
+                                                        <Setter TargetName="LogoImg" Property="Visibility" Value="Collapsed" />
+                                                        <Setter TargetName="LogoPlaceholder" Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
                                 </ScrollViewer>
                             </Grid>
-                        </Border>
-                    </TabItem>
-                    <TabItem Header="Guide">
-                        <Border Background="#131C27">
-                            <Grid Margin="12">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition/>
-                                </Grid.RowDefinitions>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="Channels" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14"/>
-                                    <TextBlock Margin="12 0 0 0" Foreground="#8BA1B9" Text="{Binding Channels.Count, StringFormat={}{0} channels}"/>
-                                </StackPanel>
-                                <Grid Grid.Row="1" Margin="0 10 0 0">
-                                    <Grid x:Name="GuideLoadingPanel" Background="#131C27">
-                                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="180">
-                                            <ProgressBar IsIndeterminate="True" Height="10" Margin="0 0 0 12" />
-                                            <TextBlock Text="Loading channels..." Foreground="#8BA1B9" FontStyle="Italic" HorizontalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Grid>
-                                    <ScrollViewer x:Name="GuideScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
-                                        <ItemsControl ItemsSource="{Binding Channels}">
-                                            <ItemsControl.ItemsPanel>
-                                                <ItemsPanelTemplate>
-                                                    <WrapPanel IsItemsHost="True" />
-                                                </ItemsPanelTemplate>
-                                            </ItemsControl.ItemsPanel>
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate>
-                                                    <Button Padding="0" Margin="6" Cursor="Hand" PreviewMouseLeftButtonDown="ChannelTile_PreviewMouseLeftButtonDown" MouseEnter="ChannelTile_MouseEnter" ToolTipService.ShowDuration="30000" ToolTip="{Binding TooltipText}">
-                                                        <Border Width="160" Height="130" Background="#182433" CornerRadius="8" Padding="8" BorderBrush="#223247" BorderThickness="1">
-                                                            <StackPanel>
-                                                                <Border Height="55" Background="#223247" CornerRadius="4">
-                                                                    <Grid>
-                                                                        <Image x:Name="LogoImg" Source="{Binding LogoImage}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Visible"/>
-                                                                        <TextBlock x:Name="LogoPlaceholder" Text="Loading..." Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
-                                                                    </Grid>
-                                                                </Border>
-                                                                <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 6 0 2"/>
-                                                                <TextBlock Text="{Binding NowTitle}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap"/>
-                                                                <TextBlock Text="{Binding NowTimeRange}" FontSize="10" Foreground="#8BA1B9"/>
-                                                            </StackPanel>
-                                                        </Border>
-                                                    </Button>
-                                                    <DataTemplate.Triggers>
-                                                        <DataTrigger Binding="{Binding LogoImage}" Value="{x:Null}">
-                                                            <Setter TargetName="LogoImg" Property="Visibility" Value="Collapsed" />
-                                                            <Setter TargetName="LogoPlaceholder" Property="Visibility" Value="Visible" />
-                                                        </DataTrigger>
-                                                    </DataTemplate.Triggers>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </ScrollViewer>
+                        </Grid>
+                    </Grid>
+                    <!-- Profile View -->
+                    <Grid x:Name="ProfileView" Visibility="Collapsed">
+                        <ScrollViewer Margin="12" VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <TextBlock Text="Profile" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14" Margin="0 0 0 8"/>
+                                <TextBlock Text="Below is information returned by the service for your account." Foreground="#8BA1B9" FontSize="12" TextWrapping="Wrap" Margin="0 0 0 12"/>
+                                <Grid Margin="0 0 0 12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="160"/>
+                                        <ColumnDefinition/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Text="Username:" Foreground="#8BA1B9" Grid.Row="0"/>
+                                    <TextBlock Text="{Binding ProfileUsername}" Foreground="#DDE6F2" Grid.Row="0" Grid.Column="1"/>
+                                    <TextBlock Text="Status:" Foreground="#8BA1B9" Grid.Row="1"/>
+                                    <TextBlock Text="{Binding ProfileStatus}" Foreground="#DDE6F2" Grid.Row="1" Grid.Column="1"/>
+                                    <TextBlock Text="Trial:" Foreground="#8BA1B9" Grid.Row="2"/>
+                                    <TextBlock Text="{Binding ProfileTrialText}" Foreground="#DDE6F2" Grid.Row="2" Grid.Column="1"/>
+                                    <TextBlock Text="Expires:" Foreground="#8BA1B9" Grid.Row="3"/>
+                                    <TextBlock Text="{Binding ProfileExpiryText}" Foreground="#DDE6F2" Grid.Row="3" Grid.Column="1"/>
+                                    <TextBlock Text="Days Remaining:" Foreground="#8BA1B9" Grid.Row="4"/>
+                                    <TextBlock Text="{Binding ProfileDaysRemaining}" Foreground="#DDE6F2" Grid.Row="4" Grid.Column="1"/>
+                                    <TextBlock Text="Max Connections:" Foreground="#8BA1B9" Grid.Row="5"/>
+                                    <TextBlock Text="{Binding ProfileMaxConnections}" Foreground="#DDE6F2" Grid.Row="5" Grid.Column="1"/>
+                                    <TextBlock Text="Active Connections:" Foreground="#8BA1B9" Grid.Row="6"/>
+                                    <TextBlock Text="{Binding ProfileActiveConnections}" Foreground="#DDE6F2" Grid.Row="6" Grid.Column="1"/>
                                 </Grid>
-                            </Grid>
-                        </Border>
-                    </TabItem>
-                    <TabItem Header="Profile">
-                        <Border Background="#131C27">
-                            <ScrollViewer Margin="12" VerticalScrollBarVisibility="Auto">
-                                <StackPanel>
-                                    <TextBlock Text="Profile" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14" Margin="0 0 0 8"/>
-                                    <TextBlock Text="Below is information returned by the service for your account." Foreground="#8BA1B9" FontSize="12" TextWrapping="Wrap" Margin="0 0 0 12"/>
-                                    <Grid Margin="0 0 0 12">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="160"/>
-                                            <ColumnDefinition/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-                                        <TextBlock Text="Username:" Foreground="#8BA1B9" Grid.Row="0"/>
-                                        <TextBlock Text="{Binding ProfileUsername}" Foreground="#DDE6F2" Grid.Row="0" Grid.Column="1"/>
-                                        <TextBlock Text="Status:" Foreground="#8BA1B9" Grid.Row="1"/>
-                                        <TextBlock Text="{Binding ProfileStatus}" Foreground="#DDE6F2" Grid.Row="1" Grid.Column="1"/>
-                                        <TextBlock Text="Trial:" Foreground="#8BA1B9" Grid.Row="2"/>
-                                        <TextBlock Text="{Binding ProfileTrialText}" Foreground="#DDE6F2" Grid.Row="2" Grid.Column="1"/>
-                                        <TextBlock Text="Expires:" Foreground="#8BA1B9" Grid.Row="3"/>
-                                        <TextBlock Text="{Binding ProfileExpiryText}" Foreground="#DDE6F2" Grid.Row="3" Grid.Column="1"/>
-                                        <TextBlock Text="Days Remaining:" Foreground="#8BA1B9" Grid.Row="4"/>
-                                        <TextBlock Text="{Binding ProfileDaysRemaining}" Foreground="#DDE6F2" Grid.Row="4" Grid.Column="1"/>
-                                        <TextBlock Text="Max Connections:" Foreground="#8BA1B9" Grid.Row="5"/>
-                                        <TextBlock Text="{Binding ProfileMaxConnections}" Foreground="#DDE6F2" Grid.Row="5" Grid.Column="1"/>
-                                        <TextBlock Text="Active Connections:" Foreground="#8BA1B9" Grid.Row="6"/>
-                                        <TextBlock Text="{Binding ProfileActiveConnections}" Foreground="#DDE6F2" Grid.Row="6" Grid.Column="1"/>
-                                    </Grid>
-                                    <TextBlock Text="Raw JSON user_info (for debugging):" Foreground="#8BA1B9" Margin="0 0 0 4"/>
-                                    <TextBox Text="{Binding ProfileRawJson}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" AcceptsReturn="True" Height="160" VerticalScrollBarVisibility="Auto" Background="#0E1620" Foreground="#C8D3E0"/>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </Border>
-                    </TabItem>
-                    <TabItem Header="Raw Output">
-                        <Border Background="#131C27">
-                            <Grid Margin="12">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition/>
-                                </Grid.RowDefinitions>
-                                <TextBlock Text="Output" FontWeight="Bold" Foreground="#F0F6FC"/>
-                                <TextBox x:Name="OutputText" Grid.Row="1" Margin="0 8 0 0" FontFamily="Consolas" FontSize="12" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="#0E1620" Foreground="#C8D3E0"/>
-                            </Grid>
-                        </Border>
-                    </TabItem>
-                </TabControl>
+                                <TextBlock Text="Raw JSON user_info (for debugging):" Foreground="#8BA1B9" Margin="0 0 0 4"/>
+                                <TextBox Text="{Binding ProfileRawJson}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" AcceptsReturn="True" Height="160" VerticalScrollBarVisibility="Auto" Background="#0E1620" Foreground="#C8D3E0"/>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                    <!-- Raw Output View -->
+                    <Grid x:Name="OutputView" Visibility="Collapsed">
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="Output" FontWeight="Bold" Foreground="#F0F6FC"/>
+                            <TextBox x:Name="OutputText" Grid.Row="1" Margin="0 8 0 0" FontFamily="Consolas" FontSize="12" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="#0E1620" Foreground="#C8D3E0"/>
+                        </Grid>
+                    </Grid>
+                </Grid>
             </Border>
         </Grid>
     </Grid>
