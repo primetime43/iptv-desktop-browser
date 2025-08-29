@@ -121,5 +121,17 @@ public partial class SettingsWindow : Window
             last.Text = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
     }
 
+    private void RestoreDefaults_Click(object sender, RoutedEventArgs e)
+    {
+        // Reset UI fields to built-in defaults; do not save yet.
+        PlayerKindCombo.SelectedIndex = 0; // VLC
+        PlayerExeTextBox.Text = string.Empty;
+        ArgsTemplateTextBox.Text = "\"{url}\" --meta-title=\"{title}\"";
+        if (FindName("FfmpegPathTextBox") is TextBox ff) ff.Text = string.Empty;
+        if (FindName("RecordingDirTextBox") is TextBox rd) rd.Text = string.Empty;
+        if (FindName("FfmpegArgsTextBox") is TextBox fa) fa.Text = "-i \"{url}\" -c copy -f mpegts \"{output}\"";
+        if (FindName("EpgIntervalTextBox") is TextBox interval) interval.Text = "30";
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 }

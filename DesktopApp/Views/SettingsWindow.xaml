@@ -206,6 +206,7 @@
 		</ScrollViewer>
 
 		<StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Restore Defaults" Width="150" Height="40" Margin="0 0 14 0" Click="RestoreDefaults_Click"/>
 			<Button Content="Save" Width="110" Height="40" Margin="0 0 10 0"
                     Style="{StaticResource PrimaryButton}" Click="Save_Click"/>
 			<Button Content="Close" Width="90" Height="40" Click="Close_Click"/>
