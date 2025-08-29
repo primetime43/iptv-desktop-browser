@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="IPTV Login" Height="640" Width="860" MinWidth="640" MinHeight="480" WindowStartupLocation="CenterScreen" Background="#0D1117">
+        Title="IPTV Login" Height="760" Width="980" MinWidth="860" MinHeight="640" WindowStartupLocation="CenterScreen" Background="#0D1117">
     <Window.Resources>
         <!-- Gradient brush for the main background overlay -->
         <LinearGradientBrush x:Key="BgGradient" StartPoint="0,0" EndPoint="1,1">
@@ -132,9 +132,9 @@
     </Window.Resources>
 
     <Grid Background="{StaticResource BgGradient}">
-        <Ellipse Width="650" Height="650" Fill="#182A44" Opacity="0.35" IsHitTestVisible="False">
+        <Ellipse Width="760" Height="760" Fill="#182A44" Opacity="0.35" IsHitTestVisible="False">
             <Ellipse.Effect>
-                <BlurEffect Radius="160"/>
+                <BlurEffect Radius="180"/>
             </Ellipse.Effect>
         </Ellipse>
         <Grid>
@@ -153,89 +153,97 @@
                     <Border Background="#243347" CornerRadius="4" Padding="8 4" VerticalAlignment="Center">
                         <TextBlock x:Name="ModeHeaderText" Text="Xtream Login" FontSize="14" Foreground="#9FB3C7"/>
                     </Border>
+                    <!-- Version / update indicator -->
+                    <Border x:Name="UpdateBadge" Background="#243347" CornerRadius="4" Padding="6 2" VerticalAlignment="Center" Margin="8 0 0 0" Visibility="Collapsed">
+                        <TextBlock x:Name="UpdateBadgeText" Text="Update" FontSize="11" Foreground="#FFCF66"/>
+                    </Border>
                 </StackPanel>
-                <Button Grid.Column="1" Style="{StaticResource IconButton}" Click="OpenCredentialManager_Click" ToolTip="Manage Credentials">
-                    <TextBlock Text="⚙" FontSize="16"/>
-                </Button>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Style="{StaticResource IconButton}" Click="AboutButton_Click" ToolTip="About / Check for Updates">
+                        <TextBlock Text="ℹ" FontSize="16"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButton}" Click="OpenCredentialManager_Click" ToolTip="Manage Credentials" Margin="4 0 0 0">
+                        <TextBlock Text="⚙" FontSize="16"/>
+                    </Button>
+                </StackPanel>
             </Grid>
-            <Border Grid.Row="1" Width="620" Padding="40 46" Background="#131C27" CornerRadius="18" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0 8 0 0">
+            <Border Grid.Row="1" Width="720" Padding="46 52" Background="#131C27" CornerRadius="22" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0 16 0 0">
                 <Border.Effect>
-                    <DropShadowEffect BlurRadius="28" ShadowDepth="0" Color="#141C26" Opacity="0.85"/>
+                    <DropShadowEffect BlurRadius="34" ShadowDepth="0" Color="#141C26" Opacity="0.85"/>
                 </Border.Effect>
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
-                                <RadioButton x:Name="ModeXtreamRadio" Content="Xtream" GroupName="LoginMode" IsChecked="True" Foreground="#DDE6F2" Checked="ModeRadio_Checked" Margin="0 0 16 0"/>
-                                <RadioButton x:Name="ModeM3uRadio" Content="M3U" GroupName="LoginMode" Foreground="#DDE6F2" Checked="ModeRadio_Checked"/>
-                            </StackPanel>
-                            <!-- Xtream panel -->
-                            <StackPanel x:Name="XtreamPanel">
-                                <TextBlock Text="Portal / Server" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
-                                <TextBox x:Name="ServerTextBox" Style="{StaticResource InputTextBox}" Tag="e.g. http://example.com"/>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition/>
-                                        <ColumnDefinition Width="110"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="Username" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
-                                        <TextBox x:Name="UsernameTextBox" Style="{StaticResource InputTextBox}" Tag="Your username"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Margin="16 0 0 0">
-                                        <TextBlock Text="Port" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
-                                        <TextBox x:Name="PortTextBox" Style="{StaticResource InputTextBox}" Text="80"/>
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="2" Margin="16 22 0 0" VerticalAlignment="Top" Orientation="Horizontal">
-                                        <CheckBox x:Name="SslCheckBox" Content="SSL" Foreground="#DDE6F2" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Grid>
-                                <TextBlock Text="Password" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
-                                <PasswordBox x:Name="PasswordBoxInput" Style="{StaticResource PasswordBoxStyle}"/>
-                                <DockPanel Margin="0 0 0 10">
-                                    <CheckBox x:Name="RememberCheckBox" Content="Remember me" Foreground="#DDE6F2"/>
-                                    <TextBlock DockPanel.Dock="Right" Text="Manage" Foreground="#5A82FF" Cursor="Hand" MouseLeftButtonUp="OpenCredentialManager_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8 0 0 0"/>
-                                </DockPanel>
-                                <Button x:Name="LoginButton" Style="{StaticResource PrimaryButton}" Content="Sign In" Height="46" Click="LoginButton_Click"/>
-                            </StackPanel>
-                            <!-- M3U panel -->
-                            <StackPanel x:Name="M3uPanel" Visibility="Collapsed">
-                                <TextBlock Text="M3U Playlist URL or local file path" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
-                                <TextBox x:Name="M3uUrlTextBox" Style="{StaticResource InputTextBox}" Tag="http(s):// or c:\path\playlist.m3u"/>
-                                <TextBlock Text="(Optional) XMLTV EPG URL or file path" Foreground="#8BA1B9" FontSize="12" Margin="2 6 0 0"/>
-                                <TextBox x:Name="XmltvUrlTextBox" Style="{StaticResource InputTextBox}" Tag="http(s):// or c:\path\guide.xml"/>
-                                <Button x:Name="LoadM3uButton" Style="{StaticResource PrimaryButton}" Content="Load Playlist" Height="46" Click="LoadM3uButton_Click"/>
-                            </StackPanel>
-                            <TextBlock x:Name="StatusText" Margin="4 14 0 4" Foreground="#6C8298" FontSize="12" TextWrapping="Wrap"/>
-                            <Expander x:Name="DiagnosticsExpander" Header="Details" Background="#182230" Foreground="#DDE6F2" Visibility="Collapsed" Margin="0 6 0 0">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="*"/>
-                                    </Grid.RowDefinitions>
-                                    <DockPanel LastChildFill="True">
-                                        <StackPanel Orientation="Horizontal" Margin="0 0 0 6">
-                                            <Button Content="Copy" Width="70" Height="26" Margin="0 0 8 0" Click="CopyDiagnostics_Click"/>
-                                            <Button Content="Clear" Width="70" Height="26" Click="ClearDiagnostics_Click"/>
-                                        </StackPanel>
-                                    </DockPanel>
-                                    <TextBox Grid.Row="1" x:Name="DiagnosticsText" Margin="0" FontFamily="Consolas,Menlo,Monaco" FontSize="12" TextWrapping="NoWrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" IsReadOnly="True" Background="#0E1620" Foreground="#C8D3E0"/>
-                                </Grid>
-                            </Expander>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
+                            <RadioButton x:Name="ModeXtreamRadio" Content="Xtream" GroupName="LoginMode" IsChecked="True" Foreground="#DDE6F2" Checked="ModeRadio_Checked" Margin="0 0 16 0"/>
+                            <RadioButton x:Name="ModeM3uRadio" Content="M3U" GroupName="LoginMode" Foreground="#DDE6F2" Checked="ModeRadio_Checked"/>
                         </StackPanel>
-                        <Border Grid.Row="1" Margin="0 28 0 0" Background="#182230" CornerRadius="12" Padding="18 16">
-                            <StackPanel>
-                                <TextBlock x:Name="HelpHeader" Text="What is Xtream Codes?" Foreground="#A4B6C7" FontWeight="SemiBold"/>
-                                <TextBlock x:Name="HelpText" Text="Enter the portal URL (or IP), your account username &amp; password provided by your IPTV provider. SSL will prefix https:// and default port 443 if selected." TextWrapping="Wrap" Foreground="#6C8298" FontSize="12" Margin="0 6 0 0"/>
-                            </StackPanel>
-                        </Border>
-                    </Grid>
-                </ScrollViewer>
+                        <!-- Xtream panel -->
+                        <StackPanel x:Name="XtreamPanel">
+                            <TextBlock Text="Portal / Server" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
+                            <TextBox x:Name="ServerTextBox" Style="{StaticResource InputTextBox}" Tag="e.g. http://example.com"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition/>
+                                    <ColumnDefinition Width="110"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Username" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
+                                    <TextBox x:Name="UsernameTextBox" Style="{StaticResource InputTextBox}" Tag="Your username"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="16 0 0 0">
+                                    <TextBlock Text="Port" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
+                                    <TextBox x:Name="PortTextBox" Style="{StaticResource InputTextBox}" Text="80"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2" Margin="16 22 0 0" VerticalAlignment="Top" Orientation="Horizontal">
+                                    <CheckBox x:Name="SslCheckBox" Content="SSL" Foreground="#DDE6F2" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Text="Password" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
+                            <PasswordBox x:Name="PasswordBoxInput" Style="{StaticResource PasswordBoxStyle}"/>
+                            <DockPanel Margin="0 0 0 10">
+                                <CheckBox x:Name="RememberCheckBox" Content="Remember me" Foreground="#DDE6F2"/>
+                                <TextBlock DockPanel.Dock="Right" Text="Manage" Foreground="#5A82FF" Cursor="Hand" MouseLeftButtonUp="OpenCredentialManager_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8 0 0 0"/>
+                            </DockPanel>
+                            <Button x:Name="LoginButton" Style="{StaticResource PrimaryButton}" Content="Sign In" Height="46" Click="LoginButton_Click"/>
+                        </StackPanel>
+                        <!-- M3U panel -->
+                        <StackPanel x:Name="M3uPanel" Visibility="Collapsed">
+                            <TextBlock Text="M3U Playlist URL or local file path" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
+                            <TextBox x:Name="M3uUrlTextBox" Style="{StaticResource InputTextBox}" Tag="http(s):// or c:\path\playlist.m3u"/>
+                            <TextBlock Text="(Optional) XMLTV EPG URL or file path" Foreground="#8BA1B9" FontSize="12" Margin="2 6 0 0"/>
+                            <TextBox x:Name="XmltvUrlTextBox" Style="{StaticResource InputTextBox}" Tag="http(s):// or c:\path\guide.xml"/>
+                            <Button x:Name="LoadM3uButton" Style="{StaticResource PrimaryButton}" Content="Load Playlist" Height="46" Click="LoadM3uButton_Click"/>
+                        </StackPanel>
+                        <TextBlock x:Name="StatusText" Margin="4 14 0 4" Foreground="#6C8298" FontSize="12" TextWrapping="Wrap"/>
+                        <Expander x:Name="DiagnosticsExpander" Header="Details" Background="#182230" Foreground="#DDE6F2" Visibility="Collapsed" Margin="0 6 0 0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <DockPanel LastChildFill="True">
+                                    <StackPanel Orientation="Horizontal" Margin="0 0 0 6">
+                                        <Button Content="Copy" Width="70" Height="26" Margin="0 0 8 0" Click="CopyDiagnostics_Click"/>
+                                        <Button Content="Clear" Width="70" Height="26" Click="ClearDiagnostics_Click"/>
+                                    </StackPanel>
+                                </DockPanel>
+                                <TextBox Grid.Row="1" x:Name="DiagnosticsText" Margin="0" FontFamily="Consolas,Menlo,Monaco" FontSize="12" TextWrapping="NoWrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" IsReadOnly="True" Background="#0E1620" Foreground="#C8D3E0"/>
+                            </Grid>
+                        </Expander>
+                    </StackPanel>
+                    <Border Grid.Row="1" Margin="0 28 0 0" Background="#182230" CornerRadius="12" Padding="22 18">
+                        <StackPanel>
+                            <TextBlock x:Name="HelpHeader" Text="What is Xtream Codes?" Foreground="#A4B6C7" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="HelpText" Text="Enter the portal URL (or IP), your account username &amp; password provided by your IPTV provider. SSL will prefix https:// and default port 443 if selected." TextWrapping="Wrap" Foreground="#6C8298" FontSize="12" Margin="0 6 0 0"/>
+                            <TextBlock x:Name="VersionText" Text="" Foreground="#546C83" FontSize="11" Margin="0 10 0 0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
             </Border>
         </Grid>
     </Grid>

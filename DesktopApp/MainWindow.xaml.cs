@@ -14,6 +14,7 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Xml;
+using System.Reflection; // added for version attributes
 
 namespace DesktopApp
 {
@@ -22,19 +23,103 @@ namespace DesktopApp
     /// </summary>
     public partial class MainWindow : Window
     {
-        private readonly HttpClient _http = new HttpClient(new HttpClientHandler
-        {
-            AllowAutoRedirect = false // so we can display redirects if present
-        });
-
+        private readonly HttpClient _http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
         private static readonly SolidColorBrush BrushInfo = new(Color.FromRgb(0x6C, 0x82, 0x98));
         private static readonly SolidColorBrush BrushSuccess = new(Color.FromRgb(0x4C, 0xD1, 0x64));
         private static readonly SolidColorBrush BrushError = new(Color.FromRgb(0xE5, 0x60, 0x60));
+        private const string RepoOwner = "primetime43";
+        private const string RepoName = "iptv-desktop-browser";
+        private const string GitHubLatestApi = "https://api.github.com/repos/" + RepoOwner + "/" + RepoName + "/releases/latest";
+        private string? _latestTag;
+        private string? _latestHtmlUrl;
 
         public MainWindow()
         {
             InitializeComponent();
             TryLoadStoredCredentials();
+            VersionText.Text = $"Version: {GetCurrentVersion()}";
+            _ = CheckForUpdatesAsync();
+        }
+
+        private string GetCurrentVersion()
+        {
+            var asm = Assembly.GetExecutingAssembly();
+            var info = asm.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+            string ver = info ?? asm.GetName().Version?.ToString() ?? "1.0.0";
+            if (ver.Contains('+')) ver = ver.Split('+')[0]; // strip build metadata
+            var parts = ver.Split('.');
+            if (parts.Length == 4 && parts[3] == "0")
+            {
+                ver = string.Join('.', parts[0], parts[1], parts[2]);
+            }
+            return ver;
+        }
+
+        private async Task CheckForUpdatesAsync()
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Get, GitHubLatestApi);
+                req.Headers.UserAgent.ParseAdd("iptv-desktop-browser-app");
+                using var resp = await _http.SendAsync(req);
+                if (!resp.IsSuccessStatusCode) return;
+                var json = await resp.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(json);
+                _latestTag = doc.RootElement.TryGetProperty("tag_name", out var tagEl) && tagEl.ValueKind == JsonValueKind.String ? tagEl.GetString() : null;
+                _latestHtmlUrl = doc.RootElement.TryGetProperty("html_url", out var urlEl) && urlEl.ValueKind == JsonValueKind.String ? urlEl.GetString() : null;
+                if (string.IsNullOrWhiteSpace(_latestTag)) return;
+                // Compare semantic-ish versions (strip leading v)
+                string current = GetCurrentVersion();
+                var currNorm = NormalizeVersion(current);
+                var latestNorm = NormalizeVersion(_latestTag);
+                if (IsNewer(latestNorm, currNorm))
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        UpdateBadge.Visibility = Visibility.Visible;
+                        UpdateBadgeText.Text = $"Update {_latestTag}";
+                        VersionText.Text += $" | New {_latestTag} available";
+                    });
+                }
+            }
+            catch { /* ignore */ }
+        }
+
+        private (int major, int minor, int patch, string rest) NormalizeVersion(string? v)
+        {
+            if (string.IsNullOrWhiteSpace(v)) return (0,0,0,string.Empty);
+            if (v.StartsWith("v", StringComparison.OrdinalIgnoreCase)) v = v[1..];
+            var rest = string.Empty;
+            int major=0, minor=0, patch=0;
+            try
+            {
+                var main = v;
+                var dash = v.IndexOf('-');
+                if (dash > 0) { rest = v[dash..]; main = v[..dash]; }
+                var parts = main.Split('.');
+                if (parts.Length > 0) int.TryParse(parts[0], out major);
+                if (parts.Length > 1) int.TryParse(parts[1], out minor);
+                if (parts.Length > 2) int.TryParse(parts[2], out patch);
+            }
+            catch { }
+            return (major, minor, patch, rest);
+        }
+
+        private bool IsNewer((int major,int minor,int patch,string rest) latest, (int major,int minor,int patch,string rest) current)
+        {
+            if (latest.major != current.major) return latest.major > current.major;
+            if (latest.minor != current.minor) return latest.minor > current.minor;
+            if (latest.patch != current.patch) return latest.patch > current.patch;
+            // if tags include prerelease identifiers treat current rest as stable priority
+            if (string.IsNullOrEmpty(current.rest) && !string.IsNullOrEmpty(latest.rest)) return false; // latest is pre-release, current stable same numbers
+            if (!string.IsNullOrEmpty(current.rest) && string.IsNullOrEmpty(latest.rest)) return true; // latest stable, current pre-release
+            return false;
+        }
+
+        private void AboutButton_Click(object sender, RoutedEventArgs e)
+        {
+            var about = new AboutWindow(GetCurrentVersion(), _latestTag, _latestHtmlUrl) { Owner = this };
+            about.ShowDialog();
         }
 
         private SessionMode CurrentMode => ModeXtreamRadio.IsChecked == true ? SessionMode.Xtream : SessionMode.M3u;
