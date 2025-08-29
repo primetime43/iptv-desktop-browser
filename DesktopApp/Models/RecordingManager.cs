@@ -2,21 +2,93 @@ using System;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Windows.Threading;
 
 namespace DesktopApp.Models;
+
+public enum RecordingState
+{
+    Idle,
+    Recording,
+    Stopped
+}
 
 public sealed class RecordingManager : INotifyPropertyChanged
 {
     public static RecordingManager Instance { get; } = new();
-    private RecordingManager() { }
+    private readonly DispatcherTimer _timer;
 
-    private bool _isRecording; public bool IsRecording { get => _isRecording; private set { if (value != _isRecording) { _isRecording = value; OnPropertyChanged(); OnPropertyChanged(nameof(StartedDisplay)); } } }
-    private string? _channelName; public string? ChannelName { get => _channelName; private set { if (value != _channelName) { _channelName = value; OnPropertyChanged(); } } }
-    private string? _filePath; public string? FilePath { get => _filePath; private set { if (value != _filePath) { _filePath = value; OnPropertyChanged(); } } }
-    private DateTime? _startUtc; public DateTime? StartUtc { get => _startUtc; private set { if (value != _startUtc) { _startUtc = value; OnPropertyChanged(); OnPropertyChanged(nameof(StartLocal)); OnPropertyChanged(nameof(StartedDisplay)); } } }
+    private RecordingManager()
+    {
+        _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _timer.Tick += (_, _) =>
+        {
+            if (IsRecording)
+                Refresh();
+            // Always raise duration even if file size unchanged so UI counts up
+            OnPropertyChanged(nameof(DurationDisplay));
+        };
+        _timer.Start();
+    }
+
+    private bool _isRecording;
+    public bool IsRecording
+    {
+        get => _isRecording;
+        private set
+        {
+            if (value != _isRecording)
+            {
+                _isRecording = value;
+                State = value ? RecordingState.Recording : RecordingState.Stopped;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(StartedDisplay));
+                OnPropertyChanged(nameof(StatusDisplay));
+            }
+        }
+    }
+
+    private RecordingState _state = RecordingState.Idle;
+    public RecordingState State
+    {
+        get => _state;
+        private set
+        {
+            if (value != _state)
+            {
+                _state = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(StatusDisplay));
+            }
+        }
+    }
+
+    private string? _channelName;
+    public string? ChannelName { get => _channelName; private set { if (value != _channelName) { _channelName = value; OnPropertyChanged(); } } }
+
+    private string? _filePath;
+    public string? FilePath
+    {
+        get => _filePath;
+        private set
+        {
+            if (value != _filePath)
+            {
+                _filePath = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(FileName));
+            }
+        }
+    }
+
+    public string? FileName => string.IsNullOrWhiteSpace(FilePath) ? null : Path.GetFileName(FilePath);
+
+    private DateTime? _startUtc;
+    public DateTime? StartUtc { get => _startUtc; private set { if (value != _startUtc) { _startUtc = value; OnPropertyChanged(); OnPropertyChanged(nameof(StartLocal)); OnPropertyChanged(nameof(StartedDisplay)); } } }
     public DateTime? StartLocal => StartUtc?.ToLocalTime();
 
-    private long _sizeBytes; public long SizeBytes { get => _sizeBytes; private set { if (value != _sizeBytes) { _sizeBytes = value; OnPropertyChanged(); OnPropertyChanged(nameof(SizeDisplay)); OnPropertyChanged(nameof(BitrateDisplay)); } } }
+    private long _sizeBytes;
+    public long SizeBytes { get => _sizeBytes; private set { if (value != _sizeBytes) { _sizeBytes = value; OnPropertyChanged(); OnPropertyChanged(nameof(SizeDisplay)); OnPropertyChanged(nameof(BitrateDisplay)); } } }
 
     public string SizeDisplay => !IsRecording ? "-" : FormatSize(SizeBytes);
     public string DurationDisplay
@@ -44,12 +116,20 @@ public sealed class RecordingManager : INotifyPropertyChanged
         }
     }
 
+    public string StatusDisplay => State switch
+    {
+        RecordingState.Recording => "Recording",
+        RecordingState.Stopped => "Stopped",
+        _ => "Idle"
+    };
+
     public void Start(string filePath, string? channel)
     {
         FilePath = filePath;
         ChannelName = channel;
         StartUtc = DateTime.UtcNow;
         SizeBytes = 0;
+        State = RecordingState.Recording;
         IsRecording = true;
         OnPropertyChanged(nameof(DurationDisplay));
     }
@@ -57,6 +137,14 @@ public sealed class RecordingManager : INotifyPropertyChanged
     public void Stop()
     {
         IsRecording = false;
+        State = RecordingState.Stopped;
+        OnPropertyChanged(nameof(DurationDisplay));
+    }
+
+    public void Reset()
+    {
+        IsRecording = false;
+        State = RecordingState.Idle;
         FilePath = null; ChannelName = null; StartUtc = null; SizeBytes = 0;
         OnPropertyChanged(nameof(DurationDisplay));
     }
@@ -68,7 +156,6 @@ public sealed class RecordingManager : INotifyPropertyChanged
         {
             var fi = new FileInfo(FilePath);
             if (fi.Exists) SizeBytes = fi.Length;
-            OnPropertyChanged(nameof(DurationDisplay));
         }
         catch { }
     }

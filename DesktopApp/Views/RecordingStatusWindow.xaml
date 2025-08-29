@@ -1,39 +1,65 @@
 <Window x:Class="DesktopApp.Views.RecordingStatusWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Recording Status" Height="270" Width="440" WindowStartupLocation="CenterOwner" Background="#0D1117" ResizeMode="NoResize">
-    <Grid Margin="16">
+        xmlns:c="clr-namespace:DesktopApp.Converters"
+        xmlns:m="clr-namespace:DesktopApp.Models"
+        Title="Recording Status" Height="420" Width="600" WindowStartupLocation="CenterOwner" Background="#0D1117" ResizeMode="CanResizeWithGrip">
+    <Window.Resources>
+        <c:NullToBoolConverter x:Key="NullToBool" />
+        <Style x:Key="StatusBadgeStyle" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4"/>
+            <Setter Property="Padding" Value="6 2"/>
+            <Setter Property="Background" Value="#394150"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding State}" Value="{x:Static m:RecordingState.Recording}">
+                    <Setter Property="Background" Value="#256D1B"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding State}" Value="{x:Static m:RecordingState.Stopped}">
+                    <Setter Property="Background" Value="#5A3C05"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="16" >
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <TextBlock Text="Current Recording" FontSize="18" FontWeight="Bold" Foreground="#F0F6FC"/>
-        <StackPanel Grid.Row="1" Margin="0 12 0 12">
-            <TextBlock Text="Channel:" Foreground="#8BA1B9"/>
-            <TextBlock Text="{Binding ChannelName}" Foreground="#DDE6F2" FontWeight="SemiBold" Margin="0 0 0 6"/>
-            <TextBlock Text="Started:" Foreground="#8BA1B9"/>
-            <TextBlock Text="{Binding StartedDisplay}" Foreground="#DDE6F2" Margin="0 0 0 6"/>
-            <TextBlock Text="File:" Foreground="#8BA1B9"/>
-            <TextBlock Text="{Binding FilePath}" Foreground="#DDE6F2" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" Margin="0 0 0 6"/>
-            <UniformGrid Columns="3" Margin="0 6 0 0">
-                <StackPanel>
-                    <TextBlock Text="Duration" Foreground="#8BA1B9" FontSize="11"/>
-                    <TextBlock Text="{Binding DurationDisplay}" Foreground="#DDE6F2" FontWeight="Bold" FontSize="16"/>
-                </StackPanel>
-                <StackPanel>
-                    <TextBlock Text="Size" Foreground="#8BA1B9" FontSize="11"/>
-                    <TextBlock Text="{Binding SizeDisplay}" Foreground="#DDE6F2" FontWeight="Bold" FontSize="16"/>
-                </StackPanel>
-                <StackPanel>
-                    <TextBlock Text="Bitrate" Foreground="#8BA1B9" FontSize="11"/>
-                    <TextBlock Text="{Binding BitrateDisplay}" Foreground="#DDE6F2" FontWeight="Bold" FontSize="16"/>
-                </StackPanel>
-            </UniformGrid>
-        </StackPanel>
+        <DockPanel>
+            <TextBlock Text="Current Recording" FontSize="18" FontWeight="Bold" Foreground="#F0F6FC"/>
+            <Border Margin="12 0 0 0" VerticalAlignment="Center" Style="{StaticResource StatusBadgeStyle}">
+                <TextBlock Text="{Binding StatusDisplay}" Foreground="White" FontWeight="SemiBold"/>
+            </Border>
+        </DockPanel>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0 12 0 12">
+                <TextBlock Text="Channel:" Foreground="#8BA1B9"/>
+                <TextBlock Text="{Binding ChannelName}" Foreground="#DDE6F2" FontWeight="SemiBold" Margin="0 0 0 6"/>
+                <TextBlock Text="Started:" Foreground="#8BA1B9"/>
+                <TextBlock Text="{Binding StartedDisplay}" Foreground="#DDE6F2" Margin="0 0 0 6"/>
+                <TextBlock Text="File:" Foreground="#8BA1B9"/>
+                <TextBlock Text="{Binding FileName}" Foreground="#DDE6F2" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" Margin="0 0 0 2"/>
+                <TextBlock Text="{Binding FilePath}" Foreground="#60758C" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" Margin="0 0 0 6"/>
+                <UniformGrid Columns="3" Margin="0 6 0 0">
+                    <StackPanel>
+                        <TextBlock Text="Duration" Foreground="#8BA1B9" FontSize="11"/>
+                        <TextBlock Text="{Binding DurationDisplay}" Foreground="#DDE6F2" FontWeight="Bold" FontSize="16"/>
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Size" Foreground="#8BA1B9" FontSize="11"/>
+                        <TextBlock Text="{Binding SizeDisplay}" Foreground="#DDE6F2" FontWeight="Bold" FontSize="16"/>
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Bitrate" Foreground="#8BA1B9" FontSize="11"/>
+                        <TextBlock Text="{Binding BitrateDisplay}" Foreground="#DDE6F2" FontWeight="Bold" FontSize="16"/>
+                    </StackPanel>
+                </UniformGrid>
+            </StackPanel>
+        </ScrollViewer>
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="Open Folder" Margin="0 0 8 0" Padding="14 6" Click="OpenFolder_Click"/>
-            <Button Content="Stop" x:Name="StopBtn" Background="#CC3333" Foreground="White" Padding="16 6" Click="Stop_Click"/>
+            <Button Content="Open Folder" Margin="0 0 8 0" Padding="14 6" Click="OpenFolder_Click" IsEnabled="{Binding FilePath, Converter={StaticResource NullToBool}}"/>
+            <Button Content="Stop" x:Name="StopBtn" Background="#CC3333" Foreground="White" Padding="16 6" Click="Stop_Click" IsEnabled="{Binding IsRecording}"/>
             <Button Content="Close" Margin="8 0 0 0" Padding="16 6" Click="Close_Click"/>
         </StackPanel>
     </Grid>
