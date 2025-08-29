@@ -13,6 +13,7 @@
     <AssemblyName>iptv-desktop-browser</AssemblyName>
     <!-- Generate NuGet lock file so GitHub Actions dependency steps succeed -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <ApplicationIcon>cde45d8b-a92b-49f8-8094-7fd9c0530cb9.ico</ApplicationIcon>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
@@ -20,5 +21,9 @@
     <DebugSymbols>false</DebugSymbols>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="cde45d8b-a92b-49f8-8094-7fd9c0530cb9.ico" />
+  </ItemGroup>
 
 </Project>
