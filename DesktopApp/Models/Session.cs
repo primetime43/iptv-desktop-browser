@@ -19,9 +19,15 @@ public static class Session
     // M3U playlist data (used when Mode == M3u)
     public static List<PlaylistEntry> PlaylistChannels { get; set; } = new();
 
+    // XMLTV EPG data for M3U mode. Keyed by tvg-id (case-insensitive). Each list is sorted by StartUtc.
+    public static Dictionary<string, List<EpgEntry>> M3uEpgByChannel { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public static event Action? M3uEpgUpdated; // raised after full XMLTV load
+    public static void RaiseM3uEpgUpdated() { try { M3uEpgUpdated?.Invoke(); } catch { } }
+
     public static void ResetM3u()
     {
         PlaylistChannels.Clear();
+        M3uEpgByChannel.Clear();
         UserInfo = null;
         Username = string.Empty;
         Password = string.Empty;
@@ -43,7 +49,7 @@ public static class Session
     public static event Action? EpgRefreshRequested;
     public static void RaiseEpgRefreshRequested()
     {
-        if (Mode != SessionMode.Xtream) return; // no EPG in m3u mode yet
+        if (Mode != SessionMode.Xtream) return; // no network EPG refresh in m3u mode yet
         LastEpgUpdateUtc = DateTime.UtcNow;
         try { EpgRefreshRequested?.Invoke(); } catch { }
     }

@@ -13,6 +13,7 @@ using DesktopApp.Views;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
+using System.Xml;
 
 namespace DesktopApp
 {
@@ -55,7 +56,7 @@ namespace DesktopApp
                 M3uPanel.Visibility = Visibility.Visible;
                 ModeHeaderText.Text = "M3U Playlist";
                 HelpHeader.Text = "What is M3U?";
-                HelpText.Text = "Provide a remote URL or local file path to an .m3u / .m3u8 playlist. We will parse group-title as categories.";
+                HelpText.Text = "Provide a remote URL or local file path to an .m3u / .m3u8 playlist. Optionally supply XMLTV URL for EPG.";
             }
             StatusText.Text = string.Empty;
             DiagnosticsText.Clear();
@@ -246,29 +247,127 @@ namespace DesktopApp
         private async void LoadM3uButton_Click(object sender, RoutedEventArgs e)
         {
             if (CurrentMode != SessionMode.M3u) return;
-            var input = M3uUrlTextBox.Text?.Trim();
-            if (string.IsNullOrWhiteSpace(input)) { SetStatus("Enter a URL or file path.", BrushError); return; }
+            var playlistPath = M3uUrlTextBox.Text?.Trim();
+            if (string.IsNullOrWhiteSpace(playlistPath)) { SetStatus("Enter a playlist URL or file path.", BrushError); return; }
+            var xmlPath = XmltvUrlTextBox.Text?.Trim();
             SetStatus("Loading playlist...", BrushInfo);
             LoadM3uButton.IsEnabled = false;
             try
             {
-                string content;
-                if (File.Exists(input)) content = await File.ReadAllTextAsync(input);
+                string playlistContent;
+                if (File.Exists(playlistPath)) playlistContent = await File.ReadAllTextAsync(playlistPath);
                 else
                 {
-                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(20));
-                    content = await _http.GetStringAsync(input, cts.Token);
+                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    playlistContent = await _http.GetStringAsync(playlistPath, cts.Token);
                 }
-                var entries = ParseM3u(content).ToList();
+                var entries = ParseM3u(playlistContent).ToList();
                 if (entries.Count == 0) { SetStatus("No channels found.", BrushError); return; }
-                Session.Mode = SessionMode.M3u;
-                Session.ResetM3u();
-                Session.PlaylistChannels.AddRange(entries);
-                SetStatus($"Loaded {entries.Count} channels.", BrushSuccess);
+                Session.Mode = SessionMode.M3u; Session.ResetM3u(); Session.PlaylistChannels.AddRange(entries);
+                SetStatus($"Loaded {entries.Count} channels. Parsing EPG...", BrushSuccess);
+                if (!string.IsNullOrWhiteSpace(xmlPath))
+                {
+                    _ = Task.Run(async () => await LoadXmltvAsync(xmlPath));
+                }
                 var dash = new DashboardWindow { Owner = this }; dash.Show(); this.Hide();
             }
             catch (Exception ex) { SetStatus("Failed: " + ex.Message, BrushError); }
             finally { LoadM3uButton.IsEnabled = true; }
+        }
+
+        private async Task LoadXmltvAsync(string source)
+        {
+            try
+            {
+                string xml;
+                if (File.Exists(source)) xml = await File.ReadAllTextAsync(source);
+                else
+                {
+                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(40));
+                    xml = await _http.GetStringAsync(source, cts.Token);
+                }
+                ParseXmltv(xml);
+                Session.RaiseM3uEpgUpdated();
+            }
+            catch (Exception ex)
+            {
+                // Could log to diagnostics file in future
+            }
+        }
+
+        private void ParseXmltv(string xml)
+        {
+            if (string.IsNullOrWhiteSpace(xml)) return;
+            try
+            {
+                var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore, IgnoreComments = true, IgnoreProcessingInstructions = true };
+                using var reader = XmlReader.Create(new StringReader(xml), settings);
+                var byChannel = Session.M3uEpgByChannel;
+                byChannel.Clear();
+                EpgEntry? BuildEntry(string chId, string start, string stop, string title, string desc)
+                {
+                    if (!TryParseXmltvDate(start, out var s) || !TryParseXmltvDate(stop, out var e)) return null;
+                    return new EpgEntry { StartUtc = s, EndUtc = e, Title = title, Description = desc };
+                }
+                string currentElement = string.Empty;
+                string channelId = string.Empty; string start = string.Empty; string stop = string.Empty; string title = string.Empty; string desc = string.Empty;
+                while (reader.Read())
+                {
+                    if (reader.NodeType == XmlNodeType.Element)
+                    {
+                        currentElement = reader.Name;
+                        if (reader.Name == "programme")
+                        {
+                            channelId = reader.GetAttribute("channel") ?? string.Empty;
+                            start = reader.GetAttribute("start") ?? string.Empty;
+                            stop = reader.GetAttribute("stop") ?? string.Empty;
+                            title = desc = string.Empty;
+                        }
+                    }
+                    else if (reader.NodeType == XmlNodeType.Text)
+                    {
+                        if (currentElement == "title") title += reader.Value;
+                        else if (currentElement == "desc") desc += reader.Value;
+                    }
+                    else if (reader.NodeType == XmlNodeType.EndElement && reader.Name == "programme")
+                    {
+                        var entry = BuildEntry(channelId, start, stop, title.Trim(), desc.Trim());
+                        if (entry != null)
+                        {
+                            if (!byChannel.TryGetValue(channelId, out var list)) { list = new List<EpgEntry>(); byChannel[channelId] = list; }
+                            list.Add(entry);
+                        }
+                    }
+                }
+                foreach (var kv in byChannel) kv.Value.Sort((a, b) => a.StartUtc.CompareTo(b.StartUtc));
+            }
+            catch { }
+        }
+
+        private bool TryParseXmltvDate(string raw, out DateTime utc)
+        {
+            // Formats like 20240101083000 +0000 or 20240101083000 +0100 / 20240101083000
+            utc = DateTime.MinValue;
+            if (string.IsNullOrWhiteSpace(raw) || raw.Length < 14) return false;
+            try
+            {
+                var dtPart = raw.Substring(0, 14); // yyyyMMddHHmmss
+                if (!DateTime.TryParseExact(dtPart, "yyyyMMddHHmmss", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var baseLocal)) return false;
+                TimeSpan offset = TimeSpan.Zero;
+                var spaceIdx = raw.IndexOf(' ');
+                if (spaceIdx > 0 && raw.Length >= spaceIdx + 6)
+                {
+                    var offStr = raw.Substring(spaceIdx + 1, 5); // +HHMM
+                    if ((offStr[0] == '+' || offStr[0] == '-') && int.TryParse(offStr.Substring(1, 2), out var hh) && int.TryParse(offStr.Substring(3, 2), out var mm))
+                    {
+                        offset = new TimeSpan(hh, mm, 0);
+                        if (offStr[0] == '-') offset = -offset;
+                    }
+                }
+                utc = DateTime.SpecifyKind(baseLocal - offset, DateTimeKind.Utc);
+                return true;
+            }
+            catch { return false; }
         }
 
         private IEnumerable<PlaylistEntry> ParseM3u(string content)
