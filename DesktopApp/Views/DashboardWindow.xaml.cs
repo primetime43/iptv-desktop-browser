@@ -23,18 +23,25 @@ namespace DesktopApp.Views
         // Collections / state
         private readonly HttpClient _http = new();
         private readonly ObservableCollection<Category> _categories = new(); public ObservableCollection<Category> Categories => _categories;
-        private readonly ObservableCollection<Channel> _channels = new(); public ObservableCollection<Channel> Channels => _channels;
+        private readonly ObservableCollection<Channel> _channels = new(); public ObservableCollection<Channel> Channels => _channels; // UI-bound current list (category OR global search subset)
         private readonly Dictionary<string, BitmapImage> _logoCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly SemaphoreSlim _logoSemaphore = new(6);
         private readonly ObservableCollection<EpgEntry> _upcomingEntries = new(); public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
 
-        // Filtered views (renamed to avoid conflict with XAML names)
+        // All channels index (for efficient global search)
+        private List<Channel>? _allChannelsIndex; // full list
+        private bool _allChannelsIndexLoading;
+        private bool _allChannelsIndexLoaded => _allChannelsIndex != null;
+
+        // Filtered views
         public ICollectionView CategoriesCollectionView { get; }
         public ICollectionView ChannelsCollectionView { get; }
 
         // Search
-        private string _searchQuery = string.Empty; public string SearchQuery { get => _searchQuery; set { if (value != _searchQuery) { _searchQuery = value; OnPropertyChanged(); ApplySearch(); } } }
-        private bool _searchAllChannels; public bool SearchAllChannels { get => _searchAllChannels; set { if (value != _searchAllChannels) { _searchAllChannels = value; OnPropertyChanged(); ApplySearch(); } } }
+        private CancellationTokenSource? _searchDebounceCts;
+        private static readonly TimeSpan GlobalSearchDebounce = TimeSpan.FromSeconds(3); // 3 second pause requested
+        private string _searchQuery = string.Empty; public string SearchQuery { get => _searchQuery; set { if (value != _searchQuery) { _searchQuery = value; OnPropertyChanged(); OnSearchQueryChanged(); } } }
+        private bool _searchAllChannels; public bool SearchAllChannels { get => _searchAllChannels; set { if (value != _searchAllChannels) { _searchAllChannels = value; OnPropertyChanged(); OnSearchAllToggle(); } } }
 
         // Selection / binding props
         private string _selectedCategoryName = string.Empty; public string SelectedCategoryName { get => _selectedCategoryName; set { if (value != _selectedCategoryName) { _selectedCategoryName = value; OnPropertyChanged(); } } }
@@ -108,9 +115,18 @@ namespace DesktopApp.Views
                 else
                 {
                     LoadCategoriesFromPlaylist();
+                    // build all-channels index immediately for playlist mode
+                    BuildPlaylistAllChannelsIndex();
                 }
                 UpdateViewVisibility(); UpdateNavButtons();
             };
+        }
+
+        // ===== Index building for playlist mode (M3U) =====
+        private void BuildPlaylistAllChannelsIndex()
+        {
+            if (Session.Mode != SessionMode.M3u) return;
+            _allChannelsIndex = Session.PlaylistChannels.Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId }).ToList();
         }
 
         private bool CategoriesFilter(object? obj)
@@ -121,66 +137,164 @@ namespace DesktopApp.Views
         }
         private bool ChannelsFilter(object? obj)
         {
+            // Only used for per-category display; global search constructs subset directly for performance
+            if (IsGlobalSearchActive) return true; // we already curated _channels
             if (obj is not Channel ch) return false;
             if (string.IsNullOrWhiteSpace(SearchQuery)) return true;
             if (ch.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)) return true;
             if (!string.IsNullOrWhiteSpace(ch.NowTitle) && ch.NowTitle.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
         }
-        private void ApplySearch()
+
+        private bool IsGlobalSearchActive => SearchAllChannels && !string.IsNullOrWhiteSpace(SearchQuery);
+
+        private void OnSearchQueryChanged()
         {
-            if (SearchAllChannels && CurrentViewKey == "categories" && !string.IsNullOrWhiteSpace(SearchQuery))
+            if (!SearchAllChannels)
             {
-                // Switch to guide automatically for global search
-                CurrentViewKey = "guide";
+                // Normal (category) search immediate
+                ApplySearch();
+                return;
             }
-            CategoriesCollectionView.Refresh();
-            ChannelsCollectionView.Refresh();
-            if (CurrentViewKey == "categories")
+            // Global search debounce
+            if (string.IsNullOrWhiteSpace(SearchQuery))
             {
-                CategoriesCountText = _categories.Count(c => CategoriesFilter(c)).ToString() + " categories";
+                CancelDebounce();
+                ApplySearch(); // clears results immediately
+                return;
             }
-            if (SearchAllChannels && CurrentViewKey == "guide" && Session.Mode == SessionMode.Xtream)
+            DebounceGlobalSearch();
+        }
+
+        private void OnSearchAllToggle()
+        {
+            CancelDebounce();
+            if (SearchAllChannels)
             {
-                // If global search: ensure all channels loaded (not just selected category). Simple strategy: if channels list doesn't exceed threshold, load all.
-                if (!_loadedAllChannelsOnce) _ = EnsureAllChannelsLoadedAsync();
+                // If enabling global and query present start debounce (but also begin index load in background)
+                if (!string.IsNullOrWhiteSpace(SearchQuery))
+                {
+                    if (!_allChannelsIndexLoaded && !_allChannelsIndexLoading)
+                    {
+                        _ = EnsureAllChannelsIndexAndFilterAsync(); // will load index; filtering happens after debounce expiry
+                    }
+                    DebounceGlobalSearch();
+                }
+                else
+                {
+                    // No query -> do nothing until user types
+                    ApplySearch();
+                }
+            }
+            else
+            {
+                // Disabling global -> immediate normal search apply
+                ApplySearch();
             }
         }
 
-        private bool _loadedAllChannelsOnce;
-        private async Task EnsureAllChannelsLoadedAsync()
+        private void DebounceGlobalSearch()
         {
-            if (Session.Mode != SessionMode.Xtream || _loadedAllChannelsOnce) return;
+            CancelDebounce();
+            _searchDebounceCts = new CancellationTokenSource();
+            var token = _searchDebounceCts.Token;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(GlobalSearchDebounce, token);
+                    if (token.IsCancellationRequested) return;
+                    await Application.Current.Dispatcher.InvokeAsync(() => ApplySearch());
+                }
+                catch (OperationCanceledException) { }
+            }, token);
+        }
+
+        private void CancelDebounce()
+        {
+            try { _searchDebounceCts?.Cancel(); } catch { } finally { _searchDebounceCts?.Dispose(); _searchDebounceCts = null; }
+        }
+
+        // Adjust ApplySearch: remove triggering from immediate key stroke for global search (handled via debounce) but keep logic for when called
+        private void ApplySearch()
+        {
+            if (IsGlobalSearchActive)
+            {
+                // Ensure view is guide
+                if (CurrentViewKey != "guide") CurrentViewKey = "guide";
+                _ = EnsureAllChannelsIndexAndFilterAsync();
+                return; // filtering will happen async
+            }
+            // Non-global: just refresh existing collection views
+            CategoriesCollectionView.Refresh();
+            ChannelsCollectionView.Refresh();
+            if (CurrentViewKey == "categories")
+                CategoriesCountText = _categories.Count(c => CategoriesFilter(c)).ToString() + " categories";
+        }
+
+        private async Task EnsureAllChannelsIndexAndFilterAsync()
+        {
+            if (!_allChannelsIndexLoaded)
+            {
+                if (Session.Mode == SessionMode.Xtream)
+                    await LoadAllChannelsIndexAsync();
+                else
+                    BuildPlaylistAllChannelsIndex();
+            }
+            FilterGlobalChannels();
+        }
+
+        private void FilterGlobalChannels()
+        {
+            if (_allChannelsIndex == null) return;
+            string query = SearchQuery.Trim();
+            _channels.Clear();
+            if (query.Length == 0)
+            {
+                return; // nothing to show until user types
+            }
+            // Simple case-insensitive contains; can extend later
+            var matches = _allChannelsIndex.Where(c => c.Name?.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 || (!string.IsNullOrWhiteSpace(c.NowTitle) && c.NowTitle.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0))
+                                           .Take(1000) // safeguard huge lists
+                                           .ToList();
+            foreach (var m in matches) _channels.Add(m);
+            ChannelsCollectionView.Refresh();
+            // Lazy load logos for shown subset
+            _ = Task.Run(() => PreloadLogosAsync(matches), _cts.Token);
+        }
+
+        private async Task LoadAllChannelsIndexAsync()
+        {
+            if (_allChannelsIndexLoading || _allChannelsIndexLoaded || Session.Mode != SessionMode.Xtream) return;
             try
             {
-                var url = Session.BuildApi("get_live_streams"); Log($"GET {url} (all channels for global search)\n");
-                var json = await _http.GetStringAsync(url, _cts.Token); Log(json + "\n\n");
-                var parsed = new List<Channel>();
+                _allChannelsIndexLoading = true; SetGuideLoading(true);
+                var url = Session.BuildApi("get_live_streams"); Log($"GET {url} (index all channels)\n");
+                var json = await _http.GetStringAsync(url, _cts.Token); Log("(length=" + json.Length + ")\n\n");
+                var list = new List<Channel>();
                 try
                 {
                     using var doc = JsonDocument.Parse(json);
                     if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
                         foreach (var el in doc.RootElement.EnumerateArray())
-                            parsed.Add(new Channel
+                        {
+                            list.Add(new Channel
                             {
                                 Id = el.TryGetProperty("stream_id", out var idEl) && idEl.TryGetInt32(out var sid) ? sid : 0,
                                 Name = el.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
                                 Logo = el.TryGetProperty("stream_icon", out var iconEl) ? iconEl.GetString() : null,
                                 EpgChannelId = el.TryGetProperty("epg_channel_id", out var epgEl) ? epgEl.GetString() : null
                             });
+                        }
+                    }
                 }
-                catch (Exception ex) { Log("PARSE ERROR channels(all): " + ex.Message + "\n"); }
-                // Merge new channels with existing (avoid duplicates)
-                var existingIds = new HashSet<int>(_channels.Select(c => c.Id));
-                foreach (var c in parsed)
-                {
-                    if (!existingIds.Contains(c.Id)) _channels.Add(c);
-                }
-                _loadedAllChannelsOnce = true; ApplySearch();
-                _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
+                catch (Exception ex) { Log("PARSE ERROR all channels index: " + ex.Message + "\n"); }
+                _allChannelsIndex = list;
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { Log("ERROR loading all channels: " + ex.Message + "\n"); }
+            catch (Exception ex) { Log("ERROR loading all channels index: " + ex.Message + "\n"); }
+            finally { _allChannelsIndexLoading = false; SetGuideLoading(false); }
         }
 
         // ===================== M3U XMLTV EPG =====================
@@ -244,8 +358,8 @@ namespace DesktopApp.Views
             ProfileView.Visibility = CurrentViewKey == "profile" ? Visibility.Visible : Visibility.Collapsed;
             OutputView.Visibility = CurrentViewKey == "output" ? Visibility.Visible : Visibility.Collapsed;
         }
-        private void NavCategories_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "categories";
-        private void NavGuide_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "guide";
+        private void NavCategories_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "categories"; if (!IsGlobalSearchActive) { /* restore category view list remains as-is */ } }
+        private void NavGuide_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "guide"; ApplySearch(); }
         private void NavProfile_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "profile";
         private void NavOutput_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "output";
 
@@ -260,7 +374,11 @@ namespace DesktopApp.Views
             }
             var ui = Session.UserInfo; if (ui == null) return;
             ProfileUsername = ui.username ?? Session.Username; ProfileStatus = ui.status ?? string.Empty;
-            if (!string.IsNullOrEmpty(ui.is_trial)) ProfileTrialText = (ui.is_trial == "1" || ui.is_trial.Equals("true", StringComparison.OrdinalIgnoreCase)) ? "Yes" : "No"; else ProfileTrialText = string.Empty;
+            if (!string.IsNullOrEmpty(ui.is_trial))
+            {
+                ProfileTrialText = (ui.is_trial == "1" || string.Equals(ui.is_trial, "true", StringComparison.OrdinalIgnoreCase)) ? "Yes" : "No";
+            }
+            else ProfileTrialText = string.Empty;
             if (!string.IsNullOrEmpty(ui.exp_date) && long.TryParse(ui.exp_date, out var unix) && unix > 0)
             {
                 try
@@ -353,6 +471,7 @@ namespace DesktopApp.Views
         }
         private async Task LoadChannelsForCategoryAsync(Category cat)
         {
+            if (IsGlobalSearchActive) return; // avoid overriding global results
             if (Session.Mode == SessionMode.M3u)
             {
                 SetGuideLoading(true);
@@ -503,7 +622,7 @@ namespace DesktopApp.Views
         private void OpenSettings_Click(object sender, RoutedEventArgs e) { var settings = new SettingsWindow { Owner = this }; if (settings.ShowDialog() == true) _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval; }
         private void Log(string text) { try { if (_isClosing || OutputText == null) return; OutputText.AppendText(text); } catch { } }
         private void Logout_Click(object sender, RoutedEventArgs e) { _logoutRequested = true; _cts.Cancel(); Session.Username = Session.Password = string.Empty; if (Owner is MainWindow mw) { Application.Current.MainWindow = mw; mw.Show(); } Close(); }
-        protected override void OnClosed(EventArgs e) { _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); } }
+        protected override void OnClosed(EventArgs e) { CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); } }
         private async void CategoryTile_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement fe && fe.DataContext is Category cat) { SelectedCategoryName = cat.Name; await LoadChannelsForCategoryAsync(cat); CurrentViewKey = "guide"; } }
         private async void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) { if (sender is FrameworkElement fe && fe.DataContext is Channel ch) await EnsureEpgLoadedAsync(ch); }
         private void ChannelTile_Click(object sender, RoutedEventArgs e) { }
