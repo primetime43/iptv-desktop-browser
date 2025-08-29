@@ -256,6 +256,8 @@ namespace DesktopApp
 
             if (RememberCheckBox.IsChecked == true)
                 CredentialStore.SaveOrUpdate(serverRaw!, port, ssl, username!, password!);
+
+            // Launch dashboard directly; settings accessible from dashboard
             var dash = new DashboardWindow { Owner = this };
             dash.Show();
             this.Hide();

@@ -74,6 +74,15 @@ namespace DesktopApp.Views
             Loaded += async (_, __) => await LoadCategoriesAsync();
         }
 
+        private void OpenSettings_Click(object sender, RoutedEventArgs e)
+        {
+            var settings = new SettingsWindow { Owner = this };
+            if (settings.ShowDialog() == true)
+            {
+                // Optionally display some confirmation or update UI; nothing needed now.
+            }
+        }
+
         private void Log(string text)
         {
             try
@@ -492,7 +501,7 @@ namespace DesktopApp.Views
             if (_lastChannelClickedElement == fe && (now - _lastChannelClickTime).TotalMilliseconds <= doubleClickMs)
             {
                 SelectedChannel = ch;
-                TryLaunchChannelInVlc(ch);
+                TryLaunchChannelInPlayer(ch);
                 _lastChannelClickedElement = null; // reset
             }
             else
@@ -503,28 +512,25 @@ namespace DesktopApp.Views
             }
         }
 
-        private void TryLaunchChannelInVlc(Channel ch)
+        private void TryLaunchChannelInPlayer(Channel ch)
         {
             try
             {
                 var url = Session.BuildStreamUrl(ch.Id, "ts");
-                Log($"Launching VLC: {url}\n");
-                string? exe = string.IsNullOrWhiteSpace(Session.VlcPath) ? "vlc" : Session.VlcPath;
-                var psi = new ProcessStartInfo
+                Log($"Launching player: {Session.PreferredPlayer} {url}\n");
+                var psi = Session.BuildPlayerProcess(url, ch.Name);
+                if (string.IsNullOrWhiteSpace(psi.FileName))
                 {
-                    FileName = exe!,
-                    Arguments = $"\"{url}\" --meta-title=\"{ch.Name.Replace("\"", "'") }\"",
-                    UseShellExecute = string.IsNullOrWhiteSpace(Session.VlcPath),
-                    RedirectStandardError = false,
-                    RedirectStandardOutput = false,
-                    CreateNoWindow = false
-                };
+                    Log("Player executable not set. Configure in Settings.\n");
+                    MessageBox.Show(this, "Player executable not set. Open Settings and configure a path.", "Player Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
                 Process.Start(psi);
             }
             catch (Exception ex)
             {
-                Log("Failed to launch VLC: " + ex.Message + "\n");
-                try { MessageBox.Show(this, "Unable to start VLC. Ensure it is installed and in PATH.", "VLC Error", MessageBoxButton.OK, MessageBoxImage.Error); } catch { }
+                Log("Failed to launch player: " + ex.Message + "\n");
+                try { MessageBox.Show(this, "Unable to start player. Check settings.", "Player Error", MessageBoxButton.OK, MessageBoxImage.Error); } catch { }
             }
         }
 
