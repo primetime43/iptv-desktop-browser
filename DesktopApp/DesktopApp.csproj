@@ -10,6 +10,7 @@
     <AssemblyVersion>1.0.3</AssemblyVersion>
     <FileVersion>1.0.3</FileVersion>
     <InformationalVersion>1.0.3</InformationalVersion>
+    <AssemblyName>iptv-desktop-browser</AssemblyName>
     <!-- Generate NuGet lock file so GitHub Actions dependency steps succeed -->
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
