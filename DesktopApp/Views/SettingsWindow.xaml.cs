@@ -4,6 +4,7 @@ using Microsoft.Win32;
 using DesktopApp.Models;
 using System.Windows.Controls;
 using System.IO;
+using DesktopApp.Models;
 
 namespace DesktopApp.Views;
 
@@ -109,6 +110,7 @@ public partial class SettingsWindow : Window
         if (FindName("FfmpegArgsTextBox") is TextBox fa) Session.FfmpegArgsTemplate = string.IsNullOrWhiteSpace(fa.Text) ? Session.FfmpegArgsTemplate : fa.Text.Trim();
         if (FindName("EpgIntervalTextBox") is TextBox interval && int.TryParse(interval.Text.Trim(), out var minutes) && minutes > 0 && minutes <= 720)
             Session.EpgRefreshInterval = TimeSpan.FromMinutes(minutes);
+        SettingsStore.SaveFromSession();
         DialogResult = true; Close();
     }
 
