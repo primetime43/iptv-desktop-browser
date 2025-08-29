@@ -106,16 +106,6 @@
                         <Button x:Name="NavGuideBtn" Content="Guide" Click="NavGuide_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
                         <Button x:Name="NavProfileBtn" Content="Profile" Click="NavProfile_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
                         <Button x:Name="NavOutputBtn" Content="Raw Output" Click="NavOutput_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
-                        <!-- Search TextBox -->
-                        <Border Background="#182433" CornerRadius="4" BorderBrush="#223247" BorderThickness="1" Margin="0 0 0 0" Padding="4 0" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <Grid VerticalAlignment="Center">
-                                    <TextBox x:Name="SearchTextBox" Width="180" BorderThickness="0" Background="Transparent" Foreground="#DDE6F2" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"  ToolTip="Search (Categories / Channels)" Padding="4 4 4 4"/>
-                                    <TextBlock Text="Search..." Foreground="#5A6B7F" Margin="6 0 0 0" IsHitTestVisible="False" VerticalAlignment="Center" Visibility="{Binding Text, ElementName=SearchTextBox, Converter={StaticResource NullToVisibilityConverter}}"/>
-                                </Grid>
-                                <CheckBox Content="All" Margin="8 0 4 0" VerticalAlignment="Center" Foreground="#DDE6F2" IsChecked="{Binding SearchAllChannels}" ToolTip="Search across all channels (may load more)"/>
-                            </StackPanel>
-                        </Border>
                     </StackPanel>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
@@ -144,6 +134,16 @@
             <Border Background="#131C27" CornerRadius="10" Padding="14" Margin="0 0 12 0">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
+                        <!-- Moved Search Area with added spacing -->
+                        <TextBlock Text="Search" FontWeight="Bold" Foreground="#F0F6FC" Margin="0 0 8 0"/>
+                        <Border Background="#182433" CornerRadius="6" BorderBrush="#223247" BorderThickness="1" Padding="8" Margin="0 0 16 12">
+                            <StackPanel>
+                                <TextBox x:Name="SearchTextBox" Margin="0 6 0 4" BorderThickness="0" Background="#0E1620" Foreground="#DDE6F2" Padding="6 4" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search categories or channels"/>
+                                <TextBlock Text="Type to search..." Foreground="#5A6B7F" Margin="6 -30 0 0" IsHitTestVisible="False" VerticalAlignment="Center" Visibility="{Binding Text, ElementName=SearchTextBox, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                <CheckBox Content="Search All Channels" Margin="0 8 0 0" VerticalAlignment="Center" Foreground="#DDE6F2" IsChecked="{Binding SearchAllChannels}" ToolTip="Search across all channels"/>
+                            </StackPanel>
+                        </Border>
+                        <Separator Margin="0 0 0 12"/>
                         <TextBlock Text="Status" FontWeight="Bold" Foreground="#F0F6FC" Margin="0 0 8 0"/>
                         <TextBlock Text="Selected Category:" Foreground="#8BA1B9"/>
                         <TextBlock Text="{Binding SelectedCategoryName}" FontWeight="Bold" Foreground="#F0F6FC" TextWrapping="Wrap"/>
