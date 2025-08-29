@@ -20,60 +20,33 @@ namespace DesktopApp.Views
 {
     public partial class DashboardWindow : Window, INotifyPropertyChanged
     {
+        // NOTE: Duplicate recording fields and OnClosed removed. This is the consolidated file.
         // Collections / state
         private readonly HttpClient _http = new();
         private readonly ObservableCollection<Category> _categories = new(); public ObservableCollection<Category> Categories => _categories;
-        private readonly ObservableCollection<Channel> _channels = new(); public ObservableCollection<Channel> Channels => _channels; // UI-bound current list (category OR global search subset)
+        private readonly ObservableCollection<Channel> _channels = new(); public ObservableCollection<Channel> Channels => _channels;
         private readonly Dictionary<string, BitmapImage> _logoCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly SemaphoreSlim _logoSemaphore = new(6);
         private readonly ObservableCollection<EpgEntry> _upcomingEntries = new(); public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
 
-        // All channels index (for efficient global search)
-        private List<Channel>? _allChannelsIndex; // full list
-        private bool _allChannelsIndexLoading;
-        private bool _allChannelsIndexLoaded => _allChannelsIndex != null;
+        // Recording state
+        private Process? _recordProcess; private string? _currentRecordingFile;
 
-        // Filtered views
+        // All channels index (for efficient global search)
+        private List<Channel>? _allChannelsIndex; private bool _allChannelsIndexLoading; private bool _allChannelsIndexLoaded => _allChannelsIndex != null;
+
         public ICollectionView CategoriesCollectionView { get; }
         public ICollectionView ChannelsCollectionView { get; }
 
         // Search
-        private CancellationTokenSource? _searchDebounceCts;
-        private static readonly TimeSpan GlobalSearchDebounce = TimeSpan.FromSeconds(3); // 3 second pause requested
+        private CancellationTokenSource? _searchDebounceCts; private static readonly TimeSpan GlobalSearchDebounce = TimeSpan.FromSeconds(3);
         private string _searchQuery = string.Empty; public string SearchQuery { get => _searchQuery; set { if (value != _searchQuery) { _searchQuery = value; OnPropertyChanged(); OnSearchQueryChanged(); } } }
         private bool _searchAllChannels; public bool SearchAllChannels { get => _searchAllChannels; set { if (value != _searchAllChannels) { _searchAllChannels = value; OnPropertyChanged(); OnSearchAllToggle(); } } }
 
         // Selection / binding props
         private string _selectedCategoryName = string.Empty; public string SelectedCategoryName { get => _selectedCategoryName; set { if (value != _selectedCategoryName) { _selectedCategoryName = value; OnPropertyChanged(); } } }
         private string _categoriesCountText = string.Empty; public string CategoriesCountText { get => _categoriesCountText; set { if (value != _categoriesCountText) { _categoriesCountText = value; OnPropertyChanged(); } } }
-        private Channel? _selectedChannel; public Channel? SelectedChannel
-        {
-            get => _selectedChannel;
-            set
-            {
-                if (value == _selectedChannel) return;
-                _selectedChannel = value; OnPropertyChanged();
-                SelectedChannelName = value?.Name ?? string.Empty;
-                if (value != null)
-                {
-                    if (Session.Mode == SessionMode.Xtream)
-                    {
-                        _ = EnsureEpgLoadedAsync(value, force: true);
-                        _ = LoadFullEpgForSelectedChannelAsync(value);
-                    }
-                    else
-                    {
-                        UpdateChannelEpgFromXmltv(value);
-                        LoadUpcomingFromXmltv(value);
-                    }
-                }
-                else
-                {
-                    _upcomingEntries.Clear();
-                    NowProgramText = string.Empty;
-                }
-            }
-        }
+        private Channel? _selectedChannel; public Channel? SelectedChannel { get => _selectedChannel; set { if (value == _selectedChannel) return; _selectedChannel = value; OnPropertyChanged(); SelectedChannelName = value?.Name ?? string.Empty; if (value != null) { if (Session.Mode == SessionMode.Xtream) { _ = EnsureEpgLoadedAsync(value, force: true); _ = LoadFullEpgForSelectedChannelAsync(value); } else { UpdateChannelEpgFromXmltv(value); LoadUpcomingFromXmltv(value); } } else { _upcomingEntries.Clear(); NowProgramText = string.Empty; } } }
         private string _selectedChannelName = string.Empty; public string SelectedChannelName { get => _selectedChannelName; set { if (value != _selectedChannelName) { _selectedChannelName = value; OnPropertyChanged(); } } }
         private string _nowProgramText = string.Empty; public string NowProgramText { get => _nowProgramText; set { if (value != _nowProgramText) { _nowProgramText = value; OnPropertyChanged(); } } }
 
@@ -97,29 +70,11 @@ namespace DesktopApp.Views
         public DashboardWindow()
         {
             InitializeComponent(); DataContext = this; UserNameText.Text = Session.Username;
-            CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
-            ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
+            CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories); ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
             CategoriesCollectionView.Filter = CategoriesFilter; ChannelsCollectionView.Filter = ChannelsFilter;
             LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : (Session.Mode == SessionMode.M3u ? "(none)" : "(never)");
-            ApplyProfileFromSession();
-            if (Session.Mode == SessionMode.M3u) Session.M3uEpgUpdated += OnM3uEpgUpdated;
-            Loaded += async (_, __) =>
-            {
-                Session.EpgRefreshRequested += OnEpgRefreshRequested;
-                if (Session.Mode == SessionMode.Xtream)
-                {
-                    _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
-                    _ = RunEpgSchedulerLoopAsync();
-                    await LoadCategoriesAsync();
-                }
-                else
-                {
-                    LoadCategoriesFromPlaylist();
-                    // build all-channels index immediately for playlist mode
-                    BuildPlaylistAllChannelsIndex();
-                }
-                UpdateViewVisibility(); UpdateNavButtons();
-            };
+            ApplyProfileFromSession(); if (Session.Mode == SessionMode.M3u) Session.M3uEpgUpdated += OnM3uEpgUpdated;
+            Loaded += async (_, __) => { Session.EpgRefreshRequested += OnEpgRefreshRequested; if (Session.Mode == SessionMode.Xtream) { _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval; _ = RunEpgSchedulerLoopAsync(); await LoadCategoriesAsync(); } else { LoadCategoriesFromPlaylist(); BuildPlaylistAllChannelsIndex(); } UpdateViewVisibility(); UpdateNavButtons(); };
         }
 
         // ===== Index building for playlist mode (M3U) =====
@@ -622,7 +577,12 @@ namespace DesktopApp.Views
         private void OpenSettings_Click(object sender, RoutedEventArgs e) { var settings = new SettingsWindow { Owner = this }; if (settings.ShowDialog() == true) _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval; }
         private void Log(string text) { try { if (_isClosing || OutputText == null) return; OutputText.AppendText(text); } catch { } }
         private void Logout_Click(object sender, RoutedEventArgs e) { _logoutRequested = true; _cts.Cancel(); Session.Username = Session.Password = string.Empty; if (Owner is MainWindow mw) { Application.Current.MainWindow = mw; mw.Show(); } Close(); }
-        protected override void OnClosed(EventArgs e) { CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); } }
+        // modify existing OnClosed (search and replace previous implementation) - keep rest of file intact
+        protected override void OnClosed(EventArgs e)
+        {
+            try { StopRecording(); } catch { }
+            CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
+        }
         private async void CategoryTile_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement fe && fe.DataContext is Category cat) { SelectedCategoryName = cat.Name; await LoadChannelsForCategoryAsync(cat); CurrentViewKey = "guide"; } }
         private async void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) { if (sender is FrameworkElement fe && fe.DataContext is Channel ch) await EnsureEpgLoadedAsync(ch); }
         private void ChannelTile_Click(object sender, RoutedEventArgs e) { }
@@ -649,6 +609,41 @@ namespace DesktopApp.Views
         private async Task RunApiCall(string action)
         { if (Session.Mode != SessionMode.Xtream) { Log("API calls disabled in M3U mode.\n"); return; } try { var url = Session.BuildApi(action); Log($"GET {url}\n"); var json = await _http.GetStringAsync(url, _cts.Token); if (json.Length > 50_000) json = json[..50_000] + "...<truncated>"; Log(json + "\n\n"); } catch (OperationCanceledException) { } catch (Exception ex) { Log("ERROR: " + ex.Message + "\n"); } }
 
+        private void StartRecording()
+        {
+            if (_recordProcess != null) return;
+            if (SelectedChannel == null) { Log("No channel selected to record.\n"); return; }
+            string streamUrl = Session.Mode == SessionMode.M3u ? Session.PlaylistChannels.FirstOrDefault(p => p.Id == SelectedChannel.Id)?.StreamUrl ?? string.Empty : Session.BuildStreamUrl(SelectedChannel.Id, "ts");
+            if (string.IsNullOrWhiteSpace(streamUrl)) { Log("Stream URL not found for recording.\n"); return; }
+            if (string.IsNullOrWhiteSpace(Session.FfmpegPath) || !File.Exists(Session.FfmpegPath)) { Log("FFmpeg path not set (Settings).\n"); MessageBox.Show(this, "Set FFmpeg path in Settings.", "Recording", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+            string baseDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+            try { Directory.CreateDirectory(baseDir); } catch { }
+            string safeName = string.Join("_", (SelectedChannel.Name ?? "channel").Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries)).Trim('_');
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            _currentRecordingFile = Path.Combine(baseDir, safeName + "_" + timestamp + ".ts");
+            var psi = Session.BuildFfmpegRecordProcess(streamUrl, SelectedChannel.Name, _currentRecordingFile);
+            if (psi == null) { Log("Unable to build FFmpeg process.\n"); return; }
+            Log($"Recording start: {_currentRecordingFile}\n");
+            _recordProcess = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            _recordProcess.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
+            _recordProcess.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
+            if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
+            else { Log("Failed to start FFmpeg.\n"); _recordProcess.Dispose(); _recordProcess = null; }
+        }
+        private void StopRecording()
+        {
+            if (_recordProcess == null) return;
+            try { if (!_recordProcess.HasExited) { _recordProcess.Kill(true); _recordProcess.WaitForExit(2000); } }
+            catch { }
+            Log("Recording saved: " + _currentRecordingFile + "\n");
+            _recordProcess.Dispose(); _recordProcess = null; _currentRecordingFile = null;
+            if (FindName("RecordBtnText") is TextBlock t) t.Text = "Record";
+        }
+
+        private void RecordBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (_recordProcess == null) StartRecording(); else StopRecording();
+        }
         public event PropertyChangedEventHandler? PropertyChanged; private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }

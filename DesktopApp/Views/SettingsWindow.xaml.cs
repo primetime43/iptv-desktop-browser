@@ -3,6 +3,7 @@ using System.Windows;
 using Microsoft.Win32;
 using DesktopApp.Models;
 using System.Windows.Controls;
+using System.IO;
 
 namespace DesktopApp.Views;
 
@@ -16,7 +17,6 @@ public partial class SettingsWindow : Window
 
     private void LoadFromSession()
     {
-        // Set player kind combo selection
         PlayerKindCombo.SelectedIndex = Session.PreferredPlayer switch
         {
             PlayerKind.VLC => 0,
@@ -27,8 +27,9 @@ public partial class SettingsWindow : Window
         };
         PlayerExeTextBox.Text = Session.PlayerExePath ?? string.Empty;
         ArgsTemplateTextBox.Text = Session.PlayerArgsTemplate ?? string.Empty;
-
-        // EPG (resolve by name to avoid compile-time requirement for generated fields)
+        if (FindName("FfmpegPathTextBox") is TextBox ff) ff.Text = Session.FfmpegPath ?? string.Empty;
+        if (FindName("RecordingDirTextBox") is TextBox rd) rd.Text = Session.RecordingDirectory ?? string.Empty;
+        if (FindName("FfmpegArgsTextBox") is TextBox fa) fa.Text = Session.FfmpegArgsTemplate ?? string.Empty;
         if (FindName("LastEpgUpdateTextBox") is TextBox last)
             last.Text = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
         if (FindName("EpgIntervalTextBox") is TextBox interval)
@@ -39,24 +40,46 @@ public partial class SettingsWindow : Window
     {
         try
         {
+            var dlg = new OpenFileDialog { Title = "Select player executable", Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*" };
+            if (dlg.ShowDialog(this) == true) PlayerExeTextBox.Text = dlg.FileName;
+        }
+        catch { }
+    }
+
+    private void BrowseFfmpeg_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var dlg = new OpenFileDialog { Title = "Select ffmpeg executable", Filter = "ffmpeg (ffmpeg.exe)|ffmpeg.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*" };
+            if (dlg.ShowDialog(this) == true && FindName("FfmpegPathTextBox") is TextBox ff) ff.Text = dlg.FileName;
+        }
+        catch { }
+    }
+
+    private void BrowseRecordingDir_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // Use OpenFileDialog hack: user picks any file (or types name) inside target directory.
             var dlg = new OpenFileDialog
             {
-                Title = "Select player executable",
-                Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*"
+                Title = "Select or create recording folder (pick or type any filename then OK)",
+                CheckFileExists = false,
+                FileName = "SelectFolderPlaceholder"
             };
-            if (dlg.ShowDialog(this) == true)
+            if (dlg.ShowDialog(this) == true && FindName("RecordingDirTextBox") is TextBox rd)
             {
-                PlayerExeTextBox.Text = dlg.FileName;
+                var path = Path.GetDirectoryName(dlg.FileName) ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(path)) rd.Text = path;
             }
         }
         catch { }
     }
 
-    private void PlayerKindCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private void PlayerKindCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!IsInitialized) return;
         var kind = GetSelectedKind();
-        // Provide default arg templates if box empty or previously matched old default
         if (string.IsNullOrWhiteSpace(ArgsTemplateTextBox.Text) || ArgsTemplateTextBox.Text == "{url}" || ArgsTemplateTextBox.Text.Contains("meta-title") || ArgsTemplateTextBox.Text.Contains("force-media-title"))
         {
             ArgsTemplateTextBox.Text = kind switch
@@ -72,10 +95,7 @@ public partial class SettingsWindow : Window
 
     private PlayerKind GetSelectedKind()
     {
-        if (PlayerKindCombo.SelectedItem is System.Windows.Controls.ComboBoxItem cbi && cbi.Tag is string tag)
-        {
-            if (Enum.TryParse<PlayerKind>(tag, out var val)) return val;
-        }
+        if (PlayerKindCombo.SelectedItem is ComboBoxItem cbi && cbi.Tag is string tag && Enum.TryParse<PlayerKind>(tag, out var val)) return val;
         return PlayerKind.VLC;
     }
 
@@ -84,14 +104,12 @@ public partial class SettingsWindow : Window
         Session.PreferredPlayer = GetSelectedKind();
         Session.PlayerExePath = string.IsNullOrWhiteSpace(PlayerExeTextBox.Text) ? null : PlayerExeTextBox.Text.Trim();
         Session.PlayerArgsTemplate = string.IsNullOrWhiteSpace(ArgsTemplateTextBox.Text) ? string.Empty : ArgsTemplateTextBox.Text.Trim();
-
+        if (FindName("FfmpegPathTextBox") is TextBox ff) Session.FfmpegPath = string.IsNullOrWhiteSpace(ff.Text) ? null : ff.Text.Trim();
+        if (FindName("RecordingDirTextBox") is TextBox rd) Session.RecordingDirectory = string.IsNullOrWhiteSpace(rd.Text) ? null : rd.Text.Trim();
+        if (FindName("FfmpegArgsTextBox") is TextBox fa) Session.FfmpegArgsTemplate = string.IsNullOrWhiteSpace(fa.Text) ? Session.FfmpegArgsTemplate : fa.Text.Trim();
         if (FindName("EpgIntervalTextBox") is TextBox interval && int.TryParse(interval.Text.Trim(), out var minutes) && minutes > 0 && minutes <= 720)
-        {
             Session.EpgRefreshInterval = TimeSpan.FromMinutes(minutes);
-        }
-
-        DialogResult = true;
-        Close();
+        DialogResult = true; Close();
     }
 
     private void UpdateEpgNow_Click(object sender, RoutedEventArgs e)

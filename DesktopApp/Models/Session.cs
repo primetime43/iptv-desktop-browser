@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Collections.Generic;
 using DesktopApp.Models;
+using System.IO;
 
 namespace DesktopApp.Models;
 
@@ -16,7 +17,7 @@ public static class Session
     public static string Password { get; set; } = string.Empty;
     public static UserInfo? UserInfo { get; set; }
 
-    // M3U playlist data (used when Mode == M3u)
+    // M3U playlist data (used when Mode == SessionMode.M3u)
     public static List<PlaylistEntry> PlaylistChannels { get; set; } = new();
 
     // XMLTV EPG data for M3U mode. Keyed by tvg-id (case-insensitive). Each list is sorted by StartUtc.
@@ -38,10 +39,13 @@ public static class Session
 
     // Preferred external player settings
     public static PlayerKind PreferredPlayer { get; set; } = PlayerKind.VLC;
-    // Optional explicit executable path for the selected player (if null we rely on PATH / shell association)
     public static string? PlayerExePath { get; set; }
-    // Argument template supports tokens: {url} {title}
     public static string PlayerArgsTemplate { get; set; } = "\"{url}\""; // will be overridden by defaults per player kind when changed in UI
+
+    // Recording (FFmpeg)
+    public static string? FfmpegPath { get; set; } // path to ffmpeg executable
+    public static string? RecordingDirectory { get; set; } // base folder for recordings
+    public static string FfmpegArgsTemplate { get; set; } = "-i \"{url}\" -c copy -f mpegts \"{output}\""; // tokens: {url} {output} {title}
 
     // EPG refresh tracking (only meaningful for Xtream mode currently)
     public static DateTime? LastEpgUpdateUtc { get; set; }
@@ -63,7 +67,6 @@ public static class Session
         return core;
     }
 
-    // Build direct live stream URL (Xtream Codes style). Default extension .ts; some servers support .m3u8.
     public static string BuildStreamUrl(int streamId, string extension = "ts")
         => $"{BaseUrl}/live/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{extension}";
 
@@ -79,7 +82,7 @@ public static class Session
                 argsTemplate = string.IsNullOrWhiteSpace(PlayerArgsTemplate) ? "\"{url}\" --meta-title=\"{title}\"" : PlayerArgsTemplate;
                 break;
             case PlayerKind.MPCHC:
-                exe = string.IsNullOrWhiteSpace(PlayerExePath) ? "mpc-hc64.exe" : PlayerExePath!; // user can point to mpc-hc.exe 32-bit
+                exe = string.IsNullOrWhiteSpace(PlayerExePath) ? "mpc-hc64.exe" : PlayerExePath!;
                 argsTemplate = string.IsNullOrWhiteSpace(PlayerArgsTemplate) ? "\"{url}\" /play" : PlayerArgsTemplate;
                 break;
             case PlayerKind.MPV:
@@ -88,7 +91,7 @@ public static class Session
                 break;
             case PlayerKind.Custom:
             default:
-                exe = string.IsNullOrWhiteSpace(PlayerExePath) ? "" : PlayerExePath!; // must be provided
+                exe = string.IsNullOrWhiteSpace(PlayerExePath) ? "" : PlayerExePath!;
                 argsTemplate = PlayerArgsTemplate;
                 break;
         }
@@ -103,6 +106,23 @@ public static class Session
             RedirectStandardOutput = false,
             RedirectStandardError = false,
             CreateNoWindow = false
+        };
+    }
+
+    public static ProcessStartInfo? BuildFfmpegRecordProcess(string streamUrl, string title, string outputPath)
+    {
+        if (string.IsNullOrWhiteSpace(FfmpegPath) || !File.Exists(FfmpegPath)) return null;
+        var safeTitle = (title ?? string.Empty).Replace("\"", "'");
+        var argsTemplate = string.IsNullOrWhiteSpace(FfmpegArgsTemplate) ? "-i \"{url}\" -c copy -f mpegts \"{output}\"" : FfmpegArgsTemplate;
+        var args = argsTemplate.Replace("{url}", streamUrl).Replace("{title}", safeTitle).Replace("{output}", outputPath);
+        return new ProcessStartInfo
+        {
+            FileName = FfmpegPath,
+            Arguments = args,
+            UseShellExecute = false,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            CreateNoWindow = true
         };
     }
 }

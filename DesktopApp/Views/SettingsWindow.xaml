@@ -1,7 +1,7 @@
 <Window x:Class="DesktopApp.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Settings" Height="520" Width="620"
+        Title="Settings" Height="640" Width="620"
         WindowStartupLocation="CenterOwner" Background="#0D1117">
 
 	<Window.Resources>
@@ -176,8 +176,24 @@
 				<TextBlock Text="Tokens: {url} {title}. Leave blank to use default for selected player. For custom player specify both path and suitable arguments."
                            Foreground="#657A91" FontSize="11" TextWrapping="Wrap" Margin="0 0 0 8"/>
 
+                <Separator Margin="0 16 0 10"/>
+                <TextBlock Text="Recording Settings" Foreground="#8BA1B9" FontSize="14" FontWeight="SemiBold"/>
+                <TextBlock Text="FFmpeg Path" Foreground="#8BA1B9" FontSize="12" Margin="2 8 0 0"/>
+                <DockPanel>
+                    <TextBox x:Name="FfmpegPathTextBox" Style="{StaticResource InputTextBox}" Margin="0 4 8 14"/>
+                    <Button Content="Browse" Width="110" Height="34" Margin="0 4 0 14" Click="BrowseFfmpeg_Click"/>
+                </DockPanel>
+                <TextBlock Text="Recording Directory" Foreground="#8BA1B9" FontSize="12" Margin="2 4 0 0"/>
+                <DockPanel>
+                    <TextBox x:Name="RecordingDirTextBox" Style="{StaticResource InputTextBox}" Margin="0 4 8 14"/>
+                    <Button Content="Browse" Width="110" Height="34" Margin="0 4 0 14" Click="BrowseRecordingDir_Click"/>
+                </DockPanel>
+                <TextBlock Text="FFmpeg Args Template" Foreground="#8BA1B9" FontSize="12" Margin="2 4 0 0"/>
+                <TextBox x:Name="FfmpegArgsTextBox" Style="{StaticResource InputTextBox}"/>
+                <TextBlock Text="Tokens: {url} {output} {title}. Default copies stream without re-encoding." Foreground="#657A91" FontSize="11" TextWrapping="Wrap" Margin="0 0 0 8"/>
+
                 <!-- EPG Section -->
-                <Separator Margin="0 10 0 10"/>
+                <Separator Margin="0 16 0 10"/>
                 <TextBlock Text="EPG Settings" Foreground="#8BA1B9" FontSize="14" FontWeight="SemiBold"/>
                 <TextBlock Text="Last EPG Update" Foreground="#8BA1B9" FontSize="12" Margin="2 10 0 0"/>
                 <TextBox x:Name="LastEpgUpdateTextBox" Style="{StaticResource InputTextBox}" IsReadOnly="True"/>
