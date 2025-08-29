@@ -30,51 +30,40 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
-          cache: true
-          cache-dependency-path: |
-            DesktopApp/packages.lock.json
+            dotnet-version: '9.0.x'
+            cache: true
+            cache-dependency-path: |
+              DesktopApp/packages.lock.json
 
-      - name: Restore (generate/update lock file if needed)
+      - name: Restore
         run: dotnet restore $env:PROJECT
 
-      - name: Verify lock file exists
+      - name: Verify lock file
         run: |
           if (-not (Test-Path "DesktopApp/packages.lock.json")) { Write-Error 'packages.lock.json missing'; exit 1 }
-          type DesktopApp/packages.lock.json
 
-      - name: Build (framework-dependent)
-        run: dotnet build $env:PROJECT -c $env:CONFIG -f $env:FRAMEWORK --no-restore
-
-      - name: Publish (self-contained win-x64)
+      - name: Publish single-file self-contained (win-x64)
         run: >-
-          dotnet publish $env:PROJECT -c $env:CONFIG -f $env:FRAMEWORK
-          -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=false
-          -o publish/win-x64-self
+          dotnet publish $env:PROJECT -c $env:CONFIG -f $env:FRAMEWORK -r win-x64 --self-contained true
+          /p:PublishSingleFile=true /p:EnableCompressionInSingleFile=true /p:PublishTrimmed=false /p:DebugType=None
+          -o publish/self
 
-      - name: Publish (framework-dependent win-x64)
-        run: >-
-          dotnet publish $env:PROJECT -c $env:CONFIG -f $env:FRAMEWORK
-          -r win-x64 --self-contained false /p:PublishSingleFile=false
-          -o publish/win-x64-fdd
+      - name: List publish output
+        run: dir publish/self
 
-      - name: Zip artifacts
+      - name: Normalize executable name
+        shell: pwsh
         run: |
-          Compress-Archive -Path publish/win-x64-self/* -DestinationPath "$env:APP_NAME-self-contained-win-x64.zip"
-          Compress-Archive -Path publish/win-x64-fdd/* -DestinationPath "$env:APP_NAME-framework-dependent-win-x64.zip"
+          $exe = Get-ChildItem publish/self -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { Write-Error 'No exe produced'; exit 1 }
+          Rename-Item $exe.FullName "$($exe.DirectoryName)/$env:APP_NAME.exe"
+          dir publish/self
 
-      - name: Upload self-contained artifact
+      - name: Upload executable artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.APP_NAME }}-self-contained-win-x64
-          path: ${{ env.APP_NAME }}-self-contained-win-x64.zip
-          if-no-files-found: error
-
-      - name: Upload framework-dependent artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.APP_NAME }}-framework-dependent-win-x64
-          path: ${{ env.APP_NAME }}-framework-dependent-win-x64.zip
+          name: ${{ env.APP_NAME }}-win-x64
+          path: publish/self/${{ env.APP_NAME }}.exe
           if-no-files-found: error
 
   release:
@@ -82,16 +71,18 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
-      - name: Download artifacts
+      - name: Download artifact
         uses: actions/download-artifact@v4
         with:
+          name: iptv-desktop-browser-win-x64
           path: dist
-      - name: Create Release
+      - name: Show files
+        run: dir dist
+      - name: Create Release (single exe)
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/**/iptv-desktop-browser-self-contained-win-x64.zip
-            dist/**/iptv-desktop-browser-framework-dependent-win-x64.zip
+            dist/iptv-desktop-browser.exe
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
         env:
