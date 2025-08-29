@@ -2,7 +2,8 @@
 
 A **lightweight Windows desktop IPTV browser** built with **WPF / .NET 9** for fast, clean, and secure access to IPTV channel lists.
 
-![App Screenshot](https://github.com/primetime43/iptv-desktop-browser/assets/screenshot-placeholder.png)  
+v1.0.1
+![App Screenshot v1.0.1](https://github-production-user-asset-6210df.s3.amazonaws.com/12754111/483490819-3dc59bf2-009c-4414-a0d0-33ab431a7535.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20250829%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250829T065056Z&X-Amz-Expires=300&X-Amz-Signature=b94f241aaed8bb4e004d069c49d35614c491242c41cb415acb5f4e56aa721138&X-Amz-SignedHeaders=host)  
 
 
 ---
