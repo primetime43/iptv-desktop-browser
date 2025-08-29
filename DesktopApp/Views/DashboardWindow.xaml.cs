@@ -31,7 +31,7 @@ namespace DesktopApp.Views
         private readonly ObservableCollection<EpgEntry> _upcomingEntries = new(); public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
 
         // Recording state
-        private Process? _recordProcess; private string? _currentRecordingFile;
+        private Process? _recordProcess; private string? _currentRecordingFile; private bool _recordStopping;
 
         // All channels index (for efficient global search)
         private List<Channel>? _allChannelsIndex; private bool _allChannelsIndexLoading; private bool _allChannelsIndexLoaded => _allChannelsIndex != null;
@@ -640,25 +640,78 @@ namespace DesktopApp.Views
             if (string.IsNullOrWhiteSpace(streamUrl)) { Log("Stream URL not found for recording.\n"); return; }
             if (string.IsNullOrWhiteSpace(Session.FfmpegPath) || !File.Exists(Session.FfmpegPath)) { Log("FFmpeg path not set (Settings).\n"); MessageBox.Show(this, "Set FFmpeg path in Settings.", "Recording", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             string baseDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos); try { Directory.CreateDirectory(baseDir); } catch { }
-            string safeName = string.Join("_", (SelectedChannel.Name ?? "channel").Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries)).Trim('_');
-            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss"); _currentRecordingFile = Path.Combine(baseDir, safeName + "_" + timestamp + ".ts");
+
+            static string Sanitize(string? raw)
+            {
+                if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
+                var invalid = Path.GetInvalidFileNameChars();
+                var parts = raw.Split(invalid, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var joined = string.Join("_", parts);
+                if (joined.Length > 60) joined = joined[..60];
+                return joined.Trim('_');
+            }
+
+            string safeChannel = Sanitize(SelectedChannel.Name) ;
+            string safeProgram = Sanitize(SelectedChannel.NowTitle);
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string fileName = string.IsNullOrWhiteSpace(safeProgram)
+                ? $"{safeChannel}_{timestamp}.ts"
+                : $"{safeChannel}_{safeProgram}_{timestamp}.ts";
+            // Collapse any double underscores
+            while (fileName.Contains("__")) fileName = fileName.Replace("__", "_");
+            _currentRecordingFile = Path.Combine(baseDir, fileName);
+
             var psi = Session.BuildFfmpegRecordProcess(streamUrl, SelectedChannel.Name, _currentRecordingFile); if (psi == null) { Log("Unable to build FFmpeg process.\n"); return; }
             Log($"Recording start: {_currentRecordingFile}\n");
-            _recordProcess = new Process { StartInfo = psi, EnableRaisingEvents = true };
-            _recordProcess.Exited += (_, _) => Dispatcher.Invoke(() => StopRecordingInternal(updateButton:false));
+            _recordProcess = new Process { StartInfo = psi, EnableRaisingEvents = false }; // we handle cleanup directly
             _recordProcess.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
             _recordProcess.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
             if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name); if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
             else { Log("Failed to start FFmpeg.\n"); _recordProcess.Dispose(); _recordProcess = null; }
         }
-        private void StopRecording() => StopRecordingInternal(updateButton:true);
-        private void StopRecordingInternal(bool updateButton)
+        private void StopRecording()
         {
-            if (_recordProcess == null) return;
-            try { if (!_recordProcess.HasExited) { _recordProcess.Kill(true); _recordProcess.WaitForExit(1500); } } catch { }
-            Log("Recording saved: " + _currentRecordingFile + "\n");
-            _recordProcess.Dispose(); _recordProcess = null; _currentRecordingFile = null; RecordingManager.Instance.Stop();
-            if (updateButton && FindName("RecordBtnText") is TextBlock t) t.Text = "Record";
+            if (_recordProcess == null || _recordStopping) return;
+            _recordStopping = true;
+            var proc = _recordProcess;
+            var recordedFile = _currentRecordingFile; // capture before clearing
+            _recordProcess = null;
+            _currentRecordingFile = null;
+
+            // Update UI state immediately
+            if (FindName("RecordBtnText") is TextBlock btnText) btnText.Text = "Record";
+            RecordingManager.Instance.Stop();
+            Log("Stopping recording...\n");
+
+            // Terminate process on background thread so UI never blocks
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    if (!proc.HasExited)
+                    {
+                        try { proc.CloseMainWindow(); } catch { }
+                        // brief grace period
+                        Thread.Sleep(400);
+                        if (!proc.HasExited)
+                        {
+                            try { proc.Kill(true); } catch { }
+                        }
+                        try { proc.WaitForExit(3000); } catch { }
+                    }
+                }
+                catch { }
+                finally
+                {
+                    try { proc.Dispose(); } catch { }
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        if (!string.IsNullOrWhiteSpace(recordedFile))
+                            Log("Recording saved: " + recordedFile + "\n");
+                        _recordStopping = false;
+                    });
+                }
+            });
         }
 
         private void RecordBtn_Click(object sender, RoutedEventArgs e)
