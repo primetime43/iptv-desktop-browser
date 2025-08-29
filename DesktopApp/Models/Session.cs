@@ -23,6 +23,16 @@ public static class Session
     // Argument template supports tokens: {url} {title}
     public static string PlayerArgsTemplate { get; set; } = "\"{url}\""; // will be overridden by defaults per player kind when changed in UI
 
+    // EPG refresh tracking
+    public static DateTime? LastEpgUpdateUtc { get; set; }
+    public static TimeSpan EpgRefreshInterval { get; set; } = TimeSpan.FromMinutes(30);
+    public static event Action? EpgRefreshRequested;
+    public static void RaiseEpgRefreshRequested()
+    {
+        LastEpgUpdateUtc = DateTime.UtcNow;
+        try { EpgRefreshRequested?.Invoke(); } catch { }
+    }
+
     public static string BaseUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}";
 
     public static string BuildApi(string? action = null)

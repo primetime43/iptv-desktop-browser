@@ -9,7 +9,11 @@
         </Grid.RowDefinitions>
         <Border Background="#131C27" Grid.Row="0" Padding="14 0" >
             <DockPanel>
-                <TextBlock Text="IPTV Dashboard" FontSize="18" FontWeight="Bold" Foreground="#F0F6FC"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="IPTV Dashboard" FontSize="18" FontWeight="Bold" Foreground="#F0F6FC"/>
+                    <TextBlock Text="  -  Last EPG:" Foreground="#8BA1B9" Margin="14 0 4 0"/>
+                    <TextBlock Text="{Binding LastEpgUpdateText}" Foreground="#DDE6F2"/>
+                </StackPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button Content="Settings" Margin="0 0 12 0" Click="OpenSettings_Click" ToolTip="Open settings"/>
                     <TextBlock Text="User:" Margin="4 0 4 0" Foreground="#8BA1B9"/>

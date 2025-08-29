@@ -65,13 +65,64 @@ namespace DesktopApp.Views
         private bool _logoutRequested;
         private bool _isClosing;
         private readonly CancellationTokenSource _cts = new();
+        private DateTime _nextScheduledEpgRefreshUtc;
+        private string _lastEpgUpdateText = "(never)";
+        public string LastEpgUpdateText { get => _lastEpgUpdateText; set { if (value != _lastEpgUpdateText) { _lastEpgUpdateText = value; OnPropertyChanged(); } } }
 
         public DashboardWindow()
         {
             InitializeComponent();
             DataContext = this;
             UserNameText.Text = Session.Username;
-            Loaded += async (_, __) => await LoadCategoriesAsync();
+            LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
+            Loaded += async (_, __) =>
+            {
+                Session.EpgRefreshRequested += OnEpgRefreshRequested;
+                _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
+                _ = RunEpgSchedulerLoopAsync();
+                await LoadCategoriesAsync();
+            };
+        }
+
+        private async Task RunEpgSchedulerLoopAsync()
+        {
+            while (!_cts.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(10), _cts.Token);
+                    if (_cts.IsCancellationRequested) break;
+                    var now = DateTime.UtcNow;
+                    if (now >= _nextScheduledEpgRefreshUtc)
+                    {
+                        Session.RaiseEpgRefreshRequested();
+                        _nextScheduledEpgRefreshUtc = now + Session.EpgRefreshInterval;
+                    }
+                }
+                catch (OperationCanceledException) { break; }
+                catch { }
+            }
+        }
+
+        private void OnEpgRefreshRequested()
+        {
+            if (_cts.IsCancellationRequested) return;
+            Dispatcher.InvokeAsync(() =>
+            {
+                LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
+                Log("EPG refresh triggered\n");
+                foreach (var ch in _channels)
+                {
+                    ch.EpgLoaded = false;
+                    ch.EpgLoading = false;
+                    ch.EpgAttempts = 0;
+                }
+                if (SelectedChannel != null)
+                {
+                    _ = EnsureEpgLoadedAsync(SelectedChannel, force: true);
+                    _ = LoadFullEpgForSelectedChannelAsync(SelectedChannel);
+                }
+            });
         }
 
         private void OpenSettings_Click(object sender, RoutedEventArgs e)
@@ -79,7 +130,8 @@ namespace DesktopApp.Views
             var settings = new SettingsWindow { Owner = this };
             if (settings.ShowDialog() == true)
             {
-                // Optionally display some confirmation or update UI; nothing needed now.
+                // update next scheduled time based on possibly changed interval
+                _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
             }
         }
 
@@ -176,6 +228,13 @@ namespace DesktopApp.Views
                     {
                         var tasks = _channels.Select(ch => Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch)).Task).ToList();
                         await Task.WhenAll(tasks);
+
+                        // Mark initial EPG timestamp after bulk load if not yet set
+                        if (Session.LastEpgUpdateUtc == null)
+                        {
+                            Session.LastEpgUpdateUtc = DateTime.UtcNow;
+                            Dispatcher.Invoke(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
+                        }
                     }
                     catch { }
                 }, _cts.Token);
@@ -347,6 +406,13 @@ namespace DesktopApp.Views
             ch.NowTimeRange = $"{startUtc.ToLocalTime():h:mm tt} - {endUtc.ToLocalTime():h:mm tt}";
             if (ReferenceEquals(ch, SelectedChannel))
                 NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
+
+            // If first ever EPG data set timestamp
+            if (Session.LastEpgUpdateUtc == null)
+            {
+                Session.LastEpgUpdateUtc = DateTime.UtcNow;
+                LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g");
+            }
         }
 
         private async Task LoadFullEpgForSelectedChannelAsync(Channel ch)
@@ -459,6 +525,7 @@ namespace DesktopApp.Views
             _cts.Cancel();
             base.OnClosed(e);
             _cts.Dispose();
+            Session.EpgRefreshRequested -= OnEpgRefreshRequested;
             if (!_logoutRequested)
             {
                 if (Owner is MainWindow mw)

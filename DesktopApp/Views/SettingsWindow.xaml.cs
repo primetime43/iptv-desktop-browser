@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using Microsoft.Win32;
 using DesktopApp.Models;
+using System.Windows.Controls;
 
 namespace DesktopApp.Views;
 
@@ -26,6 +27,12 @@ public partial class SettingsWindow : Window
         };
         PlayerExeTextBox.Text = Session.PlayerExePath ?? string.Empty;
         ArgsTemplateTextBox.Text = Session.PlayerArgsTemplate ?? string.Empty;
+
+        // EPG (resolve by name to avoid compile-time requirement for generated fields)
+        if (FindName("LastEpgUpdateTextBox") is TextBox last)
+            last.Text = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
+        if (FindName("EpgIntervalTextBox") is TextBox interval)
+            interval.Text = ((int)Session.EpgRefreshInterval.TotalMinutes).ToString();
     }
 
     private void BrowsePlayer_Click(object sender, RoutedEventArgs e)
@@ -77,8 +84,21 @@ public partial class SettingsWindow : Window
         Session.PreferredPlayer = GetSelectedKind();
         Session.PlayerExePath = string.IsNullOrWhiteSpace(PlayerExeTextBox.Text) ? null : PlayerExeTextBox.Text.Trim();
         Session.PlayerArgsTemplate = string.IsNullOrWhiteSpace(ArgsTemplateTextBox.Text) ? string.Empty : ArgsTemplateTextBox.Text.Trim();
+
+        if (FindName("EpgIntervalTextBox") is TextBox interval && int.TryParse(interval.Text.Trim(), out var minutes) && minutes > 0 && minutes <= 720)
+        {
+            Session.EpgRefreshInterval = TimeSpan.FromMinutes(minutes);
+        }
+
         DialogResult = true;
         Close();
+    }
+
+    private void UpdateEpgNow_Click(object sender, RoutedEventArgs e)
+    {
+        Session.RaiseEpgRefreshRequested();
+        if (FindName("LastEpgUpdateTextBox") is TextBox last)
+            last.Text = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
