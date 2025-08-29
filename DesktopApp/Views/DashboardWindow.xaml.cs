@@ -49,8 +49,16 @@ namespace DesktopApp.Views
                     SelectedChannelName = value?.Name ?? string.Empty;
                     if (value != null)
                     {
-                        _ = EnsureEpgLoadedAsync(value, force: true);
-                        _ = LoadFullEpgForSelectedChannelAsync(value);
+                        if (Session.Mode == SessionMode.Xtream)
+                        {
+                            _ = EnsureEpgLoadedAsync(value, force: true);
+                            _ = LoadFullEpgForSelectedChannelAsync(value);
+                        }
+                        else
+                        {
+                            _upcomingEntries.Clear();
+                            NowProgramText = string.Empty;
+                        }
                     }
                     else
                     {
@@ -90,17 +98,36 @@ namespace DesktopApp.Views
             InitializeComponent();
             DataContext = this;
             UserNameText.Text = Session.Username;
-            LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
+            LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : (Session.Mode == SessionMode.M3u ? "(n/a)" : "(never)");
             ApplyProfileFromSession();
             Loaded += async (_, __) =>
             {
                 Session.EpgRefreshRequested += OnEpgRefreshRequested;
-                _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
-                _ = RunEpgSchedulerLoopAsync();
-                await LoadCategoriesAsync();
+                if (Session.Mode == SessionMode.Xtream)
+                {
+                    _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
+                    _ = RunEpgSchedulerLoopAsync();
+                    await LoadCategoriesAsync();
+                }
+                else
+                {
+                    LoadCategoriesFromPlaylist();
+                }
                 UpdateViewVisibility();
                 UpdateNavButtons();
             };
+        }
+
+        private void LoadCategoriesFromPlaylist()
+        {
+            var groups = Session.PlaylistChannels
+                .GroupBy(p => string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category)
+                .OrderBy(g => g.Key)
+                .Select(g => new Category { Id = g.Key, Name = g.Key, ParentId = 0, ImageUrl = null })
+                .ToList();
+            _categories.Clear();
+            foreach (var c in groups) _categories.Add(c);
+            CategoriesCountText = _categories.Count + " categories";
         }
 
         private void UpdateNavButtons()
@@ -134,6 +161,14 @@ namespace DesktopApp.Views
 
         private void ApplyProfileFromSession()
         {
+            if (Session.Mode == SessionMode.M3u)
+            {
+                ProfileUsername = "M3U Playlist";
+                ProfileStatus = "(local)";
+                ProfileTrialText = ProfileExpiryText = ProfileDaysRemaining = ProfileMaxConnections = ProfileActiveConnections = string.Empty;
+                ProfileRawJson = "Playlist mode: EPG/account info not available.";
+                return;
+            }
             var ui = Session.UserInfo;
             if (ui == null) return;
             ProfileUsername = ui.username ?? Session.Username;
@@ -150,26 +185,18 @@ namespace DesktopApp.Views
                     var dt = DateTimeOffset.FromUnixTimeSeconds(unix).LocalDateTime;
                     ProfileExpiryText = dt.ToString("yyyy-MM-dd HH:mm");
                     var remaining = dt - DateTime.Now;
-                    if (remaining.TotalSeconds > 0)
-                    {
-                        ProfileDaysRemaining = Math.Floor(remaining.TotalDays).ToString();
-                    }
-                    else ProfileDaysRemaining = "Expired";
+                    if (remaining.TotalSeconds > 0) ProfileDaysRemaining = Math.Floor(remaining.TotalDays).ToString(); else ProfileDaysRemaining = "Expired";
                 }
                 catch { }
             }
             ProfileMaxConnections = ui.max_connections ?? string.Empty;
             ProfileActiveConnections = ui.active_cons ?? string.Empty;
-            try
-            {
-                ProfileRawJson = JsonSerializer.Serialize(ui, new JsonSerializerOptions { WriteIndented = true });
-            }
-            catch { }
+            try { ProfileRawJson = JsonSerializer.Serialize(ui, new JsonSerializerOptions { WriteIndented = true }); } catch { }
         }
 
         private async Task RunEpgSchedulerLoopAsync()
         {
-            while (!_cts.IsCancellationRequested)
+            while (!_cts.IsCancellationRequested && Session.Mode == SessionMode.Xtream)
             {
                 try
                 {
@@ -189,16 +216,14 @@ namespace DesktopApp.Views
 
         private void OnEpgRefreshRequested()
         {
-            if (_cts.IsCancellationRequested) return;
+            if (_cts.IsCancellationRequested || Session.Mode != SessionMode.Xtream) return;
             Dispatcher.InvokeAsync(() =>
             {
                 LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
                 Log("EPG refresh triggered\n");
                 foreach (var ch in _channels)
                 {
-                    ch.EpgLoaded = false;
-                    ch.EpgLoading = false;
-                    ch.EpgAttempts = 0;
+                    ch.EpgLoaded = false; ch.EpgLoading = false; ch.EpgAttempts = 0;
                 }
                 if (SelectedChannel != null)
                 {
@@ -211,24 +236,17 @@ namespace DesktopApp.Views
         private void OpenSettings_Click(object sender, RoutedEventArgs e)
         {
             var settings = new SettingsWindow { Owner = this };
-            if (settings.ShowDialog() == true)
-            {
-                _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
-            }
+            if (settings.ShowDialog() == true) _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
         }
 
         private void Log(string text)
         {
-            try
-            {
-                if (_isClosing || OutputText == null) return;
-                OutputText.AppendText(text);
-            }
-            catch { }
+            try { if (_isClosing || OutputText == null) return; OutputText.AppendText(text); } catch { }
         }
 
         private async Task LoadCategoriesAsync()
         {
+            if (Session.Mode != SessionMode.Xtream) return;
             try
             {
                 var url = Session.BuildApi("get_live_categories");
@@ -271,6 +289,21 @@ namespace DesktopApp.Views
 
         private async Task LoadChannelsForCategoryAsync(Category cat)
         {
+            if (Session.Mode == SessionMode.M3u)
+            {
+                SetGuideLoading(true);
+                try
+                {
+                    var list = Session.PlaylistChannels.Where(p => (string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category) == cat.Id)
+                        .Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId })
+                        .ToList();
+                    _channels.Clear();
+                    foreach (var c in list) _channels.Add(c);
+                    _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
+                }
+                finally { SetGuideLoading(false); }
+                return;
+            }
             SetGuideLoading(true);
             try
             {
@@ -300,21 +333,23 @@ namespace DesktopApp.Views
                 _channels.Clear();
                 foreach (var c in parsed) _channels.Add(c);
                 _ = Task.Run(() => PreloadLogosAsync(parsed), _cts.Token);
-
-                _ = Task.Run(async () =>
+                if (Session.Mode == SessionMode.Xtream)
                 {
-                    try
+                    _ = Task.Run(async () =>
                     {
-                        var tasks = _channels.Select(ch => Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch)).Task).ToList();
-                        await Task.WhenAll(tasks);
-                        if (Session.LastEpgUpdateUtc == null)
+                        try
                         {
-                            Session.LastEpgUpdateUtc = DateTime.UtcNow;
-                            Dispatcher.Invoke(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
+                            var tasks = _channels.Select(ch => Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch)).Task).ToList();
+                            await Task.WhenAll(tasks);
+                            if (Session.LastEpgUpdateUtc == null)
+                            {
+                                Session.LastEpgUpdateUtc = DateTime.UtcNow;
+                                Dispatcher.Invoke(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
+                            }
                         }
-                    }
-                    catch { }
-                }, _cts.Token);
+                        catch { }
+                    }, _cts.Token);
+                }
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading channels: " + ex.Message + "\n"); }
@@ -351,13 +386,8 @@ namespace DesktopApp.Views
                     try
                     {
                         var bmp = new BitmapImage();
-                        bmp.BeginInit();
-                        bmp.CacheOption = BitmapCacheOption.OnLoad;
-                        bmp.StreamSource = ms;
-                        bmp.EndInit();
-                        bmp.Freeze();
-                        _logoCache[url] = bmp;
-                        channel.LogoImage = bmp;
+                        bmp.BeginInit(); bmp.CacheOption = BitmapCacheOption.OnLoad; bmp.StreamSource = ms; bmp.EndInit(); bmp.Freeze();
+                        _logoCache[url] = bmp; channel.LogoImage = bmp;
                     }
                     catch { }
                 });
@@ -369,6 +399,7 @@ namespace DesktopApp.Views
 
         private async Task EnsureEpgLoadedAsync(Channel ch, bool force = false)
         {
+            if (Session.Mode != SessionMode.Xtream) return; // no EPG in m3u mode yet
             if (_cts.IsCancellationRequested) return;
             if (!force && (ch.EpgLoaded || ch.EpgLoading)) return;
             if (!force && ch.EpgAttempts >= 3 && !string.IsNullOrEmpty(ch.NowTitle)) return;
@@ -390,8 +421,8 @@ namespace DesktopApp.Views
 
         private async Task LoadEpgCurrentOnlyAsync(Channel ch, bool force)
         {
-            ch.EpgLoading = true;
-            ch.EpgAttempts++;
+            if (Session.Mode != SessionMode.Xtream) return;
+            ch.EpgLoading = true; ch.EpgAttempts++;
             try
             {
                 if (_cts.IsCancellationRequested) { ch.EpgLoaded = true; ch.EpgLoading = false; return; }
@@ -401,18 +432,9 @@ namespace DesktopApp.Views
                 var json = await resp.Content.ReadAsStringAsync(_cts.Token);
                 Log("(length=" + json.Length + ")\n\n");
                 if (_cts.IsCancellationRequested) return;
-
                 var trimmed = json.AsSpan().TrimStart();
-                if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
-                {
-                    Log("EPG non-JSON response skipped\n");
-                    ch.EpgLoaded = true;
-                    return;
-                }
-
-                var nowUtc = DateTime.UtcNow;
-                bool found = false;
-                EpgEntry? fallbackFirstFuture = null;
+                if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '[')) { Log("EPG non-JSON response skipped\n"); ch.EpgLoaded = true; return; }
+                var nowUtc = DateTime.UtcNow; bool found = false; EpgEntry? fallbackFirstFuture = null;
                 try
                 {
                     using var doc = JsonDocument.Parse(json);
@@ -423,51 +445,20 @@ namespace DesktopApp.Views
                             var start = GetUnix(el, "start_timestamp");
                             var end = GetUnix(el, "stop_timestamp");
                             if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
-
                             string titleRaw = TryGetString(el, "title", "name", "programme", "program");
                             string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
-                            string title = DecodeMaybeBase64(titleRaw);
-                            string desc = DecodeMaybeBase64(descRaw);
-
+                            string title = DecodeMaybeBase64(titleRaw); string desc = DecodeMaybeBase64(descRaw);
                             bool nowFlag = el.TryGetProperty("now_playing", out var np) && (np.ValueKind == JsonValueKind.Number ? np.GetInt32() == 1 : (np.ValueKind == JsonValueKind.String && np.GetString() == "1"));
                             bool isCurrent = nowFlag || (nowUtc >= start && nowUtc < end);
-                            if (isCurrent && !string.IsNullOrWhiteSpace(title))
-                            {
-                                ApplyNow(ch, title, desc, start, end);
-                                found = true;
-                                break;
-                            }
-
-                            if (!isCurrent && start > nowUtc && fallbackFirstFuture == null && !string.IsNullOrWhiteSpace(title))
-                            {
-                                fallbackFirstFuture = new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc };
-                            }
+                            if (isCurrent && !string.IsNullOrWhiteSpace(title)) { ApplyNow(ch, title, desc, start, end); found = true; break; }
+                            if (!isCurrent && start > nowUtc && fallbackFirstFuture == null && !string.IsNullOrWhiteSpace(title)) fallbackFirstFuture = new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc };
                         }
                     }
                 }
                 catch (Exception ex) { Log("PARSE ERROR (current epg): " + ex.Message + "\n"); }
-
-                if (!found && fallbackFirstFuture != null)
-                {
-                    ApplyNow(ch, fallbackFirstFuture.Title, fallbackFirstFuture.Description ?? string.Empty, fallbackFirstFuture.StartUtc, fallbackFirstFuture.EndUtc);
-                    found = true;
-                }
-
-                if (!found)
-                {
-                    ch.EpgLoaded = false;
-                    if (ch.EpgAttempts < 3 && !force)
-                    {
-                        _ = Task.Delay(1500, _cts.Token).ContinueWith(t =>
-                        {
-                            if (!t.IsCanceled) _ = Dispatcher.InvokeAsync(() => EnsureEpgLoadedAsync(ch));
-                        });
-                    }
-                }
-                else
-                {
-                    ch.EpgLoaded = true;
-                }
+                if (!found && fallbackFirstFuture != null) { ApplyNow(ch, fallbackFirstFuture.Title, fallbackFirstFuture.Description ?? string.Empty, fallbackFirstFuture.StartUtc, fallbackFirstFuture.EndUtc); found = true; }
+                if (!found) { ch.EpgLoaded = false; if (ch.EpgAttempts < 3 && !force) { _ = Task.Delay(1500, _cts.Token).ContinueWith(t => { if (!t.IsCanceled) _ = Dispatcher.InvokeAsync(() => EnsureEpgLoadedAsync(ch)); }); } }
+                else { ch.EpgLoaded = true; }
             }
             catch (OperationCanceledException) { ch.EpgLoaded = true; }
             catch (Exception ex) { Log("ERROR loading epg: " + ex.Message + "\n"); ch.EpgLoaded = true; }
@@ -476,22 +467,17 @@ namespace DesktopApp.Views
 
         private void ApplyNow(Channel ch, string title, string desc, DateTime startUtc, DateTime endUtc)
         {
-            ch.NowTitle = title;
-            ch.NowDescription = desc;
-            ch.NowTimeRange = $"{startUtc.ToLocalTime():h:mm tt} - {endUtc.ToLocalTime():h:mm tt}";
-            if (ReferenceEquals(ch, SelectedChannel))
-                NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
-
-            // If first ever EPG data set timestamp
+            ch.NowTitle = title; ch.NowDescription = desc; ch.NowTimeRange = $"{startUtc.ToLocalTime():h:mm tt} - {endUtc.ToLocalTime():h:mm tt}";
+            if (ReferenceEquals(ch, SelectedChannel)) NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
             if (Session.LastEpgUpdateUtc == null)
             {
-                Session.LastEpgUpdateUtc = DateTime.UtcNow;
-                LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g");
+                Session.LastEpgUpdateUtc = DateTime.UtcNow; LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g");
             }
         }
 
         private async Task LoadFullEpgForSelectedChannelAsync(Channel ch)
         {
+            if (Session.Mode != SessionMode.Xtream) return;
             if (_cts.IsCancellationRequested) { _upcomingEntries.Clear(); return; }
             try
             {
@@ -500,10 +486,8 @@ namespace DesktopApp.Views
                 using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, _cts.Token);
                 var json = await resp.Content.ReadAsStringAsync(_cts.Token);
                 Log("(length=" + json.Length + ")\n\n");
-                var trimmed = json.AsSpan().TrimStart();
-                if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '[')) return;
-                List<EpgEntry> upcoming = new();
-                var nowUtc = DateTime.UtcNow;
+                var trimmed = json.AsSpan().TrimStart(); if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '[')) return;
+                List<EpgEntry> upcoming = new(); var nowUtc = DateTime.UtcNow;
                 try
                 {
                     using var doc = JsonDocument.Parse(json);
@@ -511,27 +495,14 @@ namespace DesktopApp.Views
                     {
                         foreach (var el in listings.EnumerateArray())
                         {
-                            var start = GetUnix(el, "start_timestamp");
-                            var end = GetUnix(el, "stop_timestamp");
-                            if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
-                            string titleRaw = TryGetString(el, "title", "name", "programme", "program");
-                            string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
-                            string title = DecodeMaybeBase64(titleRaw);
-                            string desc = DecodeMaybeBase64(descRaw);
-                            bool isNow = nowUtc >= start && nowUtc < end;
-                            if (!isNow && start >= nowUtc)
-                            {
-                                upcoming.Add(new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc });
-                            }
+                            var start = GetUnix(el, "start_timestamp"); var end = GetUnix(el, "stop_timestamp"); if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
+                            string titleRaw = TryGetString(el, "title", "name", "programme", "program"); string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
+                            string title = DecodeMaybeBase64(titleRaw); string desc = DecodeMaybeBase64(descRaw); bool isNow = nowUtc >= start && nowUtc < end; if (!isNow && start >= nowUtc) upcoming.Add(new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc });
                         }
                     }
                 }
                 catch (Exception ex) { Log("PARSE ERROR (full epg selected): " + ex.Message + "\n"); }
-                await Dispatcher.InvokeAsync(() =>
-                {
-                    _upcomingEntries.Clear();
-                    foreach (var e in upcoming.OrderBy(e => e.StartUtc).Take(10)) _upcomingEntries.Add(e);
-                });
+                await Dispatcher.InvokeAsync(() => { _upcomingEntries.Clear(); foreach (var e in upcoming.OrderBy(e => e.StartUtc).Take(10)) _upcomingEntries.Add(e); });
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading full epg: " + ex.Message + "\n"); }
@@ -539,12 +510,7 @@ namespace DesktopApp.Views
 
         private static DateTime GetUnix(JsonElement el, string prop)
         {
-            if (el.TryGetProperty(prop, out var tsEl))
-            {
-                var str = tsEl.GetString();
-                if (long.TryParse(str, out var unix) && unix > 0)
-                    return DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime;
-            }
+            if (el.TryGetProperty(prop, out var tsEl)) { var str = tsEl.GetString(); if (long.TryParse(str, out var unix) && unix > 0) return DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime; }
             return DateTime.MinValue;
         }
 
@@ -569,6 +535,7 @@ namespace DesktopApp.Views
 
         private async Task RunApiCall(string action)
         {
+            if (Session.Mode != SessionMode.Xtream) { Log("API calls disabled in M3U mode.\n"); return; }
             try
             {
                 var url = Session.BuildApi(action);
@@ -583,31 +550,14 @@ namespace DesktopApp.Views
 
         private void Logout_Click(object sender, RoutedEventArgs e)
         {
-            _logoutRequested = true;
-            _cts.Cancel();
-            Session.Username = Session.Password = string.Empty;
-            if (Owner is MainWindow mw)
-            {
-                Application.Current.MainWindow = mw;
-                mw.Show();
-            }
-            Close();
+            _logoutRequested = true; _cts.Cancel(); Session.Username = Session.Password = string.Empty; if (Owner is MainWindow mw) { Application.Current.MainWindow = mw; mw.Show(); } Close();
         }
 
         protected override void OnClosed(EventArgs e)
         {
-            _isClosing = true;
-            _cts.Cancel();
-            base.OnClosed(e);
-            _cts.Dispose();
-            Session.EpgRefreshRequested -= OnEpgRefreshRequested;
-            if (!_logoutRequested)
+            _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; if (!_logoutRequested)
             {
-                if (Owner is MainWindow mw)
-                {
-                    try { mw.Close(); } catch { }
-                }
-                Application.Current.Shutdown();
+                if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown();
             }
         }
 
@@ -615,46 +565,41 @@ namespace DesktopApp.Views
         {
             if (sender is FrameworkElement fe && fe.DataContext is Category cat)
             {
-                SelectedCategoryName = cat.Name;
-                await LoadChannelsForCategoryAsync(cat);
-                CurrentViewKey = "guide"; // switch to guide
+                SelectedCategoryName = cat.Name; await LoadChannelsForCategoryAsync(cat); CurrentViewKey = "guide"; // switch to guide
             }
         }
 
         private async void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is Channel ch)
-                await EnsureEpgLoadedAsync(ch);
+            if (sender is FrameworkElement fe && fe.DataContext is Channel ch) await EnsureEpgLoadedAsync(ch);
         }
 
         private void ChannelTile_Click(object sender, RoutedEventArgs e) { }
 
-        private DateTime _lastChannelClickTime;
-        private FrameworkElement? _lastChannelClickedElement;
+        private DateTime _lastChannelClickTime; private FrameworkElement? _lastChannelClickedElement;
         private void ChannelTile_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             if (sender is not FrameworkElement fe || fe.DataContext is not Channel ch) return;
-            var now = DateTime.UtcNow;
-            const int doubleClickMs = 400;
+            var now = DateTime.UtcNow; const int doubleClickMs = 400;
             if (_lastChannelClickedElement == fe && (now - _lastChannelClickTime).TotalMilliseconds <= doubleClickMs)
             {
-                SelectedChannel = ch;
-                TryLaunchChannelInPlayer(ch);
-                _lastChannelClickedElement = null;
+                SelectedChannel = ch; TryLaunchChannelInPlayer(ch); _lastChannelClickedElement = null;
             }
-            else
-            {
-                SelectedChannel = ch;
-                _lastChannelClickedElement = fe;
-                _lastChannelClickTime = now;
-            }
+            else { SelectedChannel = ch; _lastChannelClickedElement = fe; _lastChannelClickTime = now; }
         }
 
         private void TryLaunchChannelInPlayer(Channel ch)
         {
             try
             {
-                var url = Session.BuildStreamUrl(ch.Id, "ts");
+                string url;
+                if (Session.Mode == SessionMode.M3u)
+                {
+                    var pe = Session.PlaylistChannels.FirstOrDefault(p => p.Id == ch.Id);
+                    if (pe == null) { Log("Playlist entry not found.\n"); return; }
+                    url = pe.StreamUrl;
+                }
+                else url = Session.BuildStreamUrl(ch.Id, "ts");
                 Log($"Launching player: {Session.PreferredPlayer} {url}\n");
                 var psi = Session.BuildPlayerProcess(url, ch.Name);
                 if (string.IsNullOrWhiteSpace(psi.FileName))
@@ -672,7 +617,6 @@ namespace DesktopApp.Views
             }
         }
 
-        public event PropertyChangedEventHandler? PropertyChanged;
-        private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        public event PropertyChangedEventHandler? PropertyChanged; private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }

@@ -1,17 +1,31 @@
 using System;
 using System.Diagnostics;
+using System.Collections.Generic;
 using DesktopApp.Models;
 
 namespace DesktopApp.Models;
 
 public static class Session
 {
+    public static SessionMode Mode { get; set; } = SessionMode.Xtream; // default existing behavior
+
     public static string Host { get; set; } = string.Empty;
     public static int Port { get; set; }
     public static bool UseSsl { get; set; }
     public static string Username { get; set; } = string.Empty;
     public static string Password { get; set; } = string.Empty;
     public static UserInfo? UserInfo { get; set; }
+
+    // M3U playlist data (used when Mode == M3u)
+    public static List<PlaylistEntry> PlaylistChannels { get; set; } = new();
+
+    public static void ResetM3u()
+    {
+        PlaylistChannels.Clear();
+        UserInfo = null;
+        Username = string.Empty;
+        Password = string.Empty;
+    }
 
     // Legacy VLC path property (will still be honored as fallback for VLC player selection)
     public static string? VlcPath { get; set; }
@@ -23,12 +37,13 @@ public static class Session
     // Argument template supports tokens: {url} {title}
     public static string PlayerArgsTemplate { get; set; } = "\"{url}\""; // will be overridden by defaults per player kind when changed in UI
 
-    // EPG refresh tracking
+    // EPG refresh tracking (only meaningful for Xtream mode currently)
     public static DateTime? LastEpgUpdateUtc { get; set; }
     public static TimeSpan EpgRefreshInterval { get; set; } = TimeSpan.FromMinutes(30);
     public static event Action? EpgRefreshRequested;
     public static void RaiseEpgRefreshRequested()
     {
+        if (Mode != SessionMode.Xtream) return; // no EPG in m3u mode yet
         LastEpgUpdateUtc = DateTime.UtcNow;
         try { EpgRefreshRequested?.Invoke(); } catch { }
     }
@@ -92,4 +107,21 @@ public enum PlayerKind
     MPCHC,
     MPV,
     Custom
+}
+
+public enum SessionMode
+{
+    Xtream,
+    M3u
+}
+
+public class PlaylistEntry
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty; // group-title
+    public string? Logo { get; set; }
+    public string StreamUrl { get; set; } = string.Empty;
+    public string? TvgId { get; set; }
+    public string? TvgName { get; set; }
 }
