@@ -14,6 +14,7 @@ using System.Windows.Media.Imaging;
 using System.IO;
 using System.Threading;
 using System.Diagnostics;
+using System.Windows.Data;
 
 namespace DesktopApp.Views
 {
@@ -26,6 +27,14 @@ namespace DesktopApp.Views
         private readonly Dictionary<string, BitmapImage> _logoCache = new(StringComparer.OrdinalIgnoreCase);
         private readonly SemaphoreSlim _logoSemaphore = new(6);
         private readonly ObservableCollection<EpgEntry> _upcomingEntries = new(); public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
+
+        // Filtered views (renamed to avoid conflict with XAML names)
+        public ICollectionView CategoriesCollectionView { get; }
+        public ICollectionView ChannelsCollectionView { get; }
+
+        // Search
+        private string _searchQuery = string.Empty; public string SearchQuery { get => _searchQuery; set { if (value != _searchQuery) { _searchQuery = value; OnPropertyChanged(); ApplySearch(); } } }
+        private bool _searchAllChannels; public bool SearchAllChannels { get => _searchAllChannels; set { if (value != _searchAllChannels) { _searchAllChannels = value; OnPropertyChanged(); ApplySearch(); } } }
 
         // Selection / binding props
         private string _selectedCategoryName = string.Empty; public string SelectedCategoryName { get => _selectedCategoryName; set { if (value != _selectedCategoryName) { _selectedCategoryName = value; OnPropertyChanged(); } } }
@@ -76,11 +85,14 @@ namespace DesktopApp.Views
         private string _profileRawJson = string.Empty; public string ProfileRawJson { get => _profileRawJson; set { if (value != _profileRawJson) { _profileRawJson = value; OnPropertyChanged(); } } }
 
         // View selection
-        private string _currentViewKey = "categories"; public string CurrentViewKey { get => _currentViewKey; set { if (value != _currentViewKey) { _currentViewKey = value; OnPropertyChanged(); UpdateViewVisibility(); UpdateNavButtons(); } } }
+        private string _currentViewKey = "categories"; public string CurrentViewKey { get => _currentViewKey; set { if (value != _currentViewKey) { _currentViewKey = value; OnPropertyChanged(); UpdateViewVisibility(); UpdateNavButtons(); ApplySearch(); } } }
 
         public DashboardWindow()
         {
             InitializeComponent(); DataContext = this; UserNameText.Text = Session.Username;
+            CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
+            ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
+            CategoriesCollectionView.Filter = CategoriesFilter; ChannelsCollectionView.Filter = ChannelsFilter;
             LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : (Session.Mode == SessionMode.M3u ? "(none)" : "(never)");
             ApplyProfileFromSession();
             if (Session.Mode == SessionMode.M3u) Session.M3uEpgUpdated += OnM3uEpgUpdated;
@@ -99,6 +111,76 @@ namespace DesktopApp.Views
                 }
                 UpdateViewVisibility(); UpdateNavButtons();
             };
+        }
+
+        private bool CategoriesFilter(object? obj)
+        {
+            if (obj is not Category c) return false;
+            if (string.IsNullOrWhiteSpace(SearchQuery)) return true;
+            return c.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase);
+        }
+        private bool ChannelsFilter(object? obj)
+        {
+            if (obj is not Channel ch) return false;
+            if (string.IsNullOrWhiteSpace(SearchQuery)) return true;
+            if (ch.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)) return true;
+            if (!string.IsNullOrWhiteSpace(ch.NowTitle) && ch.NowTitle.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+        private void ApplySearch()
+        {
+            if (SearchAllChannels && CurrentViewKey == "categories" && !string.IsNullOrWhiteSpace(SearchQuery))
+            {
+                // Switch to guide automatically for global search
+                CurrentViewKey = "guide";
+            }
+            CategoriesCollectionView.Refresh();
+            ChannelsCollectionView.Refresh();
+            if (CurrentViewKey == "categories")
+            {
+                CategoriesCountText = _categories.Count(c => CategoriesFilter(c)).ToString() + " categories";
+            }
+            if (SearchAllChannels && CurrentViewKey == "guide" && Session.Mode == SessionMode.Xtream)
+            {
+                // If global search: ensure all channels loaded (not just selected category). Simple strategy: if channels list doesn't exceed threshold, load all.
+                if (!_loadedAllChannelsOnce) _ = EnsureAllChannelsLoadedAsync();
+            }
+        }
+
+        private bool _loadedAllChannelsOnce;
+        private async Task EnsureAllChannelsLoadedAsync()
+        {
+            if (Session.Mode != SessionMode.Xtream || _loadedAllChannelsOnce) return;
+            try
+            {
+                var url = Session.BuildApi("get_live_streams"); Log($"GET {url} (all channels for global search)\n");
+                var json = await _http.GetStringAsync(url, _cts.Token); Log(json + "\n\n");
+                var parsed = new List<Channel>();
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                        foreach (var el in doc.RootElement.EnumerateArray())
+                            parsed.Add(new Channel
+                            {
+                                Id = el.TryGetProperty("stream_id", out var idEl) && idEl.TryGetInt32(out var sid) ? sid : 0,
+                                Name = el.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
+                                Logo = el.TryGetProperty("stream_icon", out var iconEl) ? iconEl.GetString() : null,
+                                EpgChannelId = el.TryGetProperty("epg_channel_id", out var epgEl) ? epgEl.GetString() : null
+                            });
+                }
+                catch (Exception ex) { Log("PARSE ERROR channels(all): " + ex.Message + "\n"); }
+                // Merge new channels with existing (avoid duplicates)
+                var existingIds = new HashSet<int>(_channels.Select(c => c.Id));
+                foreach (var c in parsed)
+                {
+                    if (!existingIds.Contains(c.Id)) _channels.Add(c);
+                }
+                _loadedAllChannelsOnce = true; ApplySearch();
+                _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log("ERROR loading all channels: " + ex.Message + "\n"); }
         }
 
         // ===================== M3U XMLTV EPG =====================
@@ -156,8 +238,8 @@ namespace DesktopApp.Views
 
         private void UpdateViewVisibility()
         {
-            if (CategoriesView == null) return;
-            CategoriesView.Visibility = CurrentViewKey == "categories" ? Visibility.Visible : Visibility.Collapsed;
+            if (CategoriesGrid == null) return;
+            CategoriesGrid.Visibility = CurrentViewKey == "categories" ? Visibility.Visible : Visibility.Collapsed;
             GuideView.Visibility = CurrentViewKey == "guide" ? Visibility.Visible : Visibility.Collapsed;
             ProfileView.Visibility = CurrentViewKey == "profile" ? Visibility.Visible : Visibility.Collapsed;
             OutputView.Visibility = CurrentViewKey == "output" ? Visibility.Visible : Visibility.Collapsed;
@@ -234,6 +316,7 @@ namespace DesktopApp.Views
                 .Select(g => new Category { Id = g.Key, Name = g.Key, ParentId = 0, ImageUrl = null }).ToList();
             _categories.Clear(); foreach (var c in groups) _categories.Add(c);
             CategoriesCountText = _categories.Count + " categories";
+            ApplySearch();
         }
         private async Task LoadCategoriesAsync()
         {
@@ -257,6 +340,7 @@ namespace DesktopApp.Views
                 }
                 catch (Exception ex) { Log("PARSE ERROR categories: " + ex.Message + "\n"); }
                 _categories.Clear(); foreach (var c in parsed) _categories.Add(c); CategoriesCountText = $"{_categories.Count} categories";
+                ApplySearch();
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR: " + ex.Message + "\n"); }
@@ -281,6 +365,7 @@ namespace DesktopApp.Views
                     foreach (var c in _channels) UpdateChannelEpgFromXmltv(c);
                 }
                 finally { SetGuideLoading(false); }
+                ApplySearch();
                 return;
             }
             SetGuideLoading(true);
@@ -322,6 +407,7 @@ namespace DesktopApp.Views
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading channels: " + ex.Message + "\n"); }
             finally { SetGuideLoading(false); }
+            ApplySearch();
         }
 
         // ===================== Logos =====================

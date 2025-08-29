@@ -7,7 +7,7 @@
         <Style x:Key="HeaderButtonBaseStyle" TargetType="Button">
             <Setter Property="FontSize" Value="12"/>
             <Setter Property="Padding" Value="12 4"/>
-            <Setter Property="Margin" Value="0 0 12 0"/>
+            <Setter Property="Margin" Value="0 0 8 0"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderBrush" Value="#223247"/>
             <Setter Property="BorderThickness" Value="1"/>
@@ -101,23 +101,33 @@
                     <TextBlock Text="  -  Last EPG:" Foreground="#8BA1B9" Margin="14 0 4 0"/>
                     <TextBlock Text="{Binding LastEpgUpdateText}" Foreground="#DDE6F2"/>
                     <!-- Top navigation buttons -->
-                    <StackPanel Orientation="Horizontal" Margin="40 0 0 0">
+                    <StackPanel Orientation="Horizontal" Margin="40 0 0 0" VerticalAlignment="Center">
                         <Button x:Name="NavCategoriesBtn" Content="Categories" Click="NavCategories_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
                         <Button x:Name="NavGuideBtn" Content="Guide" Click="NavGuide_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
                         <Button x:Name="NavProfileBtn" Content="Profile" Click="NavProfile_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
-                        <Button x:Name="NavOutputBtn" Content="Raw Output" Click="NavOutput_Click" Margin="0 0 0 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
+                        <Button x:Name="NavOutputBtn" Content="Raw Output" Click="NavOutput_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
+                        <!-- Search TextBox -->
+                        <Border Background="#182433" CornerRadius="4" BorderBrush="#223247" BorderThickness="1" Margin="0 0 0 0" Padding="4 0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Grid VerticalAlignment="Center">
+                                    <TextBox x:Name="SearchTextBox" Width="180" BorderThickness="0" Background="Transparent" Foreground="#DDE6F2" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"  ToolTip="Search (Categories / Channels)" Padding="4 4 4 4"/>
+                                    <TextBlock Text="Search..." Foreground="#5A6B7F" Margin="6 0 0 0" IsHitTestVisible="False" VerticalAlignment="Center" Visibility="{Binding Text, ElementName=SearchTextBox, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                </Grid>
+                                <CheckBox Content="All" Margin="8 0 4 0" VerticalAlignment="Center" Foreground="#DDE6F2" IsChecked="{Binding SearchAllChannels}" ToolTip="Search across all channels (may load more)"/>
+                            </StackPanel>
+                        </Border>
                     </StackPanel>
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <TextBlock Text="User:" Foreground="#8BA1B9" Margin="0 0 10 0"/>
                     <TextBlock x:Name="UserNameText" Foreground="#DDE6F2" FontWeight="SemiBold" Margin="0 0 20 0"/>
-                    <Button Style="{StaticResource PrimaryHeaderButtonStyle}" Click="OpenSettings_Click" ToolTip="Open settings" Margin="0 0 12 0">
+                    <Button Style="{StaticResource PrimaryHeaderButtonStyle}" Click="OpenSettings_Click" ToolTip="Open settings" Margin="0 0 8 0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE713;" Margin="0 0 6 0"/>
                             <TextBlock Text="Settings"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource DangerHeaderButtonStyle}" Click="Logout_Click" Margin="0 0 0 0">
+                    <Button Style="{StaticResource DangerHeaderButtonStyle}" Click="Logout_Click">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8AC;" Margin="0 0 6 0"/>
                             <TextBlock Text="Logout"/>
@@ -164,18 +174,18 @@
                 <!-- Overlaid views; full width since nav moved to header -->
                 <Grid>
                     <!-- Categories View -->
-                    <Grid x:Name="CategoriesView" Visibility="Visible">
+                    <Grid x:Name="CategoriesGrid" Visibility="Visible">
                         <Grid Margin="12">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition/>
                             </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="Categories" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14"/>
                                 <TextBlock Margin="12 0 0 0" Foreground="#8BA1B9" Text="{Binding CategoriesCountText}"/>
                             </StackPanel>
                             <ScrollViewer Grid.Row="1" Margin="0 10 0 0" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding Categories}">
+                                <ItemsControl ItemsSource="{Binding CategoriesCollectionView}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate>
                                             <WrapPanel IsItemsHost="True" />
@@ -221,7 +231,7 @@
                                     </StackPanel>
                                 </Grid>
                                 <ScrollViewer x:Name="GuideScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
-                                    <ItemsControl ItemsSource="{Binding Channels}">
+                                    <ItemsControl ItemsSource="{Binding ChannelsCollectionView}">
                                         <ItemsControl.ItemsPanel>
                                             <ItemsPanelTemplate>
                                                 <WrapPanel IsItemsHost="True" />
