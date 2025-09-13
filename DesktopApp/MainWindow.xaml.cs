@@ -200,14 +200,56 @@ namespace DesktopApp
                 LoginButton.IsEnabled = true;
                 return;
             }
-            if (!int.TryParse(portText, out var port))
+
+            // allow user to embed scheme and/or port in server input (e.g. https://example.com:443 or example.com:8080)
+            string normalizedHost = serverRaw;
+            int embeddedPort = 0;
+            bool embeddedSsl = false;
+            try
             {
-                SetStatus("Port must be numeric.", BrushError);
+                // If input missing scheme, prepend http:// for parsing
+                string test = serverRaw.Contains("://", StringComparison.OrdinalIgnoreCase) ? serverRaw : "http://" + serverRaw;
+                if (Uri.TryCreate(test, UriKind.Absolute, out var uri))
+                {
+                    normalizedHost = uri.Host; // exclude port
+                    embeddedPort = uri.Port; // captures even default ports (80/443) if explicitly present
+                    embeddedSsl = string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch { }
+            // Strip any manual protocol & trailing slash manually (fallback)
+            normalizedHost = NormalizeHost(normalizedHost);
+
+            // Parse port textbox or fall back to embedded port
+            int port;
+            bool portParsed = int.TryParse(portText, out var parsedPortTextbox);
+            if (portParsed)
+            {
+                port = parsedPortTextbox;
+            }
+            else if (embeddedPort > 0)
+            {
+                port = embeddedPort;
+            }
+            else
+            {
+                SetStatus("Port must be numeric (or specify in URL).", BrushError);
                 LoginButton.IsEnabled = true;
                 return;
             }
+
+            // If SSL checkbox not set but URL scheme specified https, auto-enable
+            if (!ssl && embeddedSsl)
+            {
+                ssl = true;
+                SslCheckBox.IsChecked = true; // reflect to UI
+            }
+
             if (ssl && (portText == "80" || port == 80)) { port = 443; }
-            string host = NormalizeHost(serverRaw);
+            if (!ssl && port == 0) port = 80;
+            if (ssl && port == 0) port = 443;
+
+            string host = normalizedHost;
             var scheme = ssl ? "https" : "http";
             var baseUrl = $"{scheme}://{host}:{port}";
             var candidateUrls = new[]
@@ -512,6 +554,13 @@ namespace DesktopApp
             if (host.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) host = host[7..];
             if (host.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) host = host[8..];
             host = host.TrimEnd('/');
+            // If user still has :port in host (because parsing failed), strip it here to avoid duplicating
+            var colon = host.LastIndexOf(':');
+            if (colon > 0 && colon < host.Length - 1 && host.IndexOf(']') < colon && host.IndexOf('/') == -1) // rudimentary check (ignore IPv6 [] and paths)
+            {
+                var maybePort = host[(colon + 1)..];
+                if (maybePort.All(char.IsDigit)) host = host[..colon];
+            }
             return host;
         }
 
