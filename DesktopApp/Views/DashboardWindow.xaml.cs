@@ -47,6 +47,7 @@ namespace DesktopApp.Views
         // Selection / binding props
         private string _selectedCategoryName = string.Empty; public string SelectedCategoryName { get => _selectedCategoryName; set { if (value != _selectedCategoryName) { _selectedCategoryName = value; OnPropertyChanged(); } } }
         private string _categoriesCountText = string.Empty; public string CategoriesCountText { get => _categoriesCountText; set { if (value != _categoriesCountText) { _categoriesCountText = value; OnPropertyChanged(); } } }
+        private string _channelsCountText = "0 channels"; public string ChannelsCountText { get => _channelsCountText; set { if (value != _channelsCountText) { _channelsCountText = value; OnPropertyChanged(); } } }
         private Channel? _selectedChannel; public Channel? SelectedChannel { get => _selectedChannel; set { if (value == _selectedChannel) return; _selectedChannel = value; OnPropertyChanged(); SelectedChannelName = value?.Name ?? string.Empty; if (value != null) { if (Session.Mode == SessionMode.Xtream) { _ = EnsureEpgLoadedAsync(value, force: true); _ = LoadFullEpgForSelectedChannelAsync(value); } else { UpdateChannelEpgFromXmltv(value); LoadUpcomingFromXmltv(value); } } else { _upcomingEntries.Clear(); NowProgramText = string.Empty; } } }
         private string _selectedChannelName = string.Empty; public string SelectedChannelName { get => _selectedChannelName; set { if (value != _selectedChannelName) { _selectedChannelName = value; OnPropertyChanged(); } } }
         private string _nowProgramText = string.Empty; public string NowProgramText { get => _nowProgramText; set { if (value != _nowProgramText) { _nowProgramText = value; OnPropertyChanged(); } } }
@@ -189,6 +190,8 @@ namespace DesktopApp.Views
             ChannelsCollectionView.Refresh();
             if (CurrentViewKey == "categories")
                 CategoriesCountText = _categories.Count(c => CategoriesFilter(c)).ToString() + " categories";
+            else if (CurrentViewKey == "guide")
+                ChannelsCountText = _channels.Count(c => ChannelsFilter(c)).ToString() + " channels";
         }
 
         private async Task EnsureAllChannelsIndexAndFilterAsync()
@@ -210,6 +213,7 @@ namespace DesktopApp.Views
             _channels.Clear();
             if (query.Length == 0)
             {
+                ChannelsCountText = "0 channels";
                 return; // nothing to show until user types
             }
             // Simple case-insensitive contains; can extend later
@@ -217,6 +221,7 @@ namespace DesktopApp.Views
                                            .Take(1000) // safeguard huge lists
                                            .ToList();
             foreach (var m in matches) _channels.Add(m);
+            ChannelsCountText = matches.Count.ToString() + " channels";
             ChannelsCollectionView.Refresh();
             // Lazy load logos for shown subset
             _ = Task.Run(() => PreloadLogosAsync(matches), _cts.Token);
@@ -449,6 +454,7 @@ namespace DesktopApp.Views
                     var list = Session.PlaylistChannels.Where(p => (string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category) == cat.Id)
                         .Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId }).ToList();
                     _channels.Clear(); foreach (var c in list) _channels.Add(c);
+                    ChannelsCountText = _channels.Count.ToString() + " channels";
                     _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
                     foreach (var c in _channels) UpdateChannelEpgFromXmltv(c);
                 }
@@ -477,6 +483,7 @@ namespace DesktopApp.Views
                 }
                 catch (Exception ex) { Log("PARSE ERROR channels: " + ex.Message + "\n"); }
                 _channels.Clear(); foreach (var c in parsed) _channels.Add(c);
+                ChannelsCountText = _channels.Count.ToString() + " channels";
                 _ = Task.Run(() => PreloadLogosAsync(parsed), _cts.Token);
                 _ = Task.Run(async () =>
                 {
