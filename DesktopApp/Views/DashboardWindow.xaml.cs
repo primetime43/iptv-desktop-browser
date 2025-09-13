@@ -66,7 +66,10 @@ namespace DesktopApp.Views
         private string _profileRawJson = string.Empty; public string ProfileRawJson { get => _profileRawJson; set { if (value != _profileRawJson) { _profileRawJson = value; OnPropertyChanged(); } } }
 
         // View selection
-        private string _currentViewKey = "categories"; public string CurrentViewKey { get => _currentViewKey; set { if (value != _currentViewKey) { _currentViewKey = value; OnPropertyChanged(); UpdateViewVisibility(); UpdateNavButtons(); ApplySearch(); } } }
+        private string _currentViewKey = "categories"; public string CurrentViewKey { get => _currentViewKey; set { if (value != _currentViewKey) { if (value == "guide" && !IsGuideReady) return; _currentViewKey = value; OnPropertyChanged(); UpdateViewVisibility(); UpdateNavButtons(); ApplySearch(); } } }
+
+        // Guide readiness (enabled only after first category selection)
+        private bool _isGuideReady = false; public bool IsGuideReady { get => _isGuideReady; set { if (value != _isGuideReady) { _isGuideReady = value; OnPropertyChanged(); UpdateNavButtons(); } } }
 
         public DashboardWindow()
         {
@@ -176,8 +179,8 @@ namespace DesktopApp.Views
         {
             if (IsGlobalSearchActive)
             {
-                // Ensure view is guide
-                if (CurrentViewKey != "guide") CurrentViewKey = "guide";
+                // Ensure view is guide (only if guide is ready)
+                if (CurrentViewKey != "guide" && IsGuideReady) CurrentViewKey = "guide";
                 _ = EnsureAllChannelsIndexAndFilterAsync();
                 return; // filtering will happen async
             }
@@ -293,15 +296,25 @@ namespace DesktopApp.Views
         // ===================== Navigation / UI =====================
         private void UpdateNavButtons()
         {
-            void StyleBtn(Button? b, bool active)
+            void StyleBtn(Button? b, bool active, bool enabled = true)
             {
                 if (b == null) return;
-                b.Background = active ? (System.Windows.Media.Brush)new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x34, 0x7D, 0xFF)) : System.Windows.Media.Brushes.Transparent;
-                b.BorderBrush = active ? b.Background : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x32, 0x47));
-                b.Foreground = active ? System.Windows.Media.Brushes.White : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDD, 0xE6, 0xF2));
+                b.IsEnabled = enabled;
+                if (!enabled)
+                {
+                    b.Background = System.Windows.Media.Brushes.Transparent;
+                    b.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x19, 0x28));
+                    b.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x66, 0x73, 0x85));
+                }
+                else
+                {
+                    b.Background = active ? (System.Windows.Media.Brush)new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x34, 0x7D, 0xFF)) : System.Windows.Media.Brushes.Transparent;
+                    b.BorderBrush = active ? b.Background : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x32, 0x47));
+                    b.Foreground = active ? System.Windows.Media.Brushes.White : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDD, 0xE6, 0xF2));
+                }
             }
             StyleBtn(NavCategoriesBtn, CurrentViewKey == "categories");
-            StyleBtn(NavGuideBtn, CurrentViewKey == "guide");
+            StyleBtn(NavGuideBtn, CurrentViewKey == "guide", IsGuideReady);
             StyleBtn(NavProfileBtn, CurrentViewKey == "profile");
             StyleBtn(NavOutputBtn, CurrentViewKey == "output");
         }
@@ -584,7 +597,7 @@ namespace DesktopApp.Views
             try { StopRecording(); } catch { }
             CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
         }
-        private async void CategoryTile_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement fe && fe.DataContext is Category cat) { SelectedCategoryName = cat.Name; await LoadChannelsForCategoryAsync(cat); CurrentViewKey = "guide"; } }
+        private async void CategoryTile_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement fe && fe.DataContext is Category cat) { SelectedCategoryName = cat.Name; await LoadChannelsForCategoryAsync(cat); IsGuideReady = true; CurrentViewKey = "guide"; } }
         private async void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) { if (sender is FrameworkElement fe && fe.DataContext is Channel ch) await EnsureEpgLoadedAsync(ch); }
         private void ChannelTile_Click(object sender, RoutedEventArgs e) { }
         private DateTime _lastChannelClickTime; private FrameworkElement? _lastChannelClickedElement;
