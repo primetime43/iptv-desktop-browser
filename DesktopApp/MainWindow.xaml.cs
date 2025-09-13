@@ -202,7 +202,9 @@ namespace DesktopApp
             }
 
             // allow user to embed scheme and/or port in server input (e.g. https://example.com:443 or example.com:8080)
-            string normalizedHost = serverRaw; int embeddedPort = 0; bool embeddedSsl = false;
+            string normalizedHost = serverRaw;
+            int embeddedPort = 0;
+            bool embeddedSsl = false;
             try
             {
                 // If input missing scheme, prepend http:// for parsing
