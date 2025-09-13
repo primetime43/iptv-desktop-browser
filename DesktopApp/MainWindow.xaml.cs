@@ -223,7 +223,15 @@ namespace DesktopApp
             // Parse port textbox or fall back to embedded port
             int port;
             bool portParsed = int.TryParse(portText, out var parsedPortTextbox);
-            if (portParsed) port = parsedPortTextbox; else if (embeddedPort > 0) port = embeddedPort; else
+            if (portParsed)
+            {
+                port = parsedPortTextbox;
+            }
+            else if (embeddedPort > 0)
+            {
+                port = embeddedPort;
+            }
+            else
             {
                 SetStatus("Port must be numeric (or specify in URL).", BrushError);
                 LoginButton.IsEnabled = true;
