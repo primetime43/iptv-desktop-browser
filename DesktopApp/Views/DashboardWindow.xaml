@@ -233,7 +233,7 @@
                             </Grid.RowDefinitions>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="Channels" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14"/>
-                                <TextBlock Margin="12 0 0 0" Foreground="#8BA1B9" Text="{Binding Channels.Count, StringFormat={}{0} channels}"/>
+                                <TextBlock Margin="12 0 0 0" Foreground="#8BA1B9" Text="{Binding ChannelsCountText}"/>
                             </StackPanel>
                             <Grid Grid.Row="1" Margin="0 10 0 0">
                                 <Grid x:Name="GuideLoadingPanel" Background="#131C27">
