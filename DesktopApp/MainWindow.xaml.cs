@@ -265,7 +265,9 @@ namespace DesktopApp
             diag.AppendLine($"Host: {host}");
             diag.AppendLine($"Scheme: {scheme}  Port: {port}");
             diag.AppendLine($"Username: {username}\n");
-            bool authed = false; string? lastError = null; UserInfo? successUserInfo = null;
+            bool authed = false;
+            string? lastError = null;
+            UserInfo? successUserInfo = null;
             foreach (var url in candidateUrls)
             {
                 if (url is null) continue;
@@ -366,9 +368,19 @@ namespace DesktopApp
                 return;
             }
             Session.Mode = SessionMode.Xtream;
-            Session.Host = host; Session.Port = port; Session.UseSsl = ssl; Session.Username = username!; Session.Password = password!; Session.UserInfo = successUserInfo;
-            if (RememberCheckBox.IsChecked == true) CredentialStore.SaveOrUpdate(serverRaw!, port, ssl, username!, password!);
-            var dash = new DashboardWindow { Owner = this }; dash.Show(); this.Hide(); LoginButton.IsEnabled = true;
+            Session.Host = host;
+            Session.Port = port;
+            Session.UseSsl = ssl;
+            Session.Username = username!;
+            Session.Password = password!;
+            Session.UserInfo = successUserInfo;
+            if (RememberCheckBox.IsChecked == true)
+                CredentialStore.SaveOrUpdate(serverRaw!, port, ssl, username!, password!);
+
+            var dash = new DashboardWindow { Owner = this };
+            dash.Show();
+            this.Hide();
+            LoginButton.IsEnabled = true;
         }
 
         private async void LoadM3uButton_Click(object sender, RoutedEventArgs e)
@@ -390,13 +402,17 @@ namespace DesktopApp
                 }
                 var entries = ParseM3u(playlistContent).ToList();
                 if (entries.Count == 0) { SetStatus("No channels found.", BrushError); return; }
-                Session.Mode = SessionMode.M3u; Session.ResetM3u(); Session.PlaylistChannels.AddRange(entries);
+                Session.Mode = SessionMode.M3u;
+                Session.ResetM3u();
+                Session.PlaylistChannels.AddRange(entries);
                 SetStatus($"Loaded {entries.Count} channels. Parsing EPG...", BrushSuccess);
                 if (!string.IsNullOrWhiteSpace(xmlPath))
                 {
                     _ = Task.Run(async () => await LoadXmltvAsync(xmlPath));
                 }
-                var dash = new DashboardWindow { Owner = this }; dash.Show(); this.Hide();
+                var dash = new DashboardWindow { Owner = this };
+                dash.Show();
+                this.Hide();
             }
             catch (Exception ex) { SetStatus("Failed: " + ex.Message, BrushError); }
             finally { LoadM3uButton.IsEnabled = true; }
@@ -437,7 +453,11 @@ namespace DesktopApp
                     return new EpgEntry { StartUtc = s, EndUtc = e, Title = title, Description = desc };
                 }
                 string currentElement = string.Empty;
-                string channelId = string.Empty; string start = string.Empty; string stop = string.Empty; string title = string.Empty; string desc = string.Empty;
+                string channelId = string.Empty;
+                string start = string.Empty;
+                string stop = string.Empty;
+                string title = string.Empty;
+                string desc = string.Empty;
                 while (reader.Read())
                 {
                     if (reader.NodeType == XmlNodeType.Element)

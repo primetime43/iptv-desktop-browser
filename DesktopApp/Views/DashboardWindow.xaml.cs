@@ -31,30 +31,172 @@ namespace DesktopApp.Views
         private readonly ObservableCollection<EpgEntry> _upcomingEntries = new(); public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
 
         // Recording state
-        private Process? _recordProcess; private string? _currentRecordingFile; private bool _recordStopping;
+        private Process? _recordProcess;
+        private string? _currentRecordingFile;
+        private bool _recordStopping;
 
         // All channels index (for efficient global search)
-        private List<Channel>? _allChannelsIndex; private bool _allChannelsIndexLoading; private bool _allChannelsIndexLoaded => _allChannelsIndex != null;
+        private List<Channel>? _allChannelsIndex;
+        private bool _allChannelsIndexLoading;
+        private bool _allChannelsIndexLoaded => _allChannelsIndex != null;
 
         public ICollectionView CategoriesCollectionView { get; }
         public ICollectionView ChannelsCollectionView { get; }
 
         // Search
-        private CancellationTokenSource? _searchDebounceCts; private static readonly TimeSpan GlobalSearchDebounce = TimeSpan.FromSeconds(3);
-        private string _searchQuery = string.Empty; public string SearchQuery { get => _searchQuery; set { if (value != _searchQuery) { _searchQuery = value; OnPropertyChanged(); OnSearchQueryChanged(); } } }
-        private bool _searchAllChannels; public bool SearchAllChannels { get => _searchAllChannels; set { if (value != _searchAllChannels) { _searchAllChannels = value; OnPropertyChanged(); OnSearchAllToggle(); } } }
+        private CancellationTokenSource? _searchDebounceCts;
+        private static readonly TimeSpan GlobalSearchDebounce = TimeSpan.FromSeconds(3);
+        private string _searchQuery = string.Empty;
+        public string SearchQuery
+        {
+            get => _searchQuery;
+            set
+            {
+                if (value != _searchQuery)
+                {
+                    _searchQuery = value;
+                    OnPropertyChanged();
+                    OnSearchQueryChanged();
+                }
+            }
+        }
+        private bool _searchAllChannels;
+        public bool SearchAllChannels
+        {
+            get => _searchAllChannels;
+            set
+            {
+                if (value != _searchAllChannels)
+                {
+                    _searchAllChannels = value;
+                    OnPropertyChanged();
+                    OnSearchAllToggle();
+                }
+            }
+        }
 
         // Selection / binding props
-        private string _selectedCategoryName = string.Empty; public string SelectedCategoryName { get => _selectedCategoryName; set { if (value != _selectedCategoryName) { _selectedCategoryName = value; OnPropertyChanged(); } } }
-        private string _categoriesCountText = string.Empty; public string CategoriesCountText { get => _categoriesCountText; set { if (value != _categoriesCountText) { _categoriesCountText = value; OnPropertyChanged(); } } }
-        private string _channelsCountText = "0 channels"; public string ChannelsCountText { get => _channelsCountText; set { if (value != _channelsCountText) { _channelsCountText = value; OnPropertyChanged(); } } }
-        private Channel? _selectedChannel; public Channel? SelectedChannel { get => _selectedChannel; set { if (value == _selectedChannel) return; _selectedChannel = value; OnPropertyChanged(); SelectedChannelName = value?.Name ?? string.Empty; if (value != null) { if (Session.Mode == SessionMode.Xtream) { _ = EnsureEpgLoadedAsync(value, force: true); _ = LoadFullEpgForSelectedChannelAsync(value); } else { UpdateChannelEpgFromXmltv(value); LoadUpcomingFromXmltv(value); } } else { _upcomingEntries.Clear(); NowProgramText = string.Empty; } } }
-        private string _selectedChannelName = string.Empty; public string SelectedChannelName { get => _selectedChannelName; set { if (value != _selectedChannelName) { _selectedChannelName = value; OnPropertyChanged(); } } }
-        private string _nowProgramText = string.Empty; public string NowProgramText { get => _nowProgramText; set { if (value != _nowProgramText) { _nowProgramText = value; OnPropertyChanged(); } } }
+        private string _selectedCategoryName = string.Empty;
+        public string SelectedCategoryName
+        {
+            get => _selectedCategoryName;
+            set
+            {
+                if (value != _selectedCategoryName)
+                {
+                    _selectedCategoryName = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private string _categoriesCountText = string.Empty;
+        public string CategoriesCountText
+        {
+            get => _categoriesCountText;
+            set
+            {
+                if (value != _categoriesCountText)
+                {
+                    _categoriesCountText = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private string _channelsCountText = "0 channels";
+        public string ChannelsCountText
+        {
+            get => _channelsCountText;
+            set
+            {
+                if (value != _channelsCountText)
+                {
+                    _channelsCountText = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+        private Channel? _selectedChannel;
+        public Channel? SelectedChannel
+        {
+            get => _selectedChannel;
+            set
+            {
+                if (value == _selectedChannel)
+                    return;
+
+                _selectedChannel = value;
+                OnPropertyChanged();
+                SelectedChannelName = value?.Name ?? string.Empty;
+
+                if (value != null)
+                {
+                    if (Session.Mode == SessionMode.Xtream)
+                    {
+                        _ = EnsureEpgLoadedAsync(value, force: true);
+                        _ = LoadFullEpgForSelectedChannelAsync(value);
+                    }
+                    else
+                    {
+                        UpdateChannelEpgFromXmltv(value);
+                        LoadUpcomingFromXmltv(value);
+                    }
+                }
+                else
+                {
+                    _upcomingEntries.Clear();
+                    NowProgramText = string.Empty;
+                }
+            }
+        }
+
+        private string _selectedChannelName = string.Empty;
+        public string SelectedChannelName
+        {
+            get => _selectedChannelName;
+            set
+            {
+                if (value != _selectedChannelName)
+                {
+                    _selectedChannelName = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private string _nowProgramText = string.Empty;
+        public string NowProgramText
+        {
+            get => _nowProgramText;
+            set
+            {
+                if (value != _nowProgramText)
+                {
+                    _nowProgramText = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         // Lifecycle / scheduling
-        private bool _logoutRequested; private bool _isClosing; private readonly CancellationTokenSource _cts = new();
-        private DateTime _nextScheduledEpgRefreshUtc; private string _lastEpgUpdateText = "(never)"; public string LastEpgUpdateText { get => _lastEpgUpdateText; set { if (value != _lastEpgUpdateText) { _lastEpgUpdateText = value; OnPropertyChanged(); } } }
+        private bool _logoutRequested;
+        private bool _isClosing;
+        private readonly CancellationTokenSource _cts = new();
+        private DateTime _nextScheduledEpgRefreshUtc;
+        private string _lastEpgUpdateText = "(never)";
+        public string LastEpgUpdateText
+        {
+            get => _lastEpgUpdateText;
+            set
+            {
+                if (value != _lastEpgUpdateText)
+                {
+                    _lastEpgUpdateText = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         // Profile properties
         private string _profileUsername = string.Empty; public string ProfileUsername { get => _profileUsername; set { if (value != _profileUsername) { _profileUsername = value; OnPropertyChanged(); } } }
@@ -67,42 +209,126 @@ namespace DesktopApp.Views
         private string _profileRawJson = string.Empty; public string ProfileRawJson { get => _profileRawJson; set { if (value != _profileRawJson) { _profileRawJson = value; OnPropertyChanged(); } } }
 
         // View selection
-        private string _currentViewKey = "categories"; public string CurrentViewKey { get => _currentViewKey; set { if (value != _currentViewKey) { if (value == "guide" && !IsGuideReady) return; _currentViewKey = value; OnPropertyChanged(); UpdateViewVisibility(); UpdateNavButtons(); ApplySearch(); } } }
+        private string _currentViewKey = "categories";
+        public string CurrentViewKey
+        {
+            get => _currentViewKey;
+            set
+            {
+                if (value != _currentViewKey)
+                {
+                    if (value == "guide" && !IsGuideReady)
+                        return;
+
+                    _currentViewKey = value;
+                    OnPropertyChanged();
+                    UpdateViewVisibility();
+                    UpdateNavButtons();
+                    ApplySearch();
+                }
+            }
+        }
 
         // Guide readiness (enabled only after first category selection)
-        private bool _isGuideReady = false; public bool IsGuideReady { get => _isGuideReady; set { if (value != _isGuideReady) { _isGuideReady = value; OnPropertyChanged(); UpdateNavButtons(); } } }
+        private bool _isGuideReady = false;
+        public bool IsGuideReady
+        {
+            get => _isGuideReady;
+            set
+            {
+                if (value != _isGuideReady)
+                {
+                    _isGuideReady = value;
+                    OnPropertyChanged();
+                    UpdateNavButtons();
+                }
+            }
+        }
 
         public DashboardWindow()
         {
-            InitializeComponent(); DataContext = this; UserNameText.Text = Session.Username;
-            CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories); ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
-            CategoriesCollectionView.Filter = CategoriesFilter; ChannelsCollectionView.Filter = ChannelsFilter;
-            LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : (Session.Mode == SessionMode.M3u ? "(none)" : "(never)");
-            ApplyProfileFromSession(); if (Session.Mode == SessionMode.M3u) Session.M3uEpgUpdated += OnM3uEpgUpdated;
-            Loaded += async (_, __) => { Session.EpgRefreshRequested += OnEpgRefreshRequested; if (Session.Mode == SessionMode.Xtream) { _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval; _ = RunEpgSchedulerLoopAsync(); await LoadCategoriesAsync(); } else { LoadCategoriesFromPlaylist(); BuildPlaylistAllChannelsIndex(); } UpdateViewVisibility(); UpdateNavButtons(); };
+            InitializeComponent();
+            DataContext = this;
+            UserNameText.Text = Session.Username;
+
+            CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
+            ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
+            CategoriesCollectionView.Filter = CategoriesFilter;
+            ChannelsCollectionView.Filter = ChannelsFilter;
+
+            LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue
+                ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g")
+                : (Session.Mode == SessionMode.M3u ? "(none)" : "(never)");
+
+            ApplyProfileFromSession();
+
+            if (Session.Mode == SessionMode.M3u)
+                Session.M3uEpgUpdated += OnM3uEpgUpdated;
+
+            Loaded += async (_, __) =>
+            {
+                Session.EpgRefreshRequested += OnEpgRefreshRequested;
+
+                if (Session.Mode == SessionMode.Xtream)
+                {
+                    _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
+                    _ = RunEpgSchedulerLoopAsync();
+                    await LoadCategoriesAsync();
+                }
+                else
+                {
+                    LoadCategoriesFromPlaylist();
+                    BuildPlaylistAllChannelsIndex();
+                }
+
+                UpdateViewVisibility();
+                UpdateNavButtons();
+            };
         }
 
         // ===== Index building for playlist mode (M3U) =====
         private void BuildPlaylistAllChannelsIndex()
         {
-            if (Session.Mode != SessionMode.M3u) return;
-            _allChannelsIndex = Session.PlaylistChannels.Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId }).ToList();
+            if (Session.Mode != SessionMode.M3u)
+                return;
+
+            _allChannelsIndex = Session.PlaylistChannels.Select(p => new Channel
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Logo = p.Logo,
+                EpgChannelId = p.TvgId
+            }).ToList();
         }
 
         private bool CategoriesFilter(object? obj)
         {
-            if (obj is not Category c) return false;
-            if (string.IsNullOrWhiteSpace(SearchQuery)) return true;
+            if (obj is not Category c)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(SearchQuery))
+                return true;
+
             return c.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase);
         }
+
         private bool ChannelsFilter(object? obj)
         {
             // Only used for per-category display; global search constructs subset directly for performance
-            if (IsGlobalSearchActive) return true; // we already curated _channels
-            if (obj is not Channel ch) return false;
-            if (string.IsNullOrWhiteSpace(SearchQuery)) return true;
-            if (ch.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)) return true;
-            if (!string.IsNullOrWhiteSpace(ch.NowTitle) && ch.NowTitle.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase)) return true;
+            if (IsGlobalSearchActive)
+                return true; // we already curated _channels
+
+            if (obj is not Channel ch)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(SearchQuery))
+                return true;
+
+            if (ch.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(ch.NowTitle) && ch.NowTitle.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
+                return true;
             return false;
         }
 
@@ -604,15 +830,47 @@ namespace DesktopApp.Views
             try { StopRecording(); } catch { }
             CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
         }
-        private async void CategoryTile_Click(object sender, RoutedEventArgs e) { if (sender is FrameworkElement fe && fe.DataContext is Category cat) { SelectedCategoryName = cat.Name; await LoadChannelsForCategoryAsync(cat); IsGuideReady = true; CurrentViewKey = "guide"; } }
-        private async void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e) { if (sender is FrameworkElement fe && fe.DataContext is Channel ch) await EnsureEpgLoadedAsync(ch); }
+        private async void CategoryTile_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is Category cat)
+            {
+                SelectedCategoryName = cat.Name;
+                await LoadChannelsForCategoryAsync(cat);
+                IsGuideReady = true;
+                CurrentViewKey = "guide";
+            }
+        }
+
+        private async void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is Channel ch)
+                await EnsureEpgLoadedAsync(ch);
+        }
+
         private void ChannelTile_Click(object sender, RoutedEventArgs e) { }
-        private DateTime _lastChannelClickTime; private FrameworkElement? _lastChannelClickedElement;
+
+        private DateTime _lastChannelClickTime;
+        private FrameworkElement? _lastChannelClickedElement;
         private void ChannelTile_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (sender is not FrameworkElement fe || fe.DataContext is not Channel ch) return; var now = DateTime.UtcNow; const int doubleClickMs = 400;
-            if (_lastChannelClickedElement == fe && (now - _lastChannelClickTime).TotalMilliseconds <= doubleClickMs) { SelectedChannel = ch; TryLaunchChannelInPlayer(ch); _lastChannelClickedElement = null; }
-            else { SelectedChannel = ch; _lastChannelClickedElement = fe; _lastChannelClickTime = now; }
+            if (sender is not FrameworkElement fe || fe.DataContext is not Channel ch)
+                return;
+
+            var now = DateTime.UtcNow;
+            const int doubleClickMs = 400;
+
+            if (_lastChannelClickedElement == fe && (now - _lastChannelClickTime).TotalMilliseconds <= doubleClickMs)
+            {
+                SelectedChannel = ch;
+                TryLaunchChannelInPlayer(ch);
+                _lastChannelClickedElement = null;
+            }
+            else
+            {
+                SelectedChannel = ch;
+                _lastChannelClickedElement = fe;
+                _lastChannelClickTime = now;
+            }
         }
         private void TryLaunchChannelInPlayer(Channel ch)
         {
