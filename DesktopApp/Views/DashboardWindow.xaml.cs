@@ -606,6 +606,7 @@ namespace DesktopApp.Views
             }
             StyleBtn(NavCategoriesBtn, CurrentViewKey == "categories");
             StyleBtn(NavGuideBtn, CurrentViewKey == "guide", IsGuideReady);
+            StyleBtn(NavVodBtn, CurrentViewKey == "vod");
             StyleBtn(NavProfileBtn, CurrentViewKey == "profile");
             StyleBtn(NavOutputBtn, CurrentViewKey == "output");
         }
