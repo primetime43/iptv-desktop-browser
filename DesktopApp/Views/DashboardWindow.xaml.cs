@@ -30,6 +30,10 @@ namespace DesktopApp.Views
         private readonly SemaphoreSlim _logoSemaphore = new(6);
         private readonly ObservableCollection<EpgEntry> _upcomingEntries = new(); public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
 
+        // VOD collections
+        private readonly ObservableCollection<VodCategory> _vodCategories = new(); public ObservableCollection<VodCategory> VodCategories => _vodCategories;
+        private readonly ObservableCollection<VodContent> _vodContent = new(); public ObservableCollection<VodContent> VodContent => _vodContent;
+
         // Recording state
         private Process? _recordProcess;
         private string? _currentRecordingFile;
@@ -42,6 +46,7 @@ namespace DesktopApp.Views
 
         public ICollectionView CategoriesCollectionView { get; }
         public ICollectionView ChannelsCollectionView { get; }
+        public ICollectionView VodContentCollectionView { get; }
 
         // Search
         private CancellationTokenSource? _searchDebounceCts;
@@ -114,6 +119,35 @@ namespace DesktopApp.Views
                 {
                     _channelsCountText = value;
                     OnPropertyChanged();
+                }
+            }
+        }
+
+        private string _vodCountText = "0 movies";
+        public string VodCountText
+        {
+            get => _vodCountText;
+            set
+            {
+                if (value != _vodCountText)
+                {
+                    _vodCountText = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private string _selectedVodCategoryId = string.Empty;
+        public string SelectedVodCategoryId
+        {
+            get => _selectedVodCategoryId;
+            set
+            {
+                if (value != _selectedVodCategoryId)
+                {
+                    _selectedVodCategoryId = value;
+                    OnPropertyChanged();
+                    OnVodCategoryChanged();
                 }
             }
         }
@@ -253,8 +287,10 @@ namespace DesktopApp.Views
 
             CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
             ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
+            VodContentCollectionView = CollectionViewSource.GetDefaultView(_vodContent);
             CategoriesCollectionView.Filter = CategoriesFilter;
             ChannelsCollectionView.Filter = ChannelsFilter;
+            VodContentCollectionView.Filter = VodContentFilter;
 
             LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue
                 ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g")
@@ -274,6 +310,7 @@ namespace DesktopApp.Views
                     _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
                     _ = RunEpgSchedulerLoopAsync();
                     await LoadCategoriesAsync();
+                    await LoadVodCategoriesAsync();
                 }
                 else
                 {
@@ -329,6 +366,29 @@ namespace DesktopApp.Views
 
             if (!string.IsNullOrWhiteSpace(ch.NowTitle) && ch.NowTitle.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
                 return true;
+            return false;
+        }
+
+        private bool VodContentFilter(object? obj)
+        {
+            if (obj is not VodContent vod)
+                return false;
+
+            if (!string.IsNullOrEmpty(SelectedVodCategoryId) && vod.CategoryId != SelectedVodCategoryId)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(SearchQuery))
+                return true;
+
+            if (vod.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(vod.Genre) && vod.Genre.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(vod.Plot) && vod.Plot.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
+                return true;
+
             return false;
         }
 
@@ -555,11 +615,13 @@ namespace DesktopApp.Views
             if (CategoriesGrid == null) return;
             CategoriesGrid.Visibility = CurrentViewKey == "categories" ? Visibility.Visible : Visibility.Collapsed;
             GuideView.Visibility = CurrentViewKey == "guide" ? Visibility.Visible : Visibility.Collapsed;
+            VodView.Visibility = CurrentViewKey == "vod" ? Visibility.Visible : Visibility.Collapsed;
             ProfileView.Visibility = CurrentViewKey == "profile" ? Visibility.Visible : Visibility.Collapsed;
             OutputView.Visibility = CurrentViewKey == "output" ? Visibility.Visible : Visibility.Collapsed;
         }
         private void NavCategories_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "categories"; if (!IsGlobalSearchActive) { /* restore category view list remains as-is */ } }
         private void NavGuide_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "guide"; ApplySearch(); }
+        private void NavVod_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "vod";
         private void NavProfile_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "profile";
         private void NavOutput_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "output";
 
@@ -993,6 +1055,228 @@ namespace DesktopApp.Views
                 try
                 {
                     MessageBox.Show(this, "Unable to start player. Check settings.",
+                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                catch (Exception msgEx)
+                {
+                    Log($"Failed to show error message: {msgEx.Message}\n");
+                }
+            }
+        }
+
+        // ===================== VOD =====================
+        private async Task LoadVodCategoriesAsync()
+        {
+            if (Session.Mode != SessionMode.Xtream) return;
+            try
+            {
+                var url = Session.BuildApi("get_vod_categories");
+                Log($"GET {url}\n");
+                var json = await _http.GetStringAsync(url, _cts.Token);
+                Log(json + "\n\n");
+
+                var parsed = new List<VodCategory>();
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in doc.RootElement.EnumerateArray())
+                        {
+                            parsed.Add(new VodCategory
+                            {
+                                CategoryId = el.TryGetProperty("category_id", out var idEl) ?
+                                    (idEl.ValueKind == JsonValueKind.String ? idEl.GetString() ?? string.Empty :
+                                     idEl.ValueKind == JsonValueKind.Number ? idEl.GetInt32().ToString() : string.Empty) : string.Empty,
+                                CategoryName = el.TryGetProperty("category_name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
+                                ParentId = el.TryGetProperty("parent_id", out var pEl) ?
+                                    (pEl.ValueKind == JsonValueKind.String ? pEl.GetString() :
+                                     pEl.ValueKind == JsonValueKind.Number ? pEl.GetInt32().ToString() : null) : null
+                            });
+                        }
+                    }
+                }
+                catch (Exception ex) { Log("PARSE ERROR VOD categories: " + ex.Message + "\n"); }
+
+                _vodCategories.Clear();
+                foreach (var c in parsed) _vodCategories.Add(c);
+                Session.VodCategories.Clear();
+                Session.VodCategories.AddRange(parsed);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log("ERROR loading VOD categories: " + ex.Message + "\n"); }
+        }
+
+        private async Task LoadVodContentAsync(string categoryId)
+        {
+            if (Session.Mode != SessionMode.Xtream || string.IsNullOrEmpty(categoryId)) return;
+            try
+            {
+                var url = Session.BuildApi("get_vod_streams") + "&category_id=" + Uri.EscapeDataString(categoryId);
+                Log($"GET {url}\n");
+                var json = await _http.GetStringAsync(url, _cts.Token);
+                Log(json + "\n\n");
+
+                var parsed = new List<VodContent>();
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        // Local helper to safely extract string or number-as-string
+                        static string? GetFlex(JsonElement parent, string prop)
+                        {
+                            if (!parent.TryGetProperty(prop, out var el)) return null;
+                            return el.ValueKind switch
+                            {
+                                JsonValueKind.String => el.GetString(),
+                                JsonValueKind.Number => el.ToString(),
+                                JsonValueKind.True => "1",
+                                JsonValueKind.False => "0",
+                                _ => null
+                            };
+                        }
+
+                        foreach (var el in doc.RootElement.EnumerateArray())
+                        {
+                            // stream_id expected int; guard against non-int
+                            int id = 0;
+                            if (el.TryGetProperty("stream_id", out var idEl))
+                            {
+                                if (idEl.ValueKind == JsonValueKind.Number) idEl.TryGetInt32(out id);
+                                else if (idEl.ValueKind == JsonValueKind.String && int.TryParse(idEl.GetString(), out var parsedId)) id = parsedId;
+                            }
+
+                            var vod = new VodContent
+                            {
+                                Id = id,
+                                Name = GetFlex(el, "name") ?? string.Empty,
+                                CategoryId = categoryId,
+                                StreamIcon = GetFlex(el, "stream_icon"),
+                                Plot = GetFlex(el, "plot"),
+                                Cast = GetFlex(el, "cast"),
+                                Director = GetFlex(el, "director"),
+                                Genre = GetFlex(el, "genre"),
+                                // Some portals use releaseDate, others release_date
+                                ReleaseDate = GetFlex(el, "releaseDate") ?? GetFlex(el, "release_date"),
+                                Duration = GetFlex(el, "duration"),
+                                Rating = GetFlex(el, "rating") ?? GetFlex(el, "rating_5based"),
+                                Country = GetFlex(el, "country"),
+                                Added = GetFlex(el, "added"),
+                                ContainerExtension = GetFlex(el, "container_extension")
+                            };
+
+                            if (!string.IsNullOrEmpty(vod.StreamIcon))
+                            {
+                                _ = LoadVodPosterAsync(vod);
+                            }
+
+                            parsed.Add(vod);
+                        }
+                    }
+                }
+                catch (Exception ex) { Log("PARSE ERROR VOD content: " + ex.Message + "\n"); }
+
+                // Add to session
+                var existing = Session.VodContent.Where(v => v.CategoryId != categoryId).ToList();
+                Session.VodContent.Clear();
+                Session.VodContent.AddRange(existing);
+                Session.VodContent.AddRange(parsed);
+
+                // Update UI collection
+                _vodContent.Clear();
+                foreach (var v in parsed) _vodContent.Add(v);
+                VodCountText = $"{_vodContent.Count} movies";
+                VodContentCollectionView.Refresh();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log("ERROR loading VOD content: " + ex.Message + "\n"); }
+        }
+
+        private async Task LoadVodPosterAsync(VodContent vod)
+        {
+            if (string.IsNullOrEmpty(vod.StreamIcon)) return;
+
+            try
+            {
+                await _logoSemaphore.WaitAsync(_cts.Token);
+                try
+                {
+                    var imageData = await _http.GetByteArrayAsync(vod.StreamIcon, _cts.Token);
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.StreamSource = new MemoryStream(imageData);
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+
+                    vod.PosterImage = bitmap;
+                }
+                finally
+                {
+                    _logoSemaphore.Release();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log($"Failed to load poster for {vod.Name}: {ex.Message}\n");
+            }
+        }
+
+        private void OnVodCategoryChanged()
+        {
+            if (!string.IsNullOrEmpty(SelectedVodCategoryId))
+            {
+                _ = LoadVodContentAsync(SelectedVodCategoryId);
+            }
+            else
+            {
+                _vodContent.Clear();
+                VodCountText = "0 movies";
+                VodContentCollectionView.Refresh();
+            }
+        }
+
+        private void VodCategory_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            // Handled by SelectedVodCategoryId property change
+        }
+
+        private void VodContent_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement fe || fe.DataContext is not VodContent vod)
+                return;
+
+            TryLaunchVodInPlayer(vod);
+        }
+
+        private void TryLaunchVodInPlayer(VodContent vod)
+        {
+            try
+            {
+                var extension = !string.IsNullOrEmpty(vod.ContainerExtension) ? vod.ContainerExtension : "mp4";
+                var url = Session.BuildVodStreamUrl(vod.Id, extension);
+
+                Log($"Launching VOD player: {Session.PreferredPlayer} {url}\n");
+                var psi = Session.BuildPlayerProcess(url, vod.Name);
+
+                if (string.IsNullOrWhiteSpace(psi.FileName))
+                {
+                    Log("Player executable not set. Configure in Settings.\n");
+                    MessageBox.Show(this, "Player executable not set. Open Settings and configure a path.",
+                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                Log("Failed to launch VOD player: " + ex.Message + "\n");
+                try
+                {
+                    MessageBox.Show(this, "Unable to start player for VOD. Check settings.",
                         "Player Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 catch (Exception msgEx)

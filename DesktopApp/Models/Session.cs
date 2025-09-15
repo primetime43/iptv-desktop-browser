@@ -20,6 +20,10 @@ public static class Session
     // M3U playlist data (used when Mode == SessionMode.M3u)
     public static List<PlaylistEntry> PlaylistChannels { get; set; } = new();
 
+    // VOD content data
+    public static List<VodContent> VodContent { get; set; } = new();
+    public static List<VodCategory> VodCategories { get; set; } = new();
+
     // XMLTV EPG data for M3U mode. Keyed by tvg-id (case-insensitive). Each list is sorted by StartUtc.
     public static Dictionary<string, List<EpgEntry>> M3uEpgByChannel { get; } = new(StringComparer.OrdinalIgnoreCase);
     public static event Action? M3uEpgUpdated; // raised after full XMLTV load
@@ -29,6 +33,8 @@ public static class Session
     {
         PlaylistChannels.Clear();
         M3uEpgByChannel.Clear();
+        VodContent.Clear();
+        VodCategories.Clear();
         UserInfo = null;
         Username = string.Empty;
         Password = string.Empty;
@@ -69,6 +75,9 @@ public static class Session
 
     public static string BuildStreamUrl(int streamId, string extension = "ts")
         => $"{BaseUrl}/live/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{extension}";
+
+    public static string BuildVodStreamUrl(int streamId, string extension = "mp4")
+        => $"{BaseUrl}/movie/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{extension}";
 
     public static ProcessStartInfo BuildPlayerProcess(string streamUrl, string title)
     {
