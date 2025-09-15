@@ -432,7 +432,7 @@ namespace DesktopApp
                 ParseXmltv(xml);
                 Session.RaiseM3uEpgUpdated();
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // Could log to diagnostics file in future
             }
@@ -596,7 +596,18 @@ namespace DesktopApp
             return sb.ToString();
         }
 
-        private void CopyDiagnostics_Click(object sender, RoutedEventArgs e) { try { Clipboard.SetText(DiagnosticsText.Text); } catch { } }
+        private void CopyDiagnostics_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Clipboard.SetText(DiagnosticsText.Text);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Failed to copy to clipboard: {ex.Message}", "Copy Error",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
         private void ClearDiagnostics_Click(object sender, RoutedEventArgs e) { DiagnosticsText.Clear(); }
         private void ClearDiagnosticsIfHidden() { if (DiagnosticsExpander.Visibility != Visibility.Visible) DiagnosticsText.Clear(); }
     }

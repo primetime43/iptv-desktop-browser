@@ -4,7 +4,6 @@ using Microsoft.Win32;
 using DesktopApp.Models;
 using System.Windows.Controls;
 using System.IO;
-using DesktopApp.Models;
 
 namespace DesktopApp.Views;
 
