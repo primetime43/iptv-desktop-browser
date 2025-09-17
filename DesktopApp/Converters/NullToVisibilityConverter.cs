@@ -7,12 +7,22 @@ namespace DesktopApp.Converters;
 
 public class NullToVisibilityConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
-        return value == null || string.IsNullOrWhiteSpace(value.ToString()) ? Visibility.Visible : Visibility.Collapsed;
+        bool isNull = value == null || (value is string str && string.IsNullOrWhiteSpace(str));
+        bool invert = parameter?.ToString() == "Invert";
+
+        if (invert)
+        {
+            return isNull ? Visibility.Collapsed : Visibility.Visible;
+        }
+        else
+        {
+            return isNull ? Visibility.Visible : Visibility.Collapsed;
+        }
     }
 
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         throw new NotSupportedException();
     }

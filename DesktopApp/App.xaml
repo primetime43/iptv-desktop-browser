@@ -6,5 +6,9 @@
     <Application.Resources>
         <conv:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
         <conv:BoolToVisibilityConverter x:Key="BoolToVis" />
+        <conv:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <conv:BoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" Invert="True" />
+        <conv:EqualityConverter x:Key="EqualityConverter" />
+        <conv:ImageSourceConverter x:Key="ImageSourceConverter" />
     </Application.Resources>
 </Application>

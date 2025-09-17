@@ -21,6 +21,7 @@ namespace DesktopApp.Views
     public partial class DashboardWindow : Window, INotifyPropertyChanged
     {
         private RecordingStatusWindow? _recordingWindow;
+        private VodWindow? _vodWindow; // new separate VOD window
         // NOTE: Duplicate recording fields and OnClosed removed. This is the consolidated file.
         // Collections / state
         private readonly HttpClient _http = new();
@@ -148,6 +149,24 @@ namespace DesktopApp.Views
                     _selectedVodCategoryId = value;
                     OnPropertyChanged();
                     OnVodCategoryChanged();
+                }
+            }
+        }
+
+        private VodContent? _selectedVodContent;
+        public VodContent? SelectedVodContent
+        {
+            get => _selectedVodContent;
+            set
+            {
+                if (value != _selectedVodContent)
+                {
+                    _selectedVodContent = value;
+                    OnPropertyChanged();
+                    if (value != null)
+                    {
+                        _ = LoadVodDetailsAsync(value);
+                    }
                 }
             }
         }
@@ -616,13 +635,27 @@ namespace DesktopApp.Views
             if (CategoriesGrid == null) return;
             CategoriesGrid.Visibility = CurrentViewKey == "categories" ? Visibility.Visible : Visibility.Collapsed;
             GuideView.Visibility = CurrentViewKey == "guide" ? Visibility.Visible : Visibility.Collapsed;
-            VodView.Visibility = CurrentViewKey == "vod" ? Visibility.Visible : Visibility.Collapsed;
+            // VOD view no longer used inside dashboard; keep collapsed always
+            VodView.Visibility = Visibility.Collapsed;
             ProfileView.Visibility = CurrentViewKey == "profile" ? Visibility.Visible : Visibility.Collapsed;
             OutputView.Visibility = CurrentViewKey == "output" ? Visibility.Visible : Visibility.Collapsed;
         }
         private void NavCategories_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "categories"; if (!IsGlobalSearchActive) { /* restore category view list remains as-is */ } }
         private void NavGuide_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "guide"; ApplySearch(); }
-        private void NavVod_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "vod";
+        private void NavVod_Click(object sender, RoutedEventArgs e)
+        {
+            // Open dedicated VOD window (single instance)
+            if (_vodWindow == null || !_vodWindow.IsVisible)
+            {
+                _vodWindow = new VodWindow(this) { Owner = this };
+                _vodWindow.Closed += (_, __) => _vodWindow = null;
+                _vodWindow.Show();
+            }
+            else
+            {
+                _vodWindow.Activate();
+            }
+        }
         private void NavProfile_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "profile";
         private void NavOutput_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "output";
 
@@ -978,6 +1011,7 @@ namespace DesktopApp.Views
         protected override void OnClosed(EventArgs e)
         {
             try { StopRecording(); } catch { }
+            try { if (_vodWindow != null) { _vodWindow.Close(); _vodWindow = null; } } catch { }
             CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
         }
         private async void CategoryTile_Click(object sender, RoutedEventArgs e)
@@ -1249,7 +1283,121 @@ namespace DesktopApp.Views
             if (sender is not FrameworkElement fe || fe.DataContext is not VodContent vod)
                 return;
 
-            TryLaunchVodInPlayer(vod);
+            // Check for double-click to launch player
+            var now = DateTime.UtcNow;
+            const int doubleClickMs = 400;
+
+            if (SelectedVodContent == vod && (now - _lastVodClickTime).TotalMilliseconds <= doubleClickMs)
+            {
+                TryLaunchVodInPlayer(vod);
+                _lastVodClickTime = DateTime.MinValue; // Reset to avoid triple-click issues
+            }
+            else
+            {
+                SelectedVodContent = vod;
+                _lastVodClickTime = now;
+            }
+        }
+
+        private DateTime _lastVodClickTime;
+
+        private void VodPlay_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedVodContent != null)
+            {
+                TryLaunchVodInPlayer(SelectedVodContent);
+            }
+        }
+
+        private async Task LoadVodDetailsAsync(VodContent vod)
+        {
+            if (Session.Mode != SessionMode.Xtream || vod.DetailsLoaded || vod.DetailsLoading)
+                return;
+
+            vod.DetailsLoading = true;
+            try
+            {
+                var url = Session.BuildApi("get_vod_info") + "&vod_id=" + vod.Id;
+                Log($"GET {url} (VOD details)\n");
+                var json = await _http.GetStringAsync(url, _cts.Token);
+                Log($"(VOD details length={json.Length})\n\n");
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.TryGetProperty("info", out var info))
+                    {
+                        // Helper to safely get string values
+                        static string? GetStringValue(JsonElement parent, string prop)
+                        {
+                            if (!parent.TryGetProperty(prop, out var el)) return null;
+                            return el.ValueKind switch
+                            {
+                                JsonValueKind.String => el.GetString(),
+                                JsonValueKind.Number => el.ToString(),
+                                JsonValueKind.True => "1",
+                                JsonValueKind.False => "0",
+                                _ => null
+                            };
+                        }
+
+                        // Update with detailed info
+                        vod.Plot = GetStringValue(info, "plot") ?? vod.Plot;
+                        vod.Cast = GetStringValue(info, "cast") ?? vod.Cast;
+                        vod.Director = GetStringValue(info, "director") ?? vod.Director;
+                        vod.Genre = GetStringValue(info, "genre") ?? vod.Genre;
+                        vod.ReleaseDate = GetStringValue(info, "releasedate") ?? GetStringValue(info, "release_date") ?? vod.ReleaseDate;
+                        vod.Rating = GetStringValue(info, "rating") ?? GetStringValue(info, "rating_5based") ?? vod.Rating;
+                        vod.Duration = GetStringValue(info, "duration") ?? vod.Duration;
+                        vod.Country = GetStringValue(info, "country") ?? vod.Country;
+                        vod.Backdrop = GetStringValue(info, "backdrop_path");
+                        vod.Trailer = GetStringValue(info, "youtube_trailer");
+                        vod.TmdbId = GetStringValue(info, "tmdb_id");
+                        vod.ImdbId = GetStringValue(info, "imdb_id");
+                        vod.Language = GetStringValue(info, "language");
+                        vod.BitRate = GetStringValue(info, "bitrate");
+                        vod.VideoCodec = GetStringValue(info, "video");
+                        vod.AudioCodec = GetStringValue(info, "audio");
+
+                        // Parse numeric values
+                        if (int.TryParse(GetStringValue(info, "played"), out var played))
+                            vod.Played = played;
+                        if (int.TryParse(GetStringValue(info, "views"), out var views))
+                            vod.Views = views;
+                    }
+
+                    // Also check for movie_data array (some servers use this format)
+                    if (doc.RootElement.TryGetProperty("movie_data", out var movieData) && movieData.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var movie in movieData.EnumerateArray())
+                        {
+                            if (movie.TryGetProperty("stream_id", out var idEl) &&
+                                idEl.TryGetInt32(out var movieId) && movieId == vod.Id)
+                            {
+                                // Update with movie_data info if available
+                                vod.Name = movie.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? vod.Name : vod.Name;
+                                break;
+                            }
+                        }
+                    }
+
+                    vod.DetailsLoaded = true;
+                    Log($"VOD details loaded for: {vod.Name}\n");
+                }
+                catch (Exception ex)
+                {
+                    Log($"PARSE ERROR VOD details: {ex.Message}\n");
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log($"ERROR loading VOD details: {ex.Message}\n");
+            }
+            finally
+            {
+                vod.DetailsLoading = false;
+            }
         }
 
         private void TryLaunchVodInPlayer(VodContent vod)
