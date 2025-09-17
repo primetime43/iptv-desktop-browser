@@ -34,6 +34,19 @@ namespace DesktopApp.Views
         // VOD collections
         private readonly ObservableCollection<VodCategory> _vodCategories = new(); public ObservableCollection<VodCategory> VodCategories => _vodCategories;
         private readonly ObservableCollection<VodContent> _vodContent = new(); public ObservableCollection<VodContent> VodContent => _vodContent;
+        private bool _hasVodAccess = false;
+        public bool HasVodAccess
+        {
+            get => _hasVodAccess;
+            set
+            {
+                if (value != _hasVodAccess)
+                {
+                    _hasVodAccess = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
 
         // Recording state
         private Process? _recordProcess;
@@ -493,10 +506,15 @@ namespace DesktopApp.Views
             // Non-global: just refresh existing collection views
             CategoriesCollectionView.Refresh();
             ChannelsCollectionView.Refresh();
+            VodContentCollectionView.Refresh();
             if (CurrentViewKey == "categories")
                 CategoriesCountText = _categories.Count(c => CategoriesFilter(c)).ToString() + " categories";
             else if (CurrentViewKey == "guide")
                 ChannelsCountText = _channels.Count(c => ChannelsFilter(c)).ToString() + " channels";
+
+            // Update VOD count to show filtered results
+            var filteredVodCount = _vodContent.Count(v => VodContentFilter(v));
+            VodCountText = $"{filteredVodCount} movies";
         }
 
         private async Task EnsureAllChannelsIndexAndFilterAsync()
@@ -626,6 +644,8 @@ namespace DesktopApp.Views
             StyleBtn(NavCategoriesBtn, CurrentViewKey == "categories");
             StyleBtn(NavGuideBtn, CurrentViewKey == "guide", IsGuideReady);
             StyleBtn(NavVodBtn, CurrentViewKey == "vod");
+            NavVodBtn.IsEnabled = HasVodAccess;
+            NavVodBtn.Opacity = HasVodAccess ? 1.0 : 0.5;
             StyleBtn(NavProfileBtn, CurrentViewKey == "profile");
             StyleBtn(NavOutputBtn, CurrentViewKey == "output");
         }
@@ -644,6 +664,12 @@ namespace DesktopApp.Views
         private void NavGuide_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "guide"; ApplySearch(); }
         private void NavVod_Click(object sender, RoutedEventArgs e)
         {
+            if (!HasVodAccess)
+            {
+                MessageBox.Show("VOD is not available for this account or connection type.", "VOD Not Available", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             // Open dedicated VOD window (single instance)
             if (_vodWindow == null || !_vodWindow.IsVisible)
             {
@@ -1102,7 +1128,11 @@ namespace DesktopApp.Views
         // ===================== VOD =====================
         private async Task LoadVodCategoriesAsync()
         {
-            if (Session.Mode != SessionMode.Xtream) return;
+            if (Session.Mode != SessionMode.Xtream)
+            {
+                HasVodAccess = false;
+                return;
+            }
             try
             {
                 var url = Session.BuildApi("get_vod_categories");
@@ -1137,9 +1167,16 @@ namespace DesktopApp.Views
                 foreach (var c in parsed) _vodCategories.Add(c);
                 Session.VodCategories.Clear();
                 Session.VodCategories.AddRange(parsed);
+
+                // Set HasVodAccess based on whether we got any categories
+                HasVodAccess = parsed.Count > 0;
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { Log("ERROR loading VOD categories: " + ex.Message + "\n"); }
+            catch (Exception ex)
+            {
+                Log("ERROR loading VOD categories: " + ex.Message + "\n");
+                HasVodAccess = false;
+            }
         }
 
         private async Task LoadVodContentAsync(string categoryId)
@@ -1221,8 +1258,9 @@ namespace DesktopApp.Views
                 // Update UI collection
                 _vodContent.Clear();
                 foreach (var v in parsed) _vodContent.Add(v);
-                VodCountText = $"{_vodContent.Count} movies";
                 VodContentCollectionView.Refresh();
+                var filteredVodCount = _vodContent.Count(v => VodContentFilter(v));
+                VodCountText = $"{filteredVodCount} movies";
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading VOD content: " + ex.Message + "\n"); }

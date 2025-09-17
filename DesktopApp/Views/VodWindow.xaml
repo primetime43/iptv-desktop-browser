@@ -113,7 +113,7 @@
             <TextBlock Text="  |  " Foreground="#223247" Margin="8 0" />
             <TextBlock Text="Search:" Foreground="#8BA1B9" VerticalAlignment="Center" Margin="0 0 4 0"/>
             <TextBox Width="220" Height="30" Background="#182433" Foreground="#DDE6F2" BorderBrush="#223247"
-                     Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"/>
+                     Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Left" VerticalContentAlignment="Center"/>
             <TextBlock Text="  " />
             <TextBlock Text="Movies:" Foreground="#8BA1B9" VerticalAlignment="Center"/>
             <TextBlock Text="{Binding VodCountText}" Foreground="#DDE6F2" FontWeight="SemiBold" Margin="4 0 0 0" VerticalAlignment="Center"/>
@@ -192,7 +192,7 @@
                             <TextBlock Text="{Binding SelectedVodContent.Cast}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedVodContent.Cast, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
                             <TextBlock Text="Director:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedVodContent.Director, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
                             <TextBlock Text="{Binding SelectedVodContent.Director}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedVodContent.Director, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
-                            <Button Content="? Play" Margin="0 16 0 0" Padding="12 8" Background="#347DFF" Foreground="White" BorderBrush="#347DFF" BorderThickness="1" FontWeight="SemiBold" Click="Play_Click"/>
+                            <Button Content="Play" Margin="0 16 0 0" Padding="12 8" Background="#347DFF" Foreground="White" BorderBrush="#347DFF" BorderThickness="1" FontWeight="SemiBold" Click="Play_Click"/>
                         </StackPanel>
                         <TextBlock Text="Select a movie..." Foreground="#5A6B7F" FontStyle="Italic" Visibility="{Binding SelectedVodContent, Converter={StaticResource NullToVisibilityConverter}}" />
                     </StackPanel>
