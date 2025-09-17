@@ -1,11 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
 
 namespace DesktopApp.Models;
 
-public class VodContent : IWatchableContent
+public class SeriesContent : IWatchableContent
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -152,7 +153,6 @@ public class VodContent : IWatchableContent
     }
 
     public string? Added { get; set; }
-    public string? ContainerExtension { get; set; }
 
     // Selection helper for UI highlighting
     private bool _isSelected;
@@ -169,7 +169,7 @@ public class VodContent : IWatchableContent
         }
     }
 
-    // Detailed VOD info (loaded on demand)
+    // Detailed series info (loaded on demand)
     private bool _detailsLoaded;
     public bool DetailsLoaded
     {
@@ -198,17 +198,12 @@ public class VodContent : IWatchableContent
         }
     }
 
-    // Extended metadata (loaded from VOD info API)
+    // Extended metadata (loaded from series info API)
     public string? Backdrop { get; set; }
     public string? Trailer { get; set; }
     public string? TmdbId { get; set; }
     public string? ImdbId { get; set; }
     public string? Language { get; set; }
-    public string? BitRate { get; set; }
-    public string? VideoCodec { get; set; }
-    public string? AudioCodec { get; set; }
-    public int? Played { get; set; }
-    public int? Views { get; set; }
 
     private string? _streamIcon;
     public string? StreamIcon
@@ -238,12 +233,45 @@ public class VodContent : IWatchableContent
         }
     }
 
+    // Series-specific properties
+    private List<SeasonInfo> _seasons = new();
+    public List<SeasonInfo> Seasons
+    {
+        get => _seasons;
+        set
+        {
+            if (_seasons != value)
+            {
+                _seasons = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(TotalEpisodes));
+                OnPropertyChanged(nameof(SeasonCount));
+            }
+        }
+    }
+
+    private bool _seasonsExpanded;
+    public bool SeasonsExpanded
+    {
+        get => _seasonsExpanded;
+        set
+        {
+            if (_seasonsExpanded != value)
+            {
+                _seasonsExpanded = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
     // Helper properties for display
     public string DisplayTitle => Name;
     public string DisplayGenre => Genre ?? "Unknown";
     public string DisplayYear => ExtractYear(ReleaseDate);
-    public string DisplayDuration => FormatDuration(Duration);
+    public string DisplayDuration => $"{SeasonCount} Season{(SeasonCount != 1 ? "s" : "")}";
     public string DisplayRating => Rating ?? "N/A";
+    public int TotalEpisodes => Seasons.Sum(s => s.Episodes.Count);
+    public int SeasonCount => Seasons.Count;
 
     private static string ExtractYear(string? releaseDate)
     {
@@ -257,29 +285,20 @@ public class VodContent : IWatchableContent
         var yearMatch = System.Text.RegularExpressions.Regex.Match(releaseDate, @"\b(19|20)\d{2}\b");
         return yearMatch.Success ? yearMatch.Value : "Unknown";
     }
-
-    private static string FormatDuration(string? duration)
-    {
-        if (string.IsNullOrEmpty(duration))
-            return "Unknown";
-
-        // Try to parse duration in seconds
-        if (int.TryParse(duration, out var seconds))
-        {
-            var hours = seconds / 3600;
-            var minutes = (seconds % 3600) / 60;
-
-            if (hours > 0)
-                return $"{hours}h {minutes}m";
-            else
-                return $"{minutes}m";
-        }
-
-        return duration;
-    }
 }
 
-public class VodCategory
+public class SeasonInfo
+{
+    public int SeasonNumber { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public List<EpisodeContent> Episodes { get; set; } = new();
+    public string? AirDate { get; set; }
+    public int EpisodeCount { get; set; }
+
+    public string DisplayName => string.IsNullOrEmpty(Name) ? $"Season {SeasonNumber}" : Name;
+}
+
+public class SeriesCategory
 {
     public string CategoryId { get; set; } = string.Empty;
     public string CategoryName { get; set; } = string.Empty;

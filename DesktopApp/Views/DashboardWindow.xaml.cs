@@ -15,6 +15,7 @@ using System.IO;
 using System.Threading;
 using System.Diagnostics;
 using System.Windows.Data;
+using System.Windows.Threading;
 
 namespace DesktopApp.Views
 {
@@ -151,6 +152,20 @@ namespace DesktopApp.Views
             }
         }
 
+        private string _seriesCountText = "0 series";
+        public string SeriesCountText
+        {
+            get => _seriesCountText;
+            set
+            {
+                if (value != _seriesCountText)
+                {
+                    _seriesCountText = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
         private string _selectedVodCategoryId = string.Empty;
         public string SelectedVodCategoryId
         {
@@ -183,6 +198,45 @@ namespace DesktopApp.Views
                 }
             }
         }
+
+        // Series collections
+        private readonly ObservableCollection<SeriesCategory> _seriesCategories = new(); public ObservableCollection<SeriesCategory> SeriesCategories => _seriesCategories;
+        private readonly ObservableCollection<SeriesContent> _seriesContent = new(); public ObservableCollection<SeriesContent> SeriesContent => _seriesContent;
+        public ICollectionView SeriesContentCollectionView { get; }
+
+        private string _selectedSeriesCategoryId = string.Empty;
+        public string SelectedSeriesCategoryId
+        {
+            get => _selectedSeriesCategoryId;
+            set
+            {
+                if (value != _selectedSeriesCategoryId)
+                {
+                    _selectedSeriesCategoryId = value;
+                    OnPropertyChanged();
+                    OnSeriesCategoryChanged();
+                }
+            }
+        }
+
+        private SeriesContent? _selectedSeriesContent;
+        public SeriesContent? SelectedSeriesContent
+        {
+            get => _selectedSeriesContent;
+            set
+            {
+                if (value != _selectedSeriesContent)
+                {
+                    _selectedSeriesContent = value;
+                    OnPropertyChanged();
+                    if (value != null)
+                    {
+                        _ = LoadSeriesDetailsAsync(value);
+                    }
+                }
+            }
+        }
+
         private Channel? _selectedChannel;
         public Channel? SelectedChannel
         {
@@ -320,9 +374,11 @@ namespace DesktopApp.Views
             CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
             ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
             VodContentCollectionView = CollectionViewSource.GetDefaultView(_vodContent);
+            SeriesContentCollectionView = CollectionViewSource.GetDefaultView(_seriesContent);
             CategoriesCollectionView.Filter = CategoriesFilter;
             ChannelsCollectionView.Filter = ChannelsFilter;
             VodContentCollectionView.Filter = VodContentFilter;
+            SeriesContentCollectionView.Filter = SeriesContentFilter;
 
             LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue
                 ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g")
@@ -343,6 +399,7 @@ namespace DesktopApp.Views
                     _ = RunEpgSchedulerLoopAsync();
                     await LoadCategoriesAsync();
                     await LoadVodCategoriesAsync();
+                    await LoadSeriesCategoriesAsync();
                 }
                 else
                 {
@@ -419,6 +476,29 @@ namespace DesktopApp.Views
                 return true;
 
             if (!string.IsNullOrWhiteSpace(vod.Plot) && vod.Plot.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            return false;
+        }
+
+        private bool SeriesContentFilter(object? obj)
+        {
+            if (obj is not SeriesContent series)
+                return false;
+
+            if (!string.IsNullOrEmpty(SelectedSeriesCategoryId) && series.CategoryId != SelectedSeriesCategoryId)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(SearchQuery))
+                return true;
+
+            if (series.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(series.Genre) && series.Genre.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (!string.IsNullOrWhiteSpace(series.Plot) && series.Plot.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
                 return true;
 
             return false;
@@ -507,14 +587,17 @@ namespace DesktopApp.Views
             CategoriesCollectionView.Refresh();
             ChannelsCollectionView.Refresh();
             VodContentCollectionView.Refresh();
+            SeriesContentCollectionView.Refresh();
             if (CurrentViewKey == "categories")
                 CategoriesCountText = _categories.Count(c => CategoriesFilter(c)).ToString() + " categories";
             else if (CurrentViewKey == "guide")
                 ChannelsCountText = _channels.Count(c => ChannelsFilter(c)).ToString() + " channels";
 
-            // Update VOD count to show filtered results
+            // Update VOD and Series count to show filtered results
             var filteredVodCount = _vodContent.Count(v => VodContentFilter(v));
             VodCountText = $"{filteredVodCount} movies";
+            var filteredSeriesCount = _seriesContent.Count(s => SeriesContentFilter(s));
+            SeriesCountText = $"{filteredSeriesCount} series";
         }
 
         private async Task EnsureAllChannelsIndexAndFilterAsync()
@@ -1179,6 +1262,54 @@ namespace DesktopApp.Views
             }
         }
 
+        private async Task LoadSeriesCategoriesAsync()
+        {
+            if (Session.Mode != SessionMode.Xtream)
+            {
+                return;
+            }
+            try
+            {
+                var url = Session.BuildApi("get_series_categories");
+                Log($"GET {url}\n");
+                var json = await _http.GetStringAsync(url, _cts.Token);
+                Log(json + "\n\n");
+
+                var parsed = new List<SeriesCategory>();
+                try
+                {
+                    using var doc = JsonDocument.Parse(json);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in doc.RootElement.EnumerateArray())
+                        {
+                            parsed.Add(new SeriesCategory
+                            {
+                                CategoryId = el.TryGetProperty("category_id", out var idEl) ?
+                                    (idEl.ValueKind == JsonValueKind.String ? idEl.GetString() ?? string.Empty :
+                                     idEl.ValueKind == JsonValueKind.Number ? idEl.GetInt32().ToString() : string.Empty) : string.Empty,
+                                CategoryName = el.TryGetProperty("category_name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
+                                ParentId = el.TryGetProperty("parent_id", out var pEl) ?
+                                    (pEl.ValueKind == JsonValueKind.String ? pEl.GetString() :
+                                     pEl.ValueKind == JsonValueKind.Number ? pEl.GetInt32().ToString() : null) : null
+                            });
+                        }
+                    }
+                }
+                catch (Exception ex) { Log("PARSE ERROR series categories: " + ex.Message + "\n"); }
+
+                _seriesCategories.Clear();
+                foreach (var c in parsed) _seriesCategories.Add(c);
+                Session.SeriesCategories.Clear();
+                Session.SeriesCategories.AddRange(parsed);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log("ERROR loading series categories: " + ex.Message + "\n");
+            }
+        }
+
         private async Task LoadVodContentAsync(string categoryId)
         {
             if (Session.Mode != SessionMode.Xtream || string.IsNullOrEmpty(categoryId)) return;
@@ -1308,6 +1439,179 @@ namespace DesktopApp.Views
                 _vodContent.Clear();
                 VodCountText = "0 movies";
                 VodContentCollectionView.Refresh();
+            }
+        }
+
+        private void OnSeriesCategoryChanged()
+        {
+            if (!string.IsNullOrEmpty(SelectedSeriesCategoryId))
+            {
+                _ = LoadSeriesContentAsync(SelectedSeriesCategoryId);
+            }
+            else
+            {
+                _seriesContent.Clear();
+                SeriesCountText = "0 series";
+                SeriesContentCollectionView.Refresh();
+            }
+        }
+
+        private async Task LoadSeriesContentAsync(string categoryId)
+        {
+            try
+            {
+                var url = Session.BuildApi("get_series") + "&category_id=" + Uri.EscapeDataString(categoryId);
+                var json = await _http.GetStringAsync(url, _cts.Token);
+
+                var parsed = new List<SeriesContent>();
+                var jArray = JsonSerializer.Deserialize<JsonElement[]>(json);
+
+                if (jArray != null)
+                {
+                    foreach (var item in jArray)
+                {
+                    var series = new SeriesContent
+                    {
+                        Id = item.TryGetProperty("series_id", out var idProp) ? (idProp.ValueKind == JsonValueKind.Number ? idProp.GetInt32() : int.TryParse(idProp.GetString() ?? "0", out var id) ? id : 0) : 0,
+                        Name = item.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? string.Empty : string.Empty,
+                        CategoryId = categoryId,
+                        StreamIcon = item.TryGetProperty("cover", out var coverProp) ? coverProp.GetString() : null,
+                        Plot = item.TryGetProperty("plot", out var plotProp) ? plotProp.GetString() : null,
+                        Cast = item.TryGetProperty("cast", out var castProp) ? castProp.GetString() : null,
+                        Director = item.TryGetProperty("director", out var directorProp) ? directorProp.GetString() : null,
+                        Genre = item.TryGetProperty("genre", out var genreProp) ? genreProp.GetString() : null,
+                        ReleaseDate = item.TryGetProperty("releaseDate", out var releaseProp) ? releaseProp.GetString() : null,
+                        Rating = item.TryGetProperty("rating", out var ratingProp) ? ratingProp.GetString() : null,
+                        LastModified = item.TryGetProperty("last_modified", out var lastModProp) ? lastModProp.GetString() : null
+                    };
+                    parsed.Add(series);
+                    }
+                }
+
+                // Add to session
+                Session.SeriesContent.Clear();
+                Session.SeriesContent.AddRange(parsed);
+
+                // Update UI collection
+                _seriesContent.Clear();
+                foreach (var s in parsed) _seriesContent.Add(s);
+                SeriesContentCollectionView.Refresh();
+                var filteredSeriesCount = _seriesContent.Count(s => SeriesContentFilter(s));
+                SeriesCountText = $"{filteredSeriesCount} series";
+
+                // Load posters for visible series
+                foreach (var series in parsed.Take(10)) // Load first 10 posters
+                {
+                    _ = LoadSeriesPosterAsync(series);
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log("ERROR loading series content: " + ex.Message + "\n"); }
+        }
+
+        private async Task LoadSeriesPosterAsync(SeriesContent series)
+        {
+            if (string.IsNullOrEmpty(series.StreamIcon)) return;
+
+            try
+            {
+                await _logoSemaphore.WaitAsync(_cts.Token);
+                try
+                {
+                    var imageBytes = await _http.GetByteArrayAsync(series.StreamIcon, _cts.Token);
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        using var stream = new MemoryStream(imageBytes);
+                        var bitmap = new BitmapImage();
+                        bitmap.BeginInit();
+                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmap.StreamSource = stream;
+                        bitmap.EndInit();
+                        bitmap.Freeze();
+                        series.PosterImage = bitmap;
+                    }, DispatcherPriority.Background, _cts.Token);
+                }
+                finally
+                {
+                    _logoSemaphore.Release();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log($"Failed to load poster for {series.Name}: {ex.Message}\n");
+            }
+        }
+
+        private async Task LoadSeriesDetailsAsync(SeriesContent series)
+        {
+            if (series.DetailsLoaded || series.DetailsLoading) return;
+
+            try
+            {
+                series.DetailsLoading = true;
+                var url = Session.BuildApi("get_series_info") + "&series_id=" + series.Id;
+                var json = await _http.GetStringAsync(url, _cts.Token);
+                var data = JsonSerializer.Deserialize<JsonElement>(json);
+
+                // Parse series info
+                if (data.TryGetProperty("info", out var infoProp))
+                {
+                    series.Plot = infoProp.TryGetProperty("plot", out var plotProp) ? plotProp.GetString() : series.Plot;
+                    series.Cast = infoProp.TryGetProperty("cast", out var castProp) ? castProp.GetString() : series.Cast;
+                    series.Director = infoProp.TryGetProperty("director", out var directorProp) ? directorProp.GetString() : series.Director;
+                    series.Genre = infoProp.TryGetProperty("genre", out var genreProp) ? genreProp.GetString() : series.Genre;
+                    series.Rating = infoProp.TryGetProperty("rating", out var ratingProp) ? ratingProp.GetString() : series.Rating;
+                }
+
+                // Parse seasons and episodes
+                if (data.TryGetProperty("episodes", out var episodesProp) && episodesProp.ValueKind == JsonValueKind.Object)
+                {
+                    var seasons = new List<SeasonInfo>();
+
+                    foreach (var seasonEntry in episodesProp.EnumerateObject())
+                    {
+                        if (int.TryParse(seasonEntry.Name, out var seasonNum) && seasonEntry.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            var season = new SeasonInfo { SeasonNumber = seasonNum };
+                            var episodes = new List<EpisodeContent>();
+
+                            foreach (var episodeItem in seasonEntry.Value.EnumerateArray())
+                            {
+                                var episode = new EpisodeContent
+                                {
+                                    Id = episodeItem.TryGetProperty("id", out var idProp) ? (idProp.ValueKind == JsonValueKind.Number ? idProp.GetInt32() : int.TryParse(idProp.GetString() ?? "0", out var id) ? id : 0) : 0,
+                                    SeriesId = series.Id,
+                                    SeasonNumber = seasonNum,
+                                    EpisodeNumber = episodeItem.TryGetProperty("episode_num", out var epNumProp) ? (epNumProp.ValueKind == JsonValueKind.Number ? epNumProp.GetInt32() : int.TryParse(epNumProp.GetString() ?? "0", out var epNum) ? epNum : 0) : 0,
+                                    Name = episodeItem.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? string.Empty : string.Empty,
+                                    Plot = episodeItem.TryGetProperty("info", out var infoProp2) && infoProp2.TryGetProperty("plot", out var plotProp2) ? plotProp2.GetString() : null,
+                                    Duration = episodeItem.TryGetProperty("info", out var infoProp3) && infoProp3.TryGetProperty("duration", out var durProp) ? durProp.GetString() : null,
+                                    ReleaseDate = episodeItem.TryGetProperty("info", out var infoProp4) && infoProp4.TryGetProperty("releasedate", out var relProp) ? relProp.GetString() : null,
+                                    ContainerExtension = episodeItem.TryGetProperty("container_extension", out var contProp) ? contProp.GetString() : "mp4"
+                                };
+                                episodes.Add(episode);
+                            }
+
+                            season.Episodes = episodes.OrderBy(e => e.EpisodeNumber).ToList();
+                            season.EpisodeCount = season.Episodes.Count;
+                            seasons.Add(season);
+                        }
+                    }
+
+                    series.Seasons = seasons.OrderBy(s => s.SeasonNumber).ToList();
+                }
+
+                series.DetailsLoaded = true;
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log($"ERROR loading series details for {series.Name}: {ex.Message}\n");
+            }
+            finally
+            {
+                series.DetailsLoading = false;
             }
         }
 
@@ -1464,6 +1768,41 @@ namespace DesktopApp.Views
                 try
                 {
                     MessageBox.Show(this, "Unable to start player for VOD. Check settings.",
+                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                catch (Exception msgEx)
+                {
+                    Log($"Failed to show error message: {msgEx.Message}\n");
+                }
+            }
+        }
+
+        private void TryLaunchEpisodeInPlayer(EpisodeContent episode)
+        {
+            try
+            {
+                var extension = !string.IsNullOrEmpty(episode.ContainerExtension) ? episode.ContainerExtension : "mp4";
+                var url = Session.BuildSeriesStreamUrl(episode.Id, extension);
+
+                Log($"Launching episode player: {Session.PreferredPlayer} {url}\n");
+                var psi = Session.BuildPlayerProcess(url, episode.DisplayTitle);
+
+                if (string.IsNullOrWhiteSpace(psi.FileName))
+                {
+                    Log("Player executable not set. Configure in Settings.\n");
+                    MessageBox.Show(this, "Player executable not set. Open Settings and configure a path.",
+                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                Process.Start(psi);
+            }
+            catch (Exception ex)
+            {
+                Log("Failed to launch episode player: " + ex.Message + "\n");
+                try
+                {
+                    MessageBox.Show(this, "Unable to start player for episode. Check settings.",
                         "Player Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 catch (Exception msgEx)

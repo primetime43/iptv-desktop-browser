@@ -5,7 +5,7 @@ using System.Windows.Media.Imaging;
 
 namespace DesktopApp.Models;
 
-public class VodContent : IWatchableContent
+public class EpisodeContent : IWatchableContent
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -31,7 +31,11 @@ public class VodContent : IWatchableContent
         }
     }
 
-    public string CategoryId { get; set; } = string.Empty;
+    // Episode-specific properties
+    public int SeriesId { get; set; }
+    public int SeasonNumber { get; set; }
+    public int EpisodeNumber { get; set; }
+    public string? ContainerExtension { get; set; }
 
     private string? _plot;
     public string? Plot
@@ -105,8 +109,6 @@ public class VodContent : IWatchableContent
         }
     }
 
-    public string? LastModified { get; set; }
-
     private string? _rating;
     public string? Rating
     {
@@ -152,7 +154,6 @@ public class VodContent : IWatchableContent
     }
 
     public string? Added { get; set; }
-    public string? ContainerExtension { get; set; }
 
     // Selection helper for UI highlighting
     private bool _isSelected;
@@ -169,7 +170,7 @@ public class VodContent : IWatchableContent
         }
     }
 
-    // Detailed VOD info (loaded on demand)
+    // Detailed episode info (loaded on demand)
     private bool _detailsLoaded;
     public bool DetailsLoaded
     {
@@ -198,9 +199,8 @@ public class VodContent : IWatchableContent
         }
     }
 
-    // Extended metadata (loaded from VOD info API)
+    // Extended metadata
     public string? Backdrop { get; set; }
-    public string? Trailer { get; set; }
     public string? TmdbId { get; set; }
     public string? ImdbId { get; set; }
     public string? Language { get; set; }
@@ -239,7 +239,7 @@ public class VodContent : IWatchableContent
     }
 
     // Helper properties for display
-    public string DisplayTitle => Name;
+    public string DisplayTitle => $"S{SeasonNumber:D2}E{EpisodeNumber:D2} - {Name}";
     public string DisplayGenre => Genre ?? "Unknown";
     public string DisplayYear => ExtractYear(ReleaseDate);
     public string DisplayDuration => FormatDuration(Duration);
@@ -277,11 +277,4 @@ public class VodContent : IWatchableContent
 
         return duration;
     }
-}
-
-public class VodCategory
-{
-    public string CategoryId { get; set; } = string.Empty;
-    public string CategoryName { get; set; } = string.Empty;
-    public string? ParentId { get; set; }
 }

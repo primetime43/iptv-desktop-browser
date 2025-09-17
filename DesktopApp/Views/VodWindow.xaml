@@ -9,12 +9,15 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition/>
         </Grid.RowDefinitions>
-        <TextBlock Text="Video on Demand" FontWeight="Bold" Foreground="#F0F6FC" FontSize="18" />
+        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Text="Video on Demand" FontWeight="Bold" Foreground="#F0F6FC" FontSize="18" Margin="0 0 16 0"/>
+            <Button x:Name="MoviesTabBtn" Content="Movies" Click="MoviesTab_Click" Margin="0 0 4 0" Padding="12 6" Background="#347DFF" Foreground="White" BorderBrush="#347DFF" BorderThickness="1"/>
+            <Button x:Name="SeriesTabBtn" Content="TV Shows" Click="SeriesTab_Click" Margin="0 0 0 0" Padding="12 6" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
+        </StackPanel>
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0 10 0 8" VerticalAlignment="Center">
             <TextBlock Text="Category:" Foreground="#8BA1B9" VerticalAlignment="Center" Margin="0 0 8 0"/>
-            <ComboBox x:Name="VodCategoryCombo" Width="260" Height="32" Background="#182433" Foreground="#DDE6F2" BorderBrush="#223247"
-                      ItemsSource="{Binding VodCategories}" DisplayMemberPath="CategoryName" SelectedValuePath="CategoryId"
-                      SelectedValue="{Binding SelectedVodCategoryId}">
+            <ComboBox x:Name="CategoryCombo" Width="260" Height="32" Background="#182433" Foreground="#DDE6F2" BorderBrush="#223247"
+                      DisplayMemberPath="CategoryName" SelectedValuePath="CategoryId">
                 <ComboBox.Style>
                     <Style TargetType="ComboBox">
                         <Setter Property="Template">
@@ -115,8 +118,8 @@
             <TextBox Width="220" Height="30" Background="#182433" Foreground="#DDE6F2" BorderBrush="#223247"
                      Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Left" VerticalContentAlignment="Center"/>
             <TextBlock Text="  " />
-            <TextBlock Text="Movies:" Foreground="#8BA1B9" VerticalAlignment="Center"/>
-            <TextBlock Text="{Binding VodCountText}" Foreground="#DDE6F2" FontWeight="SemiBold" Margin="4 0 0 0" VerticalAlignment="Center"/>
+            <TextBlock x:Name="ContentTypeLabel" Text="Movies:" Foreground="#8BA1B9" VerticalAlignment="Center"/>
+            <TextBlock x:Name="ContentCountLabel" Text="{Binding VodCountText}" Foreground="#DDE6F2" FontWeight="SemiBold" Margin="4 0 0 0" VerticalAlignment="Center"/>
             <Button Content="Close" Margin="16 0 0 0" Padding="14 4" Click="Close_Click" Background="#223247" Foreground="#DDE6F2" BorderBrush="#223247" VerticalAlignment="Center"/>
         </StackPanel>
         <Grid Grid.Row="2">
@@ -124,33 +127,39 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="340"/>
             </Grid.ColumnDefinitions>
-            <!-- Movie grid -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 0 8 0">
-                <ItemsControl ItemsSource="{Binding VodContentCollectionView}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <WrapPanel IsItemsHost="True" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Button Click="VodContent_Click" Padding="0" Margin="6" Cursor="Hand" ToolTip="{Binding Plot}">
-                                <Border Width="170" Height="210" Background="#182433" CornerRadius="8" Padding="6" BorderBrush="#223247" BorderThickness="1">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="BorderBrush" Value="#223247"/>
-                                            <Setter Property="BorderThickness" Value="1"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Value="True">
-                                                    <DataTrigger.Binding>
-                                                        <MultiBinding Converter="{StaticResource EqualityConverter}">
-                                                            <Binding Path="Id"/>
-                                                            <Binding RelativeSource="{RelativeSource AncestorType=Window}" Path="DataContext.SelectedVodContent.Id"/>
-                                                        </MultiBinding>
-                                                    </DataTrigger.Binding>
-                                                    <Setter Property="BorderBrush" Value="#347DFF"/>
-                                                    <Setter Property="BorderThickness" Value="2"/>
-                                                </DataTrigger>
+
+            <!-- Movies View -->
+            <Grid x:Name="MoviesView" Visibility="Visible" Grid.ColumnSpan="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="340"/>
+                </Grid.ColumnDefinitions>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 0 8 0">
+                    <ItemsControl ItemsSource="{Binding VodContentCollectionView}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel IsItemsHost="True" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Click="VodContent_Click" Padding="0" Margin="6" Cursor="Hand" ToolTip="{Binding Plot}">
+                                    <Border Width="170" Height="210" Background="#182433" CornerRadius="8" Padding="6" BorderBrush="#223247" BorderThickness="1">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="BorderBrush" Value="#223247"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Value="True">
+                                                        <DataTrigger.Binding>
+                                                            <MultiBinding Converter="{StaticResource EqualityConverter}">
+                                                                <Binding Path="Id"/>
+                                                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" Path="DataContext.SelectedVodContent.Id"/>
+                                                            </MultiBinding>
+                                                        </DataTrigger.Binding>
+                                                        <Setter Property="BorderBrush" Value="#347DFF"/>
+                                                        <Setter Property="BorderThickness" Value="2"/>
+                                                    </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
@@ -172,32 +181,122 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </ScrollViewer>
-            <!-- Details panel -->
-            <Border Grid.Column="1" Background="#131C27" CornerRadius="8" Padding="12" >
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <TextBlock Text="Details" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14" Margin="0 0 0 8"/>
-                        <StackPanel Visibility="{Binding SelectedVodContent, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}">
-                            <TextBlock Text="{Binding SelectedVodContent.Name}" FontWeight="SemiBold" FontSize="16" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 0 0 6"/>
-                            <StackPanel Orientation="Horizontal" Margin="0 0 0 4">
-                                <TextBlock Text="{Binding SelectedVodContent.DisplayYear}" FontSize="11" Foreground="#9DB2C7" Margin="0 0 12 0"/>
-                                <TextBlock Text="{Binding SelectedVodContent.DisplayDuration}" FontSize="11" Foreground="#9DB2C7" Margin="0 0 12 0"/>
-                                <TextBlock Text="{Binding SelectedVodContent.DisplayRating}" FontSize="11" Foreground="#9DB2C7"/>
-                            </StackPanel>
-                            <TextBlock Text="{Binding SelectedVodContent.Genre}" FontSize="11" Foreground="#8BA1B9" Margin="0 0 0 6" Visibility="{Binding SelectedVodContent.Genre, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
-                            <TextBlock Text="Plot:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedVodContent.Plot, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
-                            <TextBlock Text="{Binding SelectedVodContent.Plot}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedVodContent.Plot, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
-                            <TextBlock Text="Cast:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedVodContent.Cast, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
-                            <TextBlock Text="{Binding SelectedVodContent.Cast}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedVodContent.Cast, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
-                            <TextBlock Text="Director:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedVodContent.Director, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
-                            <TextBlock Text="{Binding SelectedVodContent.Director}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedVodContent.Director, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
-                            <Button Content="Play" Margin="0 16 0 0" Padding="12 8" Background="#347DFF" Foreground="White" BorderBrush="#347DFF" BorderThickness="1" FontWeight="SemiBold" Click="Play_Click"/>
-                        </StackPanel>
-                        <TextBlock Text="Select a movie..." Foreground="#5A6B7F" FontStyle="Italic" Visibility="{Binding SelectedVodContent, Converter={StaticResource NullToVisibilityConverter}}" />
-                    </StackPanel>
                 </ScrollViewer>
-            </Border>
+                <!-- Movie Details panel -->
+                <Border Grid.Column="1" Background="#131C27" CornerRadius="8" Padding="12" >
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Text="Details" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14" Margin="0 0 0 8"/>
+                            <StackPanel Visibility="{Binding SelectedVodContent, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}">
+                                <TextBlock Text="{Binding SelectedVodContent.Name}" FontWeight="SemiBold" FontSize="16" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 0 0 6"/>
+                                <StackPanel Orientation="Horizontal" Margin="0 0 0 4">
+                                    <TextBlock Text="{Binding SelectedVodContent.DisplayYear}" FontSize="11" Foreground="#9DB2C7" Margin="0 0 12 0"/>
+                                    <TextBlock Text="{Binding SelectedVodContent.DisplayDuration}" FontSize="11" Foreground="#9DB2C7" Margin="0 0 12 0"/>
+                                    <TextBlock Text="{Binding SelectedVodContent.DisplayRating}" FontSize="11" Foreground="#9DB2C7"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding SelectedVodContent.Genre}" FontSize="11" Foreground="#8BA1B9" Margin="0 0 0 6" Visibility="{Binding SelectedVodContent.Genre, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="Plot:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedVodContent.Plot, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="{Binding SelectedVodContent.Plot}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedVodContent.Plot, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="Cast:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedVodContent.Cast, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="{Binding SelectedVodContent.Cast}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedVodContent.Cast, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="Director:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedVodContent.Director, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="{Binding SelectedVodContent.Director}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedVodContent.Director, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <Button Content="Play" Margin="0 16 0 0" Padding="12 8" Background="#347DFF" Foreground="White" BorderBrush="#347DFF" BorderThickness="1" FontWeight="SemiBold" Click="Play_Click"/>
+                            </StackPanel>
+                            <TextBlock Text="Select a movie..." Foreground="#5A6B7F" FontStyle="Italic" Visibility="{Binding SelectedVodContent, Converter={StaticResource NullToVisibilityConverter}}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+
+            <!-- Series View -->
+            <Grid x:Name="SeriesView" Visibility="Collapsed" Grid.ColumnSpan="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="300"/>
+                </Grid.ColumnDefinitions>
+                <!-- Series List -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 0 8 0">
+                    <ItemsControl ItemsSource="{Binding SeriesContentCollectionView}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel IsItemsHost="True" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Click="SeriesContent_Click" Padding="0" Margin="6" Cursor="Hand" ToolTip="{Binding Plot}">
+                                    <Border Width="170" Height="210" Background="#182433" CornerRadius="8" Padding="6" BorderBrush="#223247" BorderThickness="1">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="BorderBrush" Value="#223247"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Value="True">
+                                                        <DataTrigger.Binding>
+                                                            <MultiBinding Converter="{StaticResource EqualityConverter}">
+                                                                <Binding Path="Id"/>
+                                                                <Binding RelativeSource="{RelativeSource AncestorType=Window}" Path="DataContext.SelectedSeriesContent.Id"/>
+                                                            </MultiBinding>
+                                                        </DataTrigger.Binding>
+                                                        <Setter Property="BorderBrush" Value="#347DFF"/>
+                                                        <Setter Property="BorderThickness" Value="2"/>
+                                                    </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <Border Grid.Row="0" Background="#223247" CornerRadius="4">
+                                            <Grid>
+                                                <Image Source="{Binding PosterImage, Converter={StaticResource ImageSourceConverter}}" Stretch="UniformToFill" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <TextBlock Text="No Poster" Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                            </Grid>
+                                        </Border>
+                                        <TextBlock Grid.Row="1" Text="{Binding DisplayTitle}" FontSize="11" FontWeight="Bold" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 4 0 0" MaxHeight="30" TextAlignment="Center"/>
+                                    </Grid>
+                                </Border>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </ScrollViewer>
+                <!-- Series Details and Episodes Panel -->
+                <Border Grid.Column="1" Background="#131C27" CornerRadius="8" Padding="12" Margin="8 0 0 0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <!-- Series Details Section -->
+                            <TextBlock Text="Details" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14" Margin="0 0 0 8"/>
+                            <StackPanel Visibility="{Binding SelectedSeriesContent, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}">
+                                <TextBlock Text="{Binding SelectedSeriesContent.Name}" FontWeight="SemiBold" FontSize="16" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 0 0 6"/>
+                                <StackPanel Orientation="Horizontal" Margin="0 0 0 4">
+                                    <TextBlock Text="{Binding SelectedSeriesContent.DisplayYear}" FontSize="11" Foreground="#9DB2C7" Margin="0 0 12 0"/>
+                                    <TextBlock Text="{Binding SelectedSeriesContent.DisplayDuration}" FontSize="11" Foreground="#9DB2C7" Margin="0 0 12 0"/>
+                                    <TextBlock Text="{Binding SelectedSeriesContent.DisplayRating}" FontSize="11" Foreground="#9DB2C7"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding SelectedSeriesContent.Genre}" FontSize="11" Foreground="#8BA1B9" Margin="0 0 0 6" Visibility="{Binding SelectedSeriesContent.Genre, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="Plot:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedSeriesContent.Plot, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="{Binding SelectedSeriesContent.Plot}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedSeriesContent.Plot, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="Cast:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedSeriesContent.Cast, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="{Binding SelectedSeriesContent.Cast}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedSeriesContent.Cast, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="Director:" FontWeight="SemiBold" Foreground="#DDE6F2" Margin="0 8 0 4" Visibility="{Binding SelectedSeriesContent.Director, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+                                <TextBlock Text="{Binding SelectedSeriesContent.Director}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0 0 0 8" Visibility="{Binding SelectedSeriesContent.Director, Converter={StaticResource NullToVisibilityConverter}, ConverterParameter=Invert}"/>
+
+                                <!-- Episodes Section -->
+                                <Separator Background="#223247" Margin="0 16 0 8"/>
+                                <TextBlock Text="Episodes" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14" Margin="0 0 0 8"/>
+                                <StackPanel x:Name="SeasonsPanel">
+                                    <!-- Seasons and Episodes will be populated in code-behind -->
+                                </StackPanel>
+                            </StackPanel>
+                            <TextBlock Text="Select a series..." Foreground="#5A6B7F" FontStyle="Italic" Visibility="{Binding SelectedSeriesContent, Converter={StaticResource NullToVisibilityConverter}}" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
         </Grid>
     </Grid>
 </Window>
