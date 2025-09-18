@@ -132,7 +132,7 @@ public class ScheduledRecording : INotifyPropertyChanged
         _ => "Unknown"
     };
 
-    public bool CanCancel => Status == RecordingScheduleStatus.Scheduled;
+    public bool CanCancel => Status == RecordingScheduleStatus.Scheduled || Status == RecordingScheduleStatus.Recording;
     public bool CanEdit => Status == RecordingScheduleStatus.Scheduled;
 
     public string TimeRangeText => $"{StartTimeLocal} - {EndTimeLocal} ({DurationText})";

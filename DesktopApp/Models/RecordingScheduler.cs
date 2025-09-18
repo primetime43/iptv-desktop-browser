@@ -77,7 +77,11 @@ public class RecordingScheduler : INotifyPropertyChanged
             if (timeDiff.TotalMinutes <= 1)
             {
                 Log($"Recording scheduled to start immediately: {recording.Title}");
-                Task.Run(() => StartRecording(recording));
+                Task.Run(() =>
+                {
+                    StartRecording(recording);
+                    SaveScheduledRecordings(); // Save status after starting
+                });
             }
         }
     }
@@ -89,6 +93,12 @@ public class RecordingScheduler : INotifyPropertyChanged
             var recording = _scheduledRecordings.FirstOrDefault(r => r.Id == recordingId);
             if (recording != null && recording.CanCancel)
             {
+                // If currently recording, stop the recording process
+                if (recording.Status == RecordingScheduleStatus.Recording)
+                {
+                    StopRecording(recording);
+                }
+
                 recording.Status = RecordingScheduleStatus.Cancelled;
                 SaveScheduledRecordings();
                 Log($"Cancelled recording: {recording.Title}");

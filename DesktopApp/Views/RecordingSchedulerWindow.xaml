@@ -424,7 +424,7 @@
                                                     BorderBrush="#FF6C757D" Padding="4,2" Margin="0,0,2,0"
                                                     IsEnabled="{Binding CanEdit}" FontSize="9"
                                                     Click="EditRecording_Click"/>
-                                            <Button Content="Cancel" Background="#FFDC3545" 
+                                            <Button Content="Cancel" Background="#FFDC3545"
                                                     BorderBrush="#FFDC3545" Padding="4,2" FontSize="9"
                                                     IsEnabled="{Binding CanCancel}"
                                                     Click="CancelRecording_Click"/>

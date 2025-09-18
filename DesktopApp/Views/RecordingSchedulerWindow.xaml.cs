@@ -512,9 +512,44 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
         if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
             return;
 
-        // TODO: Implement edit recording dialog
-        MessageBox.Show("Edit recording functionality will be implemented in a future update.",
-            "Coming Soon", MessageBoxButton.OK, MessageBoxImage.Information);
+        // Simple edit dialog using message boxes for now
+        var editMessage = $"Current recording details:\n\n" +
+                         $"Title: {recording.Title}\n" +
+                         $"Pre-buffer: {recording.PreBufferMinutes} minutes\n" +
+                         $"Post-buffer: {recording.PostBufferMinutes} minutes\n\n" +
+                         $"This is a basic edit confirmation. Would you like to add 1 minute to both pre and post buffer?";
+
+        var result = MessageBox.Show(editMessage, "Edit Recording",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+        if (result != MessageBoxResult.Yes)
+            return;
+
+        // Update the recording with increased buffer times
+        var updatedRecording = new ScheduledRecording
+        {
+            Id = recording.Id,
+            Title = recording.Title,
+            Description = recording.Description,
+            ChannelId = recording.ChannelId,
+            ChannelName = recording.ChannelName,
+            StreamUrl = recording.StreamUrl,
+            StartTime = recording.StartTime,
+            EndTime = recording.EndTime,
+            Status = recording.Status,
+            OutputFilePath = recording.OutputFilePath,
+            IsEpgBased = recording.IsEpgBased,
+            EpgProgramId = recording.EpgProgramId,
+            PreBufferMinutes = recording.PreBufferMinutes + 1,
+            PostBufferMinutes = recording.PostBufferMinutes + 1,
+            CreatedAt = recording.CreatedAt
+        };
+
+        _scheduler.UpdateRecording(updatedRecording);
+        LoadScheduledRecordings();
+
+        MessageBox.Show("Recording updated successfully!", "Edit Recording",
+            MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void CancelRecording_Click(object sender, RoutedEventArgs e)
