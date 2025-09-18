@@ -1923,7 +1923,7 @@ namespace DesktopApp.Views
             _recordProcess = new Process { StartInfo = psi, EnableRaisingEvents = false }; // we handle cleanup directly
             _recordProcess.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
             _recordProcess.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
-            if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name, SelectedChannel.Id); if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
+            if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name, SelectedChannel.Id, true); if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
             else { Log("Failed to start FFmpeg.\n"); _recordProcess.Dispose(); _recordProcess = null; }
         }
         private void StopRecording()
@@ -1973,7 +1973,23 @@ namespace DesktopApp.Views
 
         private void RecordBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (_recordProcess == null) StartRecording(); else StopRecording();
+            if (_recordProcess == null)
+            {
+                StartRecording();
+            }
+            else
+            {
+                // Only allow stopping if it's a manual recording
+                if (RecordingManager.Instance.IsManualRecording)
+                {
+                    StopRecording();
+                }
+                else
+                {
+                    MessageBox.Show("Cannot stop scheduled recording manually. Use the Recording Scheduler to cancel scheduled recordings.",
+                        "Scheduled Recording Active", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
         }
         public event PropertyChangedEventHandler? PropertyChanged; private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }

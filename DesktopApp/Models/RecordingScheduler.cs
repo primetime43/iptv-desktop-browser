@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using DesktopApp.Views;
 
 namespace DesktopApp.Models;
 
@@ -175,6 +176,45 @@ public class RecordingScheduler : INotifyPropertyChanged
                         Log($"Stopping recording: {recording.Title} (scheduled end: {recording.EndTimeLocal}, now: {DateTime.Now:MM/dd/yyyy hh:mm:ss tt})");
                         StopRecording(recording);
                     }
+
+                    // Check if recording has exceeded its end time (cleanup for missed stops)
+                    if (recording.Status == RecordingScheduleStatus.Recording &&
+                        DateTime.UtcNow > recording.EndTime.AddMinutes(recording.PostBufferMinutes + 5))
+                    {
+                        Log($"Force stopping overdue recording: {recording.Title}");
+                        recording.Status = RecordingScheduleStatus.Completed;
+
+                        // Clean up the recording process
+                        if (recording.RecordingProcess != null && !recording.RecordingProcess.HasExited)
+                        {
+                            try
+                            {
+                                recording.RecordingProcess.Kill();
+                                recording.RecordingProcess.Dispose();
+                                recording.RecordingProcess = null;
+                            }
+                            catch (Exception ex)
+                            {
+                                Log($"Error force stopping process for {recording.Title}: {ex.Message}");
+                            }
+                        }
+
+                        // Reset channel indicator and UI
+                        RecordingManager.Instance.StopRecording();
+                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            // Find the dashboard window and reset button text
+                            foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
+                            {
+                                if (window is DashboardWindow dashboard)
+                                {
+                                    if (dashboard.FindName("RecordBtnText") is System.Windows.Controls.TextBlock btnText)
+                                        btnText.Text = "Record";
+                                    break;
+                                }
+                            }
+                        });
+                    }
                 }
 
                 SaveScheduledRecordings();
@@ -272,11 +312,29 @@ public class RecordingScheduler : INotifyPropertyChanged
             }
             catch { }
 
-            // Update RecordingManager UI state
+            // Update RecordingManager only for channel indicator (separate from status)
             RecordingManager.Instance.StartRecording(recording.StreamUrl, recording.OutputFilePath, recording.Title, recording.ChannelId);
 
             // Store process reference for stopping later
             recording.RecordingProcess = process;
+
+            // Update UI to show scheduled recording is active
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                if (System.Windows.Application.Current.MainWindow is MainWindow mainWindow)
+                {
+                    // Find the dashboard window and update button text
+                    foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
+                    {
+                        if (window is DashboardWindow dashboard)
+                        {
+                            if (dashboard.FindName("RecordBtnText") is System.Windows.Controls.TextBlock btnText)
+                                btnText.Text = "Scheduled";
+                            break;
+                        }
+                    }
+                }
+            });
 
             Log($"Started FFmpeg recording process for: {recording.Title} -> {recording.OutputFilePath}");
         }
@@ -315,8 +373,23 @@ public class RecordingScheduler : INotifyPropertyChanged
                 }
             }
 
-            // Update RecordingManager UI state
+            // Update RecordingManager only for channel indicator (separate from status)
             RecordingManager.Instance.StopRecording();
+
+            // Update UI to show recording is no longer active
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                // Find the dashboard window and reset button text
+                foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
+                {
+                    if (window is DashboardWindow dashboard)
+                    {
+                        if (dashboard.FindName("RecordBtnText") is System.Windows.Controls.TextBlock btnText)
+                            btnText.Text = "Record";
+                        break;
+                    }
+                }
+            });
 
             recording.Status = RecordingScheduleStatus.Completed;
             RecordingStopped?.Invoke(recording);
