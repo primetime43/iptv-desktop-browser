@@ -16,6 +16,7 @@ using System.Threading;
 using System.Diagnostics;
 using System.Windows.Data;
 using System.Windows.Threading;
+using System.Windows.Media;
 
 namespace DesktopApp.Views
 {
@@ -62,6 +63,9 @@ namespace DesktopApp.Views
         public ICollectionView CategoriesCollectionView { get; }
         public ICollectionView ChannelsCollectionView { get; }
         public ICollectionView VodContentCollectionView { get; }
+        public ICollectionView VodCategoriesCollectionView { get; }
+        public ICollectionView SeriesContentCollectionView { get; }
+        public ICollectionView SeriesCategoriesCollectionView { get; }
 
         // Search
         private CancellationTokenSource? _searchDebounceCts;
@@ -91,6 +95,21 @@ namespace DesktopApp.Views
                     _searchAllChannels = value;
                     OnPropertyChanged();
                     OnSearchAllToggle();
+                }
+            }
+        }
+
+        private string _vodSearchQuery = string.Empty;
+        public string VodSearchQuery
+        {
+            get => _vodSearchQuery;
+            set
+            {
+                if (value != _vodSearchQuery)
+                {
+                    _vodSearchQuery = value;
+                    OnPropertyChanged();
+                    VodContentCollectionView.Refresh();
                 }
             }
         }
@@ -202,7 +221,6 @@ namespace DesktopApp.Views
         // Series collections
         private readonly ObservableCollection<SeriesCategory> _seriesCategories = new(); public ObservableCollection<SeriesCategory> SeriesCategories => _seriesCategories;
         private readonly ObservableCollection<SeriesContent> _seriesContent = new(); public ObservableCollection<SeriesContent> SeriesContent => _seriesContent;
-        public ICollectionView SeriesContentCollectionView { get; }
 
         private string _selectedSeriesCategoryId = string.Empty;
         public string SelectedSeriesCategoryId
@@ -369,12 +387,14 @@ namespace DesktopApp.Views
         {
             InitializeComponent();
             DataContext = this;
-            UserNameText.Text = Session.Username;
+            // User name display removed in new layout
 
             CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
             ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
             VodContentCollectionView = CollectionViewSource.GetDefaultView(_vodContent);
+            VodCategoriesCollectionView = CollectionViewSource.GetDefaultView(_vodCategories);
             SeriesContentCollectionView = CollectionViewSource.GetDefaultView(_seriesContent);
+            SeriesCategoriesCollectionView = CollectionViewSource.GetDefaultView(_seriesCategories);
             CategoriesCollectionView.Filter = CategoriesFilter;
             ChannelsCollectionView.Filter = ChannelsFilter;
             VodContentCollectionView.Filter = VodContentFilter;
@@ -710,41 +730,26 @@ namespace DesktopApp.Views
         // ===================== Navigation / UI =====================
         private void UpdateNavButtons()
         {
-            void StyleBtn(Button? b, bool active, bool enabled = true)
+            try
             {
-                if (b == null) return;
-                b.IsEnabled = enabled;
-                if (!enabled)
+                // Navigation buttons are now handled by the new layout system
+                // VOD access check
+                if (FindName("VodNavButton") is Button vodBtn)
                 {
-                    b.Background = System.Windows.Media.Brushes.Transparent;
-                    b.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x19, 0x28));
-                    b.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x66, 0x73, 0x85));
-                }
-                else
-                {
-                    b.Background = active ? (System.Windows.Media.Brush)new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x34, 0x7D, 0xFF)) : System.Windows.Media.Brushes.Transparent;
-                    b.BorderBrush = active ? b.Background : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x32, 0x47));
-                    b.Foreground = active ? System.Windows.Media.Brushes.White : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDD, 0xE6, 0xF2));
+                    vodBtn.IsEnabled = HasVodAccess;
+                    vodBtn.Opacity = HasVodAccess ? 1.0 : 0.5;
                 }
             }
-            StyleBtn(NavCategoriesBtn, CurrentViewKey == "categories");
-            StyleBtn(NavGuideBtn, CurrentViewKey == "guide", IsGuideReady);
-            StyleBtn(NavVodBtn, CurrentViewKey == "vod");
-            NavVodBtn.IsEnabled = HasVodAccess;
-            NavVodBtn.Opacity = HasVodAccess ? 1.0 : 0.5;
-            StyleBtn(NavProfileBtn, CurrentViewKey == "profile");
-            StyleBtn(NavOutputBtn, CurrentViewKey == "output");
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error updating nav buttons: {ex.Message}");
+            }
         }
 
         private void UpdateViewVisibility()
         {
-            if (CategoriesGrid == null) return;
-            CategoriesGrid.Visibility = CurrentViewKey == "categories" ? Visibility.Visible : Visibility.Collapsed;
-            GuideView.Visibility = CurrentViewKey == "guide" ? Visibility.Visible : Visibility.Collapsed;
-            // VOD view no longer used inside dashboard; keep collapsed always
-            VodView.Visibility = Visibility.Collapsed;
-            ProfileView.Visibility = CurrentViewKey == "profile" ? Visibility.Visible : Visibility.Collapsed;
-            OutputView.Visibility = CurrentViewKey == "output" ? Visibility.Visible : Visibility.Collapsed;
+            // View visibility is now handled by the new navigation system
+            // ShowPage method handles page switching
         }
         private void NavCategories_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "categories"; if (!IsGlobalSearchActive) { /* restore category view list remains as-is */ } }
         private void NavGuide_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "guide"; ApplySearch(); }
@@ -873,9 +878,8 @@ namespace DesktopApp.Views
         }
         private void SetGuideLoading(bool loading)
         {
-            if (GuideLoadingPanel == null || GuideScroll == null) return;
-            GuideLoadingPanel.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
-            GuideScroll.Visibility = loading ? Visibility.Collapsed : Visibility.Visible;
+            // Guide loading indicators removed in new layout
+            // TODO: Add loading indicators to new Live TV page if needed
         }
         private async Task LoadChannelsForCategoryAsync(Category cat)
         {
@@ -1107,10 +1111,10 @@ namespace DesktopApp.Views
         {
             try
             {
-                if (_isClosing || OutputText == null)
+                if (_isClosing)
                     return;
 
-                OutputText.AppendText(text);
+                // Output text handling removed in new layout
             }
             catch (Exception ex)
             {
@@ -1155,16 +1159,6 @@ namespace DesktopApp.Views
             }
         }
 
-        private async void CategoryTile_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is Category cat)
-            {
-                SelectedCategoryName = cat.Name;
-                await LoadChannelsForCategoryAsync(cat);
-                IsGuideReady = true;
-                CurrentViewKey = "guide";
-            }
-        }
 
         private async void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
@@ -1189,12 +1183,14 @@ namespace DesktopApp.Views
                 SelectedChannel = ch;
                 TryLaunchChannelInPlayer(ch);
                 _lastChannelClickedElement = null;
+                UpdateRecordingPageDisplay();
             }
             else
             {
                 SelectedChannel = ch;
                 _lastChannelClickedElement = fe;
                 _lastChannelClickTime = now;
+                UpdateRecordingPageDisplay();
             }
         }
         private void TryLaunchChannelInPlayer(Channel ch)
@@ -1278,8 +1274,12 @@ namespace DesktopApp.Views
                 }
                 catch (Exception ex) { Log("PARSE ERROR VOD categories: " + ex.Message + "\n"); }
 
+                // Populate local collection for UI binding
                 _vodCategories.Clear();
-                foreach (var c in parsed) _vodCategories.Add(c);
+                foreach (var cat in parsed)
+                    _vodCategories.Add(cat);
+
+                // Also populate session collection
                 Session.VodCategories.Clear();
                 Session.VodCategories.AddRange(parsed);
 
@@ -1674,6 +1674,7 @@ namespace DesktopApp.Views
         }
 
         private DateTime _lastVodClickTime;
+        private DateTime _lastSeriesClickTime;
 
         private void VodPlay_Click(object sender, RoutedEventArgs e)
         {
@@ -1844,6 +1845,28 @@ namespace DesktopApp.Views
             }
         }
 
+
+        private void TryLaunchSeriesInPlayer(SeriesContent series)
+        {
+            // For series, we typically want to show episodes rather than launch directly
+            // This could open a series episodes window or launch first episode
+            try
+            {
+                Log($"Opening series: {series.Name}\n");
+
+                // For now, this could open a separate series episodes window
+                // or we could implement inline episode browsing
+                var seriesWindow = new VodWindow(series) { Owner = this };
+                seriesWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                Log("Failed to open series: " + ex.Message + "\n");
+                MessageBox.Show(this, "Unable to open series details.",
+                    "Series Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         // API test output (disabled in M3U mode)
         private async void LoadStreams_Click(object sender, RoutedEventArgs e) => await RunApiCall("get_live_streams");
         private async Task RunApiCall(string action)
@@ -1991,6 +2014,248 @@ namespace DesktopApp.Views
                 }
             }
         }
+        // Navigation Methods for New Layout
+        private void NavigateToLiveTv(object sender, RoutedEventArgs e)
+        {
+            ShowPage("LiveTv");
+            SetSelectedNavButton(sender as Button);
+        }
+
+        private async void NavigateToVod(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Vod");
+            SetSelectedNavButton(sender as Button);
+
+            // Load VOD categories if not already loaded
+            if (_vodCategories.Count == 0 && Session.Mode == SessionMode.Xtream)
+            {
+                await LoadVodCategoriesAsync();
+                await LoadSeriesCategoriesAsync();
+            }
+        }
+
+        private void NavigateToRecording(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Recording");
+            SetSelectedNavButton(sender as Button);
+            UpdateRecordingPageDisplay();
+        }
+
+        private void NavigateToScheduler(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Scheduler");
+            SetSelectedNavButton(sender as Button);
+        }
+
+        private void NavigateToSettings(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Settings");
+            SetSelectedNavButton(sender as Button);
+        }
+
+        private void ShowPage(string pageName)
+        {
+            // Hide all pages
+            if (FindName("LiveTvPage") is Grid liveTvPage) liveTvPage.Visibility = Visibility.Collapsed;
+            if (FindName("VodPage") is Grid vodPage) vodPage.Visibility = Visibility.Collapsed;
+            if (FindName("RecordingPage") is Grid recordingPage) recordingPage.Visibility = Visibility.Collapsed;
+            if (FindName("SchedulerPage") is Grid schedulerPage) schedulerPage.Visibility = Visibility.Collapsed;
+            if (FindName("SettingsPage") is Grid settingsPage) settingsPage.Visibility = Visibility.Collapsed;
+
+            // Show selected page
+            if (FindName($"{pageName}Page") is Grid targetPage)
+                targetPage.Visibility = Visibility.Visible;
+        }
+
+        private void SetSelectedNavButton(Button? selectedButton)
+        {
+            // Clear all nav button selections
+            if (FindName("LiveTvNavButton") is Button liveTvBtn) liveTvBtn.Tag = null;
+            if (FindName("VodNavButton") is Button vodBtn) vodBtn.Tag = null;
+            if (FindName("RecordingNavButton") is Button recordingBtn) recordingBtn.Tag = null;
+            if (FindName("SchedulerNavButton") is Button schedulerBtn) schedulerBtn.Tag = null;
+            if (FindName("SettingsNavButton") is Button settingsBtn) settingsBtn.Tag = null;
+
+            // Set selected button
+            if (selectedButton != null)
+                selectedButton.Tag = "Selected";
+        }
+
+        private void UpdateRecordingPageDisplay()
+        {
+            if (FindName("SelectedChannelText") is TextBlock channelText)
+            {
+                channelText.Text = SelectedChannel?.Name ?? "None selected";
+            }
+        }
+
+        private async void CategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox combo && combo.SelectedItem is Category category)
+            {
+                await LoadChannelsForCategoryAsync(category);
+                ShowChannelsView_Click(null, null);
+            }
+        }
+
+        private void ShowCategoriesView_Click(object sender, RoutedEventArgs e)
+        {
+            if (FindName("CategoriesScrollViewer") is ScrollViewer categoriesViewer)
+                categoriesViewer.Visibility = Visibility.Visible;
+            if (FindName("ChannelsScrollViewer") is ScrollViewer channelsViewer)
+                channelsViewer.Visibility = Visibility.Collapsed;
+
+            // Update button states
+            if (FindName("CategoriesViewBtn") is Button categoriesBtn)
+            {
+                categoriesBtn.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47));
+                categoriesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xDD, 0xE6));
+            }
+            if (FindName("ChannelsViewBtn") is Button channelsBtn)
+            {
+                channelsBtn.Background = Brushes.Transparent;
+                channelsBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7));
+            }
+        }
+
+        private void ShowChannelsView_Click(object sender, RoutedEventArgs e)
+        {
+            if (FindName("CategoriesScrollViewer") is ScrollViewer categoriesViewer)
+                categoriesViewer.Visibility = Visibility.Collapsed;
+            if (FindName("ChannelsScrollViewer") is ScrollViewer channelsViewer)
+                channelsViewer.Visibility = Visibility.Visible;
+
+            // Update button states
+            if (FindName("CategoriesViewBtn") is Button categoriesBtn)
+            {
+                categoriesBtn.Background = Brushes.Transparent;
+                categoriesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7));
+            }
+            if (FindName("ChannelsViewBtn") is Button channelsBtn)
+            {
+                channelsBtn.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47));
+                channelsBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xDD, 0xE6));
+            }
+        }
+
+        private async void CategoryTile_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element && element.DataContext is Category category)
+            {
+                await LoadChannelsForCategoryAsync(category);
+
+                // Switch to channels view
+                ShowChannelsView_Click(null, null);
+
+                // Update category combo selection
+                if (FindName("CategoryCombo") is ComboBox combo)
+                {
+                    combo.SelectedItem = category;
+                }
+            }
+        }
+
+        private async void VodCategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox combo && combo.SelectedValue is string categoryId)
+            {
+                // Load content based on current view (Movies or Series)
+                if (FindName("MoviesScrollViewer") is ScrollViewer moviesViewer && moviesViewer.Visibility == Visibility.Visible)
+                {
+                    await LoadVodContentAsync(categoryId);
+                }
+                else if (FindName("SeriesScrollViewer") is ScrollViewer seriesViewer && seriesViewer.Visibility == Visibility.Visible)
+                {
+                    await LoadSeriesContentAsync(categoryId);
+                }
+            }
+        }
+
+        private void ShowMoviesView_Click(object sender, RoutedEventArgs e)
+        {
+            if (FindName("MoviesScrollViewer") is ScrollViewer moviesViewer)
+                moviesViewer.Visibility = Visibility.Visible;
+            if (FindName("SeriesScrollViewer") is ScrollViewer seriesViewer)
+                seriesViewer.Visibility = Visibility.Collapsed;
+
+            // Update button states
+            if (FindName("MoviesViewBtn") is Button moviesBtn)
+            {
+                moviesBtn.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47));
+                moviesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xDD, 0xE6));
+            }
+            if (FindName("SeriesViewBtn") is Button seriesBtn)
+            {
+                seriesBtn.Background = Brushes.Transparent;
+                seriesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7));
+            }
+
+            // Update category combo to show VOD categories
+            if (FindName("VodCategoryCombo") is ComboBox combo)
+            {
+                combo.ItemsSource = VodCategoriesCollectionView;
+                combo.DisplayMemberPath = "CategoryName";
+                combo.SelectedValuePath = "CategoryId";
+            }
+        }
+
+        private void ShowSeriesView_Click(object sender, RoutedEventArgs e)
+        {
+            if (FindName("MoviesScrollViewer") is ScrollViewer moviesViewer)
+                moviesViewer.Visibility = Visibility.Collapsed;
+            if (FindName("SeriesScrollViewer") is ScrollViewer seriesViewer)
+                seriesViewer.Visibility = Visibility.Visible;
+
+            // Update button states
+            if (FindName("MoviesViewBtn") is Button moviesBtn)
+            {
+                moviesBtn.Background = Brushes.Transparent;
+                moviesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7));
+            }
+            if (FindName("SeriesViewBtn") is Button seriesBtn)
+            {
+                seriesBtn.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47));
+                seriesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xDD, 0xE6));
+            }
+
+            // Update category combo to show series categories
+            if (FindName("VodCategoryCombo") is ComboBox combo)
+            {
+                combo.ItemsSource = SeriesCategoriesCollectionView;
+                combo.DisplayMemberPath = "CategoryName";
+                combo.SelectedValuePath = "CategoryId";
+            }
+        }
+
+        private void SeriesContent_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement fe || fe.DataContext is not SeriesContent series)
+                return;
+
+            // Check for double-click to launch player or open episodes
+            var now = DateTime.UtcNow;
+            const int doubleClickMs = 400;
+
+            if (SelectedSeriesContent == series && (now - _lastSeriesClickTime).TotalMilliseconds <= doubleClickMs)
+            {
+                // Open series episodes or launch player
+                TryLaunchSeriesInPlayer(series);
+                _lastSeriesClickTime = DateTime.MinValue;
+            }
+            else
+            {
+                SelectedSeriesContent = series;
+                _lastSeriesClickTime = now;
+            }
+        }
+
+
+        private void OpenRecordingScheduler_Click(object sender, RoutedEventArgs e)
+        {
+            var scheduler = new RecordingSchedulerWindow { Owner = this };
+            scheduler.Show();
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged; private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }
