@@ -2047,10 +2047,18 @@ namespace DesktopApp.Views
             SetSelectedNavButton(sender as Button);
         }
 
+        private void NavigateToProfile(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Profile");
+            SetSelectedNavButton(sender as Button);
+            LoadProfileData();
+        }
+
         private void NavigateToSettings(object sender, RoutedEventArgs e)
         {
-            ShowPage("Settings");
-            SetSelectedNavButton(sender as Button);
+            // Open the dedicated Settings window instead of embedded page
+            var settingsWindow = new SettingsWindow { Owner = this };
+            settingsWindow.ShowDialog();
         }
 
         private void ShowPage(string pageName)
@@ -2060,7 +2068,7 @@ namespace DesktopApp.Views
             if (FindName("VodPage") is Grid vodPage) vodPage.Visibility = Visibility.Collapsed;
             if (FindName("RecordingPage") is Grid recordingPage) recordingPage.Visibility = Visibility.Collapsed;
             if (FindName("SchedulerPage") is Grid schedulerPage) schedulerPage.Visibility = Visibility.Collapsed;
-            if (FindName("SettingsPage") is Grid settingsPage) settingsPage.Visibility = Visibility.Collapsed;
+            if (FindName("ProfilePage") is Grid profilePage) profilePage.Visibility = Visibility.Collapsed;
 
             // Show selected page
             if (FindName($"{pageName}Page") is Grid targetPage)
@@ -2074,7 +2082,7 @@ namespace DesktopApp.Views
             if (FindName("VodNavButton") is Button vodBtn) vodBtn.Tag = null;
             if (FindName("RecordingNavButton") is Button recordingBtn) recordingBtn.Tag = null;
             if (FindName("SchedulerNavButton") is Button schedulerBtn) schedulerBtn.Tag = null;
-            if (FindName("SettingsNavButton") is Button settingsBtn) settingsBtn.Tag = null;
+            if (FindName("ProfileNavButton") is Button profileBtn) profileBtn.Tag = null;
 
             // Set selected button
             if (selectedButton != null)
@@ -2255,6 +2263,98 @@ namespace DesktopApp.Views
             var scheduler = new RecordingSchedulerWindow { Owner = this };
             scheduler.Show();
         }
+
+        // Profile page methods
+        private void LoadProfileData()
+        {
+            try
+            {
+                // Update account information
+                if (FindName("UsernameText") is TextBlock usernameText)
+                    usernameText.Text = Session.Username ?? "Unknown";
+
+                if (FindName("StatusText") is TextBlock statusText)
+                    statusText.Text = Session.UserInfo?.status ?? "Unknown";
+
+                if (FindName("IsTrialText") is TextBlock isTrialText)
+                    isTrialText.Text = Session.UserInfo?.is_trial ?? "Unknown";
+
+                if (FindName("ExpiryDateText") is TextBlock expiryText)
+                {
+                    if (Session.UserInfo?.exp_date != null && long.TryParse(Session.UserInfo.exp_date, out var expTimestamp))
+                    {
+                        var expiry = DateTimeOffset.FromUnixTimeSeconds(expTimestamp).DateTime;
+                        expiryText.Text = expiry.ToString("MM/dd/yyyy hh:mm tt");
+                    }
+                    else
+                        expiryText.Text = "Never";
+                }
+
+                if (FindName("MaxConnectionsText") is TextBlock maxConnText)
+                    maxConnText.Text = Session.UserInfo?.max_connections ?? "Unknown";
+
+                if (FindName("ActiveConnectionsText") is TextBlock activeConnText)
+                    activeConnText.Text = Session.UserInfo?.active_cons ?? "0";
+
+                // Initialize debug output for API call logging
+                if (FindName("DebugOutputBox") is TextBox debugBox)
+                {
+                    if (string.IsNullOrEmpty(debugBox.Text))
+                    {
+                        debugBox.Text = $"[{DateTime.Now:HH:mm:ss}] Profile page loaded. API calls will be logged here.\n";
+                        debugBox.Text += $"[{DateTime.Now:HH:mm:ss}] Connection Info - Server: {(Session.UseSsl ? "https" : "http")}://{Session.Host}:{Session.Port}, User: {Session.Username}, Mode: {Session.Mode}\n";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (FindName("DebugOutputBox") is TextBox debugBox)
+                {
+                    debugBox.Text += $"\nError loading profile data: {ex.Message}\n";
+                }
+            }
+        }
+
+        private async void RefreshProfile_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (FindName("DebugOutputBox") is TextBox debugBox)
+                    debugBox.Text += $"\n[{DateTime.Now:HH:mm:ss}] Refreshing profile data...\n";
+
+                // Re-fetch user info if in Xtream mode
+                if (Session.Mode == SessionMode.Xtream)
+                {
+                    var url = Session.BuildApi("get_account_info");
+                    var response = await _http.GetStringAsync(url);
+                    var userInfo = JsonSerializer.Deserialize<UserInfo>(response);
+
+                    if (userInfo != null)
+                    {
+                        Session.UserInfo = userInfo;
+                        if (FindName("DebugOutputBox") is TextBox debugBox2)
+                            debugBox2.Text += $"[{DateTime.Now:HH:mm:ss}] Profile refreshed successfully.\n";
+                    }
+                }
+
+                LoadProfileData();
+            }
+            catch (Exception ex)
+            {
+                if (FindName("DebugOutputBox") is TextBox debugBox)
+                    debugBox.Text += $"[{DateTime.Now:HH:mm:ss}] Error refreshing profile: {ex.Message}\n";
+            }
+        }
+
+        private void ClearDebugOutput_Click(object sender, RoutedEventArgs e)
+        {
+            if (FindName("DebugOutputBox") is TextBox debugBox)
+            {
+                debugBox.Clear();
+                debugBox.Text = $"[{DateTime.Now:HH:mm:ss}] Debug log cleared.\n";
+            }
+        }
+
 
         public event PropertyChangedEventHandler? PropertyChanged; private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }

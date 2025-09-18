@@ -215,6 +215,14 @@
                         </StackPanel>
                     </Button>
 
+                    <Button x:Name="ProfileNavButton" Style="{StaticResource NavButtonStyle}"
+                            Click="NavigateToProfile">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="👤" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Profile"/>
+                        </StackPanel>
+                    </Button>
+
                     <Button x:Name="SettingsNavButton" Style="{StaticResource NavButtonStyle}"
                             Click="NavigateToSettings">
                         <StackPanel Orientation="Horizontal">
@@ -607,22 +615,97 @@
                 </StackPanel>
             </Grid>
 
-            <!-- Settings Page (Hidden by default) -->
-            <Grid x:Name="SettingsPage" Visibility="Collapsed">
-                <StackPanel Margin="16">
-                    <TextBlock Text="Settings" Style="{StaticResource HeaderTextStyle}"/>
+            <!-- Profile Page (Hidden by default) -->
+            <Grid x:Name="ProfilePage" Visibility="Collapsed">
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Profile &amp; Debug Info" Style="{StaticResource HeaderTextStyle}"/>
 
-                    <Border Style="{StaticResource CardStyle}">
-                        <StackPanel>
-                            <Button Content="Open Settings" Background="#6C757D" Foreground="White"
-                                    BorderThickness="0" Padding="16,8" HorizontalAlignment="Left"
-                                    Click="OpenSettings_Click"/>
-                            <TextBlock Text="Configure FFmpeg path, recording directory, player settings, and more."
-                                     FontSize="14" Foreground="#9DB2C7" TextWrapping="Wrap" Margin="0,12,0,0"/>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                        <!-- Account Information -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="Account Information" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="160"/>
+                                        <ColumnDefinition/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Text="Username:" Foreground="#8BA1B9" Grid.Row="0" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileUsername}" Foreground="#DDE6F2" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Status:" Foreground="#8BA1B9" Grid.Row="1" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileStatus}" Foreground="#DDE6F2" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Trial Account:" Foreground="#8BA1B9" Grid.Row="2" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileTrialText}" Foreground="#DDE6F2" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Expires:" Foreground="#8BA1B9" Grid.Row="3" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileExpiryText}" Foreground="#DDE6F2" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Days Remaining:" Foreground="#8BA1B9" Grid.Row="4" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileDaysRemaining}" Foreground="#DDE6F2" Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Max Connections:" Foreground="#8BA1B9" Grid.Row="5" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileMaxConnections}" Foreground="#DDE6F2" Grid.Row="5" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Active Connections:" Foreground="#8BA1B9" Grid.Row="6"/>
+                                    <TextBlock Text="{Binding ProfileActiveConnections}" Foreground="#DDE6F2" Grid.Row="6" Grid.Column="1"/>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Profile Actions -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="Profile Actions" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Refresh Profile" Background="#28A745" Foreground="White"
+                                            BorderThickness="0" Padding="16,8" Margin="0,0,12,0"
+                                            Click="RefreshProfile_Click"/>
+                                    <Button Content="Clear Debug Log" Background="#DC3545" Foreground="White"
+                                            BorderThickness="0" Padding="12,6"
+                                            Click="ClearDebugOutput_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Debug Information -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <TextBlock Text="Debug Information" FontSize="18" FontWeight="Bold"
+                                             Foreground="#F0F6FC"/>
+                                    <Button Content="Clear Output" Background="#DC3545" Foreground="White"
+                                            BorderThickness="0" Padding="12,6" Margin="16,0,0,0"
+                                            Click="ClearDebugOutput_Click"/>
+                                </StackPanel>
+
+                                <TextBlock Text="API Call Debug Log:" Foreground="#8BA1B9" Margin="0,0,0,8"/>
+                                <ScrollViewer Height="300" VerticalScrollBarVisibility="Auto">
+                                    <TextBox x:Name="DebugOutputBox" IsReadOnly="True" FontFamily="Consolas"
+                                           FontSize="11" TextWrapping="Wrap" AcceptsReturn="True"
+                                           Background="#0E1620" Foreground="#C8D3E0" BorderThickness="0"/>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
+
         </Grid>
     </Grid>
 </Window>
