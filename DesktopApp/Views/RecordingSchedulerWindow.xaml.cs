@@ -262,7 +262,9 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
 
         if (EpgRadio?.IsChecked == true && _selectedChannel != null && _selectedProgram != null)
         {
-            var sanitizedTitle = SanitizeFileName(_selectedProgram.Title);
+            // Clean the title by removing emoji and LIVE NOW indicator
+            var cleanTitle = _selectedProgram.Title.Replace("🔴 ", "").Replace(" (LIVE NOW)", "");
+            var sanitizedTitle = SanitizeFileName(cleanTitle);
             var sanitizedChannel = SanitizeFileName(_selectedChannel.Name);
             var timestamp = _selectedProgram.StartUtc.ToLocalTime().ToString("yyyy-MM-dd_HH-mm");
             var fileName = $"{sanitizedChannel}_{sanitizedTitle}_{timestamp}.ts";
@@ -284,8 +286,21 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
 
     private static string SanitizeFileName(string fileName)
     {
+        if (string.IsNullOrWhiteSpace(fileName)) return "Unknown";
+
+        // First remove emoji and LIVE NOW indicators
+        var cleaned = fileName.Replace("🔴 ", "").Replace(" (LIVE NOW)", "");
+
+        // Remove other emoji characters (basic cleanup)
+        cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"[\uD800-\uDBFF\uDC00-\uDFFF]", "");
+
+        // Remove invalid file name characters
         var invalidChars = Path.GetInvalidFileNameChars();
-        return string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+        var result = string.Join("_", cleaned.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+
+        // Trim and ensure we have something
+        result = result.Trim('_', ' ');
+        return string.IsNullOrWhiteSpace(result) ? "Recording" : result;
     }
 
     private string GetStreamUrlForChannel(Channel channel)
