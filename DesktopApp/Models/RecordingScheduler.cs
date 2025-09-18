@@ -175,7 +175,8 @@ public class RecordingScheduler : INotifyPropertyChanged
                     RecordingManager.Instance.StartRecording(
                         recording.StreamUrl,
                         recording.OutputFilePath,
-                        recording.Title
+                        recording.Title,
+                        recording.ChannelId
                     );
 
                     RecordingStarted?.Invoke(recording);

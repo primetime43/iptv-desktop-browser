@@ -410,6 +410,9 @@ namespace DesktopApp.Views
                 UpdateViewVisibility();
                 UpdateNavButtons();
             };
+
+            // Subscribe to recording manager events for channel indicators
+            RecordingManager.Instance.PropertyChanged += OnRecordingManagerChanged;
         }
 
         // ===== Index building for playlist mode (M3U) =====
@@ -1121,8 +1124,37 @@ namespace DesktopApp.Views
         {
             try { StopRecording(); } catch { }
             try { if (_vodWindow != null) { _vodWindow.Close(); _vodWindow = null; } } catch { }
-            CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
+            CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; RecordingManager.Instance.PropertyChanged -= OnRecordingManagerChanged; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
         }
+
+        private void OnRecordingManagerChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(RecordingManager.RecordingChannelId))
+            {
+                UpdateChannelRecordingStatus();
+            }
+        }
+
+        private void UpdateChannelRecordingStatus()
+        {
+            var recordingChannelId = RecordingManager.Instance.RecordingChannelId;
+
+            // Update channels in current collection
+            foreach (var channel in _channels)
+            {
+                channel.IsRecording = (recordingChannelId.HasValue && channel.Id == recordingChannelId.Value);
+            }
+
+            // Also update all channels index if loaded
+            if (_allChannelsIndex != null)
+            {
+                foreach (var channel in _allChannelsIndex)
+                {
+                    channel.IsRecording = (recordingChannelId.HasValue && channel.Id == recordingChannelId.Value);
+                }
+            }
+        }
+
         private async void CategoryTile_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is Category cat)
@@ -1891,7 +1923,7 @@ namespace DesktopApp.Views
             _recordProcess = new Process { StartInfo = psi, EnableRaisingEvents = false }; // we handle cleanup directly
             _recordProcess.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
             _recordProcess.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
-            if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name); if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
+            if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name, SelectedChannel.Id); if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
             else { Log("Failed to start FFmpeg.\n"); _recordProcess.Dispose(); _recordProcess = null; }
         }
         private void StopRecording()

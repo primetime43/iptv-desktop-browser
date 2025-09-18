@@ -16,7 +16,7 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private readonly RecordingScheduler _scheduler = RecordingScheduler.Instance;
-    private PlaylistEntry? _selectedChannel;
+    private Channel? _selectedChannel;
     private EpgEntry? _selectedProgram;
 
     public RecordingSchedulerWindow()
@@ -24,6 +24,7 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
         InitializeComponent();
         DataContext = this;
 
+        System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Initializing window, Owner: {Owner?.GetType().Name}");
         InitializeWindow();
         LoadChannels();
         LoadScheduledRecordings();
@@ -32,6 +33,15 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
     protected virtual void OnPropertyChanged(string propertyName)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+
+        System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] OnSourceInitialized, Owner: {Owner?.GetType().Name}");
+        // Reload channels now that the window is fully initialized
+        LoadChannels();
     }
 
     private void InitializeWindow()
@@ -47,9 +57,35 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
 
     private void LoadChannels()
     {
-        var channels = Session.PlaylistChannels.OrderBy(c => c.Name).ToList();
-        ChannelCombo.ItemsSource = channels;
-        CustomChannelCombo.ItemsSource = channels;
+        // Get channels from the dashboard owner if available
+        if (Owner is DashboardWindow dashboard)
+        {
+            var channels = dashboard.Channels.OrderBy(c => c.Name).ToList();
+            System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Loading {channels.Count} channels from dashboard");
+            if (ChannelCombo != null)
+                ChannelCombo.ItemsSource = channels;
+            if (CustomChannelCombo != null)
+                CustomChannelCombo.ItemsSource = channels;
+        }
+        else
+        {
+            // Fallback to playlist channels
+            var playlistChannels = Session.PlaylistChannels.OrderBy(c => c.Name).ToList();
+            System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Loading {playlistChannels.Count} playlist channels as fallback");
+            // Convert PlaylistEntry to Channel for compatibility
+            var channels = playlistChannels.Select(p => new Channel
+            {
+                Id = p.Id,
+                Name = p.Name,
+                Logo = p.Logo,
+                EpgChannelId = p.TvgId
+            }).ToList();
+
+            if (ChannelCombo != null)
+                ChannelCombo.ItemsSource = channels;
+            if (CustomChannelCombo != null)
+                CustomChannelCombo.ItemsSource = channels;
+        }
     }
 
     private void LoadScheduledRecordings()
@@ -77,7 +113,7 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
 
     private void ChannelCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (ChannelCombo.SelectedItem is PlaylistEntry channel)
+        if (ChannelCombo.SelectedItem is Channel channel)
         {
             _selectedChannel = channel;
             LoadProgramsForChannel(channel);
@@ -85,13 +121,13 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void LoadProgramsForChannel(PlaylistEntry channel)
+    private void LoadProgramsForChannel(Channel channel)
     {
         var now = DateTime.UtcNow;
         var programs = new List<EpgEntry>();
 
-        if (!string.IsNullOrWhiteSpace(channel.TvgId) &&
-            Session.M3uEpgByChannel.TryGetValue(channel.TvgId, out var entries))
+        if (!string.IsNullOrWhiteSpace(channel.EpgChannelId) &&
+            Session.M3uEpgByChannel.TryGetValue(channel.EpgChannelId, out var entries))
         {
             programs = entries
                 .Where(epg => epg.StartUtc >= now)
@@ -144,7 +180,7 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
             var recordingDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
             OutputFileBox.Text = Path.Combine(recordingDir, fileName);
         }
-        else if (CustomRadio?.IsChecked == true && CustomChannelCombo?.SelectedItem is PlaylistEntry customChannel)
+        else if (CustomRadio?.IsChecked == true && CustomChannelCombo?.SelectedItem is Channel customChannel)
         {
             var title = string.IsNullOrWhiteSpace(TitleBox?.Text) ? "Custom_Recording" : TitleBox.Text;
             var sanitizedTitle = SanitizeFileName(title);
@@ -161,6 +197,21 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
     {
         var invalidChars = Path.GetInvalidFileNameChars();
         return string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    private string GetStreamUrlForChannel(Channel channel)
+    {
+        if (Session.Mode == SessionMode.M3u)
+        {
+            // For M3U mode, find the corresponding playlist entry
+            var playlistEntry = Session.PlaylistChannels.FirstOrDefault(p => p.Id == channel.Id);
+            return playlistEntry?.StreamUrl ?? "";
+        }
+        else
+        {
+            // For Xtream mode, build the stream URL
+            return Session.BuildStreamUrl(channel.Id, "ts");
+        }
     }
 
     private void BrowseOutput_Click(object sender, RoutedEventArgs e)
@@ -205,7 +256,7 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
                     Description = _selectedProgram.Description ?? "",
                     ChannelId = _selectedChannel.Id,
                     ChannelName = _selectedChannel.Name,
-                    StreamUrl = Session.Mode == SessionMode.M3u ? _selectedChannel.StreamUrl : Session.BuildStreamUrl(_selectedChannel.Id, "ts"),
+                    StreamUrl = GetStreamUrlForChannel(_selectedChannel),
                     StartTime = _selectedProgram.StartUtc,
                     EndTime = _selectedProgram.EndUtc,
                     IsEpgBased = true,
@@ -215,7 +266,7 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
             else
             {
                 // Custom time recording
-                if (CustomChannelCombo.SelectedItem is not PlaylistEntry customChannel)
+                if (CustomChannelCombo.SelectedItem is not Channel customChannel)
                 {
                     MessageBox.Show("Please select a channel.", "Validation Error",
                         MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -245,7 +296,7 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
                     Title = string.IsNullOrWhiteSpace(TitleBox.Text) ? "Custom Recording" : TitleBox.Text,
                     ChannelId = customChannel.Id,
                     ChannelName = customChannel.Name,
-                    StreamUrl = Session.Mode == SessionMode.M3u ? customChannel.StreamUrl : Session.BuildStreamUrl(customChannel.Id, "ts"),
+                    StreamUrl = GetStreamUrlForChannel(customChannel),
                     StartTime = startDateTime.ToUniversalTime(),
                     EndTime = endDateTime.ToUniversalTime(),
                     IsEpgBased = false

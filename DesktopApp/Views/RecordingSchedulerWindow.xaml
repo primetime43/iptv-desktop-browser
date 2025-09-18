@@ -22,14 +22,22 @@
         <TabControl Grid.Row="1" Background="Transparent" BorderBrush="#FF3B4A5C">
             <TabControl.Resources>
                 <Style TargetType="TabItem">
-                    <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Foreground" Value="#FF9DB2C7"/>
+                    <Setter Property="Background" Value="#FF2A3A4F"/>
+                    <Setter Property="Foreground" Value="#FFDDE6F2"/>
                     <Setter Property="BorderBrush" Value="#FF3B4A5C"/>
-                    <Setter Property="Padding" Value="12,6"/>
+                    <Setter Property="BorderThickness" Value="1,1,1,0"/>
+                    <Setter Property="Padding" Value="15,8"/>
                     <Setter Property="FontWeight" Value="SemiBold"/>
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="Margin" Value="0,0,2,0"/>
                     <Style.Triggers>
                         <Trigger Property="IsSelected" Value="True">
                             <Setter Property="Background" Value="#FF347DFF"/>
+                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="BorderBrush" Value="#FF347DFF"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#FF3B4A5C"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>
                     </Style.Triggers>

@@ -37,6 +37,9 @@ public sealed class Channel : INotifyPropertyChanged
     private bool _epgLoading;
     public bool EpgLoading { get => _epgLoading; set { if (value != _epgLoading) { _epgLoading = value; OnPropertyChanged(); OnPropertyChanged(nameof(TooltipText)); } } }
 
+    private bool _isRecording;
+    public bool IsRecording { get => _isRecording; set { if (value != _isRecording) { _isRecording = value; OnPropertyChanged(); OnPropertyChanged(nameof(TooltipText)); } } }
+
     // Track how many times we've tried to load EPG.
     private int _epgAttempts;
     public int EpgAttempts { get => _epgAttempts; set { if (value != _epgAttempts) { _epgAttempts = value; OnPropertyChanged(); } } }
@@ -45,10 +48,12 @@ public sealed class Channel : INotifyPropertyChanged
     {
         get
         {
-            if (EpgLoading) return "Loading EPG...";
-            if (!EpgLoaded) return "Hover to load program info"; // generic prompt
-            if (string.IsNullOrEmpty(NowTitle)) return "No EPG data";
-            return string.IsNullOrWhiteSpace(NowTimeRange) ? NowTitle! : $"{NowTitle}\n{NowTimeRange}";
+            var text = "";
+            if (IsRecording) text += "🔴 RECORDING\n";
+            if (EpgLoading) return text + "Loading EPG...";
+            if (!EpgLoaded) return text + "Hover to load program info"; // generic prompt
+            if (string.IsNullOrEmpty(NowTitle)) return text + "No EPG data";
+            return text + (string.IsNullOrWhiteSpace(NowTimeRange) ? NowTitle! : $"{NowTitle}\n{NowTimeRange}");
         }
     }
 

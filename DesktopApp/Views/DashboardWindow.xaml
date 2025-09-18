@@ -260,23 +260,42 @@
                                             <DataTemplate>
                                                 <Button Padding="0" Margin="6" Cursor="Hand" PreviewMouseLeftButtonDown="ChannelTile_PreviewMouseLeftButtonDown" MouseEnter="ChannelTile_MouseEnter" ToolTipService.ShowDuration="30000" ToolTip="{Binding TooltipText}">
                                                     <Border Width="160" Height="130" Background="#182433" CornerRadius="8" Padding="8" BorderBrush="#223247" BorderThickness="1">
-                                                        <StackPanel>
-                                                            <Border Height="55" Background="#223247" CornerRadius="4">
-                                                                <Grid>
-                                                                    <Image x:Name="LogoImg" Source="{Binding LogoImage}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Visible"/>
-                                                                    <TextBlock x:Name="LogoPlaceholder" Text="Loading..." Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
-                                                                </Grid>
+                                                        <Grid>
+                                                            <StackPanel>
+                                                                <Border Height="55" Background="#223247" CornerRadius="4">
+                                                                    <Grid>
+                                                                        <Image x:Name="LogoImg" Source="{Binding LogoImage}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Visible"/>
+                                                                        <TextBlock x:Name="LogoPlaceholder" Text="Loading..." Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
+                                                                    </Grid>
+                                                                </Border>
+                                                                <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 6 0 2"/>
+                                                                <TextBlock Text="{Binding NowTitle}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap"/>
+                                                                <TextBlock Text="{Binding NowTimeRange}" FontSize="10" Foreground="#8BA1B9"/>
+                                                            </StackPanel>
+                                                            <!-- Recording Indicator -->
+                                                            <Border x:Name="RecordingIndicator"
+                                                                    Background="#FFDC3545"
+                                                                    CornerRadius="12"
+                                                                    Width="24" Height="24"
+                                                                    HorizontalAlignment="Right"
+                                                                    VerticalAlignment="Top"
+                                                                    Margin="0,-4,-4,0"
+                                                                    Visibility="Collapsed">
+                                                                <Ellipse Width="8" Height="8"
+                                                                         Fill="White"
+                                                                         HorizontalAlignment="Center"
+                                                                         VerticalAlignment="Center"/>
                                                             </Border>
-                                                            <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 6 0 2"/>
-                                                            <TextBlock Text="{Binding NowTitle}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap"/>
-                                                            <TextBlock Text="{Binding NowTimeRange}" FontSize="10" Foreground="#8BA1B9"/>
-                                                        </StackPanel>
+                                                        </Grid>
                                                     </Border>
                                                 </Button>
                                                 <DataTemplate.Triggers>
                                                     <DataTrigger Binding="{Binding LogoImage}" Value="{x:Null}">
                                                         <Setter TargetName="LogoImg" Property="Visibility" Value="Collapsed" />
                                                         <Setter TargetName="LogoPlaceholder" Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                                                        <Setter TargetName="RecordingIndicator" Property="Visibility" Value="Visible" />
                                                     </DataTrigger>
                                                 </DataTemplate.Triggers>
                                             </DataTemplate>

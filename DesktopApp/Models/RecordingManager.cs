@@ -66,6 +66,9 @@ public sealed class RecordingManager : INotifyPropertyChanged
     private string? _channelName;
     public string? ChannelName { get => _channelName; private set { if (value != _channelName) { _channelName = value; OnPropertyChanged(); } } }
 
+    private int? _recordingChannelId;
+    public int? RecordingChannelId { get => _recordingChannelId; private set { if (value != _recordingChannelId) { _recordingChannelId = value; OnPropertyChanged(); } } }
+
     private string? _filePath;
     public string? FilePath
     {
@@ -123,10 +126,11 @@ public sealed class RecordingManager : INotifyPropertyChanged
         _ => "Idle"
     };
 
-    public void Start(string filePath, string? channel)
+    public void Start(string filePath, string? channel, int? channelId = null)
     {
         FilePath = filePath;
         ChannelName = channel;
+        RecordingChannelId = channelId;
         StartUtc = DateTime.UtcNow;
         SizeBytes = 0;
         State = RecordingState.Recording;
@@ -138,6 +142,7 @@ public sealed class RecordingManager : INotifyPropertyChanged
     {
         IsRecording = false;
         State = RecordingState.Stopped;
+        RecordingChannelId = null;
         OnPropertyChanged(nameof(DurationDisplay));
     }
 
@@ -145,14 +150,14 @@ public sealed class RecordingManager : INotifyPropertyChanged
     {
         IsRecording = false;
         State = RecordingState.Idle;
-        FilePath = null; ChannelName = null; StartUtc = null; SizeBytes = 0;
+        FilePath = null; ChannelName = null; RecordingChannelId = null; StartUtc = null; SizeBytes = 0;
         OnPropertyChanged(nameof(DurationDisplay));
     }
 
     // Methods used by RecordingScheduler
-    public void StartRecording(string streamUrl, string outputPath, string? title)
+    public void StartRecording(string streamUrl, string outputPath, string? title, int? channelId = null)
     {
-        Start(outputPath, title);
+        Start(outputPath, title, channelId);
     }
 
     public void StopRecording()
