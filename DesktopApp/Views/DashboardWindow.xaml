@@ -116,6 +116,12 @@
                             <TextBlock Text="Status"/>
                         </StackPanel>
                     </Button>
+                    <Button x:Name="ScheduleBtn" Style="{StaticResource HeaderButtonBaseStyle}" Margin="0 0 8 0" ToolTip="Schedule Recordings" Click="OpenScheduler_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE823;" Margin="0 0 6 0"/>
+                            <TextBlock Text="Schedule"/>
+                        </StackPanel>
+                    </Button>
                     <Button x:Name="RecordBtn" Style="{StaticResource PrimaryHeaderButtonStyle}" Margin="0 0 12 0" ToolTip="Start/Stop Recording" Click="RecordBtn_Click">
                         <StackPanel Orientation="Horizontal">
                             <Ellipse Width="10" Height="10" Fill="#FF4136" VerticalAlignment="Center" Margin="0 0 6 0"/>

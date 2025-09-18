@@ -149,6 +149,17 @@ public sealed class RecordingManager : INotifyPropertyChanged
         OnPropertyChanged(nameof(DurationDisplay));
     }
 
+    // Methods used by RecordingScheduler
+    public void StartRecording(string streamUrl, string outputPath, string? title)
+    {
+        Start(outputPath, title);
+    }
+
+    public void StopRecording()
+    {
+        Stop();
+    }
+
     public void Refresh()
     {
         if (!IsRecording || string.IsNullOrWhiteSpace(FilePath)) return;

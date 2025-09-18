@@ -1835,6 +1835,13 @@ namespace DesktopApp.Views
                 _recordingWindow.Activate();
             }
         }
+
+        private void OpenScheduler_Click(object sender, RoutedEventArgs e)
+        {
+            var schedulerWindow = new RecordingSchedulerWindow { Owner = this };
+            schedulerWindow.Show();
+        }
+
         private void OnRecordingStoppedRequested()
         {
             Dispatcher.Invoke(() => { if (_recordProcess != null) StopRecording(); });
