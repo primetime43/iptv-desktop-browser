@@ -100,7 +100,12 @@ public class RecordingScheduler : INotifyPropertyChanged
                     StopRecording(recording);
                 }
 
-                recording.Status = RecordingScheduleStatus.Cancelled;
+                // Update status on UI thread to ensure proper binding updates
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    recording.Status = RecordingScheduleStatus.Cancelled;
+                });
+
                 SaveScheduledRecordings();
                 Log($"Cancelled recording: {recording.Title}");
             }
@@ -114,8 +119,13 @@ public class RecordingScheduler : INotifyPropertyChanged
             var existingRecording = _scheduledRecordings.FirstOrDefault(r => r.Id == updatedRecording.Id);
             if (existingRecording != null && existingRecording.CanEdit)
             {
-                var index = _scheduledRecordings.IndexOf(existingRecording);
-                _scheduledRecordings[index] = updatedRecording;
+                // Update on UI thread to ensure proper binding updates
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    var index = _scheduledRecordings.IndexOf(existingRecording);
+                    _scheduledRecordings[index] = updatedRecording;
+                });
+
                 SaveScheduledRecordings();
                 Log($"Updated recording: {updatedRecording.Title}");
             }
@@ -132,13 +142,17 @@ public class RecordingScheduler : INotifyPropertyChanged
                            r.Status == RecordingScheduleStatus.Cancelled)
                 .ToList();
 
-            foreach (var recording in toRemove)
-            {
-                _scheduledRecordings.Remove(recording);
-            }
-
             if (toRemove.Any())
             {
+                // Remove items on UI thread to ensure proper binding updates
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    foreach (var recording in toRemove)
+                    {
+                        _scheduledRecordings.Remove(recording);
+                    }
+                });
+
                 SaveScheduledRecordings();
                 Log($"Deleted {toRemove.Count} completed recordings");
             }

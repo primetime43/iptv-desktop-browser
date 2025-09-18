@@ -492,7 +492,7 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
         if (result == MessageBoxResult.Yes)
         {
             _scheduler.DeleteCompletedRecordings();
-            LoadScheduledRecordings();
+            // No need to call LoadScheduledRecordings() - the ObservableCollection will update automatically
         }
     }
 
@@ -561,7 +561,7 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
         };
 
         _scheduler.UpdateRecording(updatedRecording);
-        LoadScheduledRecordings();
+        // No need to call LoadScheduledRecordings() - the ObservableCollection will update automatically
 
         MessageBox.Show("Recording updated successfully!", "Edit Recording",
             MessageBoxButton.OK, MessageBoxImage.Information);
@@ -578,7 +578,8 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
         if (result == MessageBoxResult.Yes)
         {
             _scheduler.CancelRecording(recording.Id);
-            LoadScheduledRecordings();
+            // No need to call LoadScheduledRecordings() - the ObservableCollection will update automatically
+            // due to INotifyPropertyChanged implementation in ScheduledRecording
         }
     }
 
