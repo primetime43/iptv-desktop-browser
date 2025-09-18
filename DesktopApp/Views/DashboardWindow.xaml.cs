@@ -1670,6 +1670,9 @@ namespace DesktopApp.Views
             {
                 SelectedVodContent = vod;
                 _lastVodClickTime = now;
+
+                // Update details panel
+                ShowVodDetailsPanel(vod);
             }
         }
 
@@ -2056,9 +2059,9 @@ namespace DesktopApp.Views
 
         private void NavigateToSettings(object sender, RoutedEventArgs e)
         {
-            // Open the dedicated Settings window instead of embedded page
-            var settingsWindow = new SettingsWindow { Owner = this };
-            settingsWindow.ShowDialog();
+            ShowPage("Settings");
+            SetSelectedNavButton(sender as Button);
+            LoadSettingsPage();
         }
 
         private void ShowPage(string pageName)
@@ -2069,6 +2072,7 @@ namespace DesktopApp.Views
             if (FindName("RecordingPage") is Grid recordingPage) recordingPage.Visibility = Visibility.Collapsed;
             if (FindName("SchedulerPage") is Grid schedulerPage) schedulerPage.Visibility = Visibility.Collapsed;
             if (FindName("ProfilePage") is Grid profilePage) profilePage.Visibility = Visibility.Collapsed;
+            if (FindName("SettingsPage") is Grid settingsPage) settingsPage.Visibility = Visibility.Collapsed;
 
             // Show selected page
             if (FindName($"{pageName}Page") is Grid targetPage)
@@ -2083,6 +2087,7 @@ namespace DesktopApp.Views
             if (FindName("RecordingNavButton") is Button recordingBtn) recordingBtn.Tag = null;
             if (FindName("SchedulerNavButton") is Button schedulerBtn) schedulerBtn.Tag = null;
             if (FindName("ProfileNavButton") is Button profileBtn) profileBtn.Tag = null;
+            if (FindName("SettingsNavButton") is Button settingsBtn) settingsBtn.Tag = null;
 
             // Set selected button
             if (selectedButton != null)
@@ -2254,6 +2259,9 @@ namespace DesktopApp.Views
             {
                 SelectedSeriesContent = series;
                 _lastSeriesClickTime = now;
+
+                // Update details panel
+                ShowSeriesDetailsPanel(series);
             }
         }
 
@@ -2262,6 +2270,278 @@ namespace DesktopApp.Views
         {
             var scheduler = new RecordingSchedulerWindow { Owner = this };
             scheduler.Show();
+        }
+
+        // VOD Details Panel Methods
+        private VodContent? _currentSubscribedVod;
+
+        private void ShowVodDetailsPanel(VodContent vod)
+        {
+            try
+            {
+                // Unsubscribe from previous VOD property changes
+                if (_currentSubscribedVod != null)
+                {
+                    _currentSubscribedVod.PropertyChanged -= VodContent_PropertyChanged;
+                }
+
+                // Subscribe to this VOD's property changes
+                _currentSubscribedVod = vod;
+                vod.PropertyChanged += VodContent_PropertyChanged;
+
+                // If details are already loaded, show them immediately
+                if (vod.DetailsLoaded)
+                {
+                    DisplayVodDetailsPanel(vod);
+                    return;
+                }
+
+                // Show loading state
+                if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                {
+                    placeholder.Text = "Loading details...";
+                    placeholder.Visibility = Visibility.Visible;
+                }
+
+                if (FindName("VodDetailsContent") is StackPanel content)
+                    content.Visibility = Visibility.Collapsed;
+
+                // Start loading details in background (fire and forget)
+                _ = LoadVodDetailsAsync(vod);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error showing VOD details: {ex.Message}");
+                // Show error state
+                if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                {
+                    placeholder.Text = "Failed to load details";
+                    placeholder.Visibility = Visibility.Visible;
+                }
+                if (FindName("VodDetailsContent") is StackPanel content)
+                    content.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void VodContent_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == "DetailsLoaded" &&
+                sender is VodContent vod && vod.DetailsLoaded && ReferenceEquals(vod, this.SelectedVodContent))
+            {
+                // Details have been loaded for the currently selected VOD, update UI
+                Dispatcher.Invoke(() => DisplayVodDetailsPanel(vod));
+            }
+        }
+
+        private void DisplayVodDetailsPanel(VodContent vod)
+        {
+            // Hide placeholder, show content
+            if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                placeholder.Visibility = Visibility.Collapsed;
+
+            if (FindName("VodDetailsContent") is StackPanel content)
+                content.Visibility = Visibility.Visible;
+
+            // Set title
+            if (FindName("VodDetailsTitle") is TextBlock title)
+                title.Text = vod.Name ?? "Unknown";
+
+            // Set poster if available
+            if (FindName("VodDetailsPoster") is Image poster && FindName("VodDetailsIcon") is TextBlock icon)
+            {
+                if (vod.PosterImage != null)
+                {
+                    poster.Source = vod.PosterImage;
+                    poster.Visibility = Visibility.Visible;
+                    icon.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    poster.Visibility = Visibility.Collapsed;
+                    icon.Visibility = Visibility.Visible;
+                    icon.Text = "🎬";
+                }
+            }
+
+            // Update all detail fields
+            UpdateVodDetailsDisplay(vod);
+        }
+
+        private void UpdateVodDetailsDisplay(VodContent vod)
+        {
+            // Only update if details are actually loaded
+            if (!vod.DetailsLoaded)
+            {
+                // Keep showing loading state
+                return;
+            }
+
+            // Update all fields with loaded data
+            if (FindName("VodDetailsYear") is TextBlock year)
+                year.Text = !string.IsNullOrWhiteSpace(vod.ReleaseDate) ? vod.DisplayYear : "";
+
+            if (FindName("VodDetailsDuration") is TextBlock duration)
+                duration.Text = !string.IsNullOrWhiteSpace(vod.Duration) ? vod.DisplayDuration : "";
+
+            if (FindName("VodDetailsRating") is TextBlock rating)
+                rating.Text = !string.IsNullOrWhiteSpace(vod.Rating) ? vod.Rating : "";
+
+            if (FindName("VodDetailsGenre") is TextBlock genre)
+                genre.Text = !string.IsNullOrWhiteSpace(vod.Genre) ? vod.Genre : "";
+
+            if (FindName("VodDetailsCast") is TextBlock cast)
+                cast.Text = !string.IsNullOrWhiteSpace(vod.Cast) ? vod.Cast : "";
+
+            if (FindName("VodDetailsDirector") is TextBlock director)
+                director.Text = !string.IsNullOrWhiteSpace(vod.Director) ? vod.Director : "";
+
+            if (FindName("VodDetailsPlot") is TextBlock plot)
+                plot.Text = !string.IsNullOrWhiteSpace(vod.Plot) ? vod.Plot : "No plot available";
+        }
+
+        private SeriesContent? _currentSubscribedSeries;
+
+        private void ShowSeriesDetailsPanel(SeriesContent series)
+        {
+            try
+            {
+                // Unsubscribe from previous series property changes
+                if (_currentSubscribedSeries != null)
+                {
+                    _currentSubscribedSeries.PropertyChanged -= SeriesContent_PropertyChanged;
+                }
+
+                // Subscribe to this series' property changes
+                _currentSubscribedSeries = series;
+                series.PropertyChanged += SeriesContent_PropertyChanged;
+
+                // If details are already loaded, show them immediately
+                if (series.DetailsLoaded)
+                {
+                    DisplaySeriesDetailsPanel(series);
+                    return;
+                }
+
+                // Show loading state
+                if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                {
+                    placeholder.Text = "Loading details...";
+                    placeholder.Visibility = Visibility.Visible;
+                }
+
+                if (FindName("VodDetailsContent") is StackPanel content)
+                    content.Visibility = Visibility.Collapsed;
+
+                // Start loading details in background (fire and forget)
+                _ = LoadSeriesDetailsAsync(series);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error showing series details: {ex.Message}");
+                // Show error state
+                if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                {
+                    placeholder.Text = "Failed to load details";
+                    placeholder.Visibility = Visibility.Visible;
+                }
+                if (FindName("VodDetailsContent") is StackPanel content)
+                    content.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void SeriesContent_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == "DetailsLoaded" &&
+                sender is SeriesContent series && series.DetailsLoaded && ReferenceEquals(series, this.SelectedSeriesContent))
+            {
+                // Details have been loaded for the currently selected series, update UI
+                Dispatcher.Invoke(() => DisplaySeriesDetailsPanel(series));
+            }
+        }
+
+        private void DisplaySeriesDetailsPanel(SeriesContent series)
+        {
+            // Hide placeholder, show content
+            if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                placeholder.Visibility = Visibility.Collapsed;
+
+            if (FindName("VodDetailsContent") is StackPanel content)
+                content.Visibility = Visibility.Visible;
+
+            // Set title
+            if (FindName("VodDetailsTitle") is TextBlock title)
+                title.Text = series.Name ?? "Unknown";
+
+            // Set poster if available
+            if (FindName("VodDetailsPoster") is Image poster && FindName("VodDetailsIcon") is TextBlock icon)
+            {
+                if (series.PosterImage != null)
+                {
+                    poster.Source = series.PosterImage;
+                    poster.Visibility = Visibility.Visible;
+                    icon.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    poster.Visibility = Visibility.Collapsed;
+                    icon.Visibility = Visibility.Visible;
+                    icon.Text = "📺";
+                }
+            }
+
+            // Update all detail fields
+            UpdateSeriesDetailsDisplay(series);
+        }
+
+        private void UpdateSeriesDetailsDisplay(SeriesContent series)
+        {
+            // Only update if details are actually loaded
+            if (!series.DetailsLoaded)
+            {
+                // Keep showing loading state
+                return;
+            }
+
+            // Update all fields with loaded data
+            if (FindName("VodDetailsYear") is TextBlock year)
+                year.Text = !string.IsNullOrWhiteSpace(series.ReleaseDate) ? series.DisplayYear : "";
+
+            if (FindName("VodDetailsDuration") is TextBlock duration)
+                duration.Text = series.SeasonCount > 0 ? series.DisplayDuration : "";
+
+            if (FindName("VodDetailsRating") is TextBlock rating)
+                rating.Text = !string.IsNullOrWhiteSpace(series.Rating) ? series.Rating : "";
+
+            if (FindName("VodDetailsGenre") is TextBlock genre)
+                genre.Text = !string.IsNullOrWhiteSpace(series.Genre) ? series.Genre : "";
+
+            if (FindName("VodDetailsCast") is TextBlock cast)
+                cast.Text = !string.IsNullOrWhiteSpace(series.Cast) ? series.Cast : "";
+
+            if (FindName("VodDetailsDirector") is TextBlock director)
+                director.Text = !string.IsNullOrWhiteSpace(series.Director) ? series.Director : "";
+
+            if (FindName("VodDetailsPlot") is TextBlock plot)
+                plot.Text = !string.IsNullOrWhiteSpace(series.Plot) ? series.Plot : "No plot available";
+        }
+
+
+        private void VodPlayButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedVodContent != null)
+            {
+                TryLaunchVodInPlayer(SelectedVodContent);
+            }
+            else if (SelectedSeriesContent != null)
+            {
+                TryLaunchSeriesInPlayer(SelectedSeriesContent);
+            }
+        }
+
+        private void VodTrailerButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Could implement trailer functionality in the future
+            MessageBox.Show("Trailer functionality not yet implemented.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         // Profile page methods
@@ -2355,6 +2635,648 @@ namespace DesktopApp.Views
             }
         }
 
+        // Settings page methods
+        private void LoadSettingsPage()
+        {
+            try
+            {
+                if (FindName("SettingsPlayerKindCombo") is ComboBox playerCombo)
+                {
+                    playerCombo.SelectedIndex = Session.PreferredPlayer switch
+                    {
+                        PlayerKind.VLC => 0,
+                        PlayerKind.MPCHC => 1,
+                        PlayerKind.MPV => 2,
+                        PlayerKind.Custom => 3,
+                        _ => 0
+                    };
+                }
+
+                if (FindName("SettingsPlayerExeTextBox") is TextBox playerExe)
+                    playerExe.Text = Session.PlayerExePath ?? string.Empty;
+
+                if (FindName("SettingsArgsTemplateTextBox") is TextBox argsTemplate)
+                    argsTemplate.Text = Session.PlayerArgsTemplate ?? string.Empty;
+
+                if (FindName("SettingsFfmpegPathTextBox") is TextBox ffmpegPath)
+                    ffmpegPath.Text = Session.FfmpegPath ?? string.Empty;
+
+                if (FindName("SettingsRecordingDirTextBox") is TextBox recordingDir)
+                    recordingDir.Text = Session.RecordingDirectory ?? string.Empty;
+
+                if (FindName("SettingsFfmpegArgsTextBox") is TextBox ffmpegArgs)
+                    ffmpegArgs.Text = Session.FfmpegArgsTemplate ?? string.Empty;
+
+                if (FindName("SettingsLastEpgUpdateTextBox") is TextBox lastEpg)
+                {
+                    lastEpg.Text = Session.LastEpgUpdateUtc.HasValue
+                        ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g")
+                        : "(never)";
+                }
+
+                if (FindName("SettingsEpgIntervalTextBox") is TextBox epgInterval)
+                    epgInterval.Text = ((int)Session.EpgRefreshInterval.TotalMinutes).ToString();
+
+                ValidateAllSettingsFields();
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error loading settings: {ex.Message}", true);
+            }
+        }
+
+        private void SetSettingsStatusMessage(string message, bool isError = false)
+        {
+            if (FindName("SettingsStatusText") is TextBlock statusText)
+            {
+                statusText.Text = message;
+                statusText.Foreground = new SolidColorBrush(isError ? Color.FromRgb(0xF8, 0x81, 0x66) : Color.FromRgb(0x8B, 0xA1, 0xB9));
+            }
+        }
+
+        private void ValidateAllSettingsFields()
+        {
+            ValidateSettingsPlayerPath();
+            ValidateSettingsFfmpegPath();
+            ValidateSettingsRecordingDirectory();
+            ValidateSettingsEpgInterval();
+        }
+
+        private void ValidateSettingsPlayerPath()
+        {
+            if (FindName("SettingsPlayerExeTextBox") is not TextBox pathBox || FindName("SettingsPlayerPathStatus") is not TextBlock status)
+                return;
+
+            var path = pathBox.Text.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                status.Text = "Path is required for custom players";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+            else if (!File.Exists(path))
+            {
+                status.Text = "File not found";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+            else
+            {
+                status.Text = "✓ Valid executable";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+            }
+        }
+
+        private void ValidateSettingsFfmpegPath()
+        {
+            if (FindName("SettingsFfmpegPathTextBox") is not TextBox pathBox || FindName("SettingsFfmpegPathStatus") is not TextBlock status)
+                return;
+
+            var path = pathBox.Text.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                status.Text = "FFmpeg path not set (recording disabled)";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0xA1, 0xB9));
+            }
+            else if (!File.Exists(path))
+            {
+                status.Text = "FFmpeg executable not found";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+            else
+            {
+                status.Text = "✓ FFmpeg ready for recording";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+            }
+        }
+
+        private void ValidateSettingsRecordingDirectory()
+        {
+            if (FindName("SettingsRecordingDirTextBox") is not TextBox pathBox || FindName("SettingsRecordingDirStatus") is not TextBlock status)
+                return;
+
+            var path = pathBox.Text.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                status.Text = "Using default: My Videos folder";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0xA1, 0xB9));
+            }
+            else if (!Directory.Exists(path))
+            {
+                status.Text = "Directory will be created when recording";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0xC5, 0x55));
+            }
+            else
+            {
+                status.Text = "✓ Directory exists";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+            }
+        }
+
+        private void ValidateSettingsEpgInterval()
+        {
+            if (FindName("SettingsEpgIntervalTextBox") is not TextBox textBox || FindName("SettingsEpgIntervalStatus") is not TextBlock status)
+                return;
+
+            var text = textBox.Text.Trim();
+            if (int.TryParse(text, out var minutes) && minutes >= 5 && minutes <= 720)
+            {
+                status.Text = $"✓ EPG will refresh every {minutes} minutes";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+            }
+            else
+            {
+                status.Text = "Invalid interval (5-720 minutes allowed)";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+        }
+
+        private void SettingsAutoDetectPlayer_Click(object sender, RoutedEventArgs e)
+        {
+            var kind = GetSettingsSelectedPlayerKind();
+            var detectedPath = DetectSettingsPlayerPath(kind);
+
+            if (!string.IsNullOrEmpty(detectedPath))
+            {
+                if (FindName("SettingsPlayerExeTextBox") is TextBox textBox)
+                    textBox.Text = detectedPath;
+                SetSettingsStatusMessage($"Auto-detected {kind} player");
+                ValidateSettingsPlayerPath();
+            }
+            else
+            {
+                SetSettingsStatusMessage($"Could not auto-detect {kind} player", true);
+            }
+        }
+
+        private void SettingsAutoDetectFfmpeg_Click(object sender, RoutedEventArgs e)
+        {
+            var detectedPath = DetectSettingsFfmpegPath();
+
+            if (!string.IsNullOrEmpty(detectedPath))
+            {
+                if (FindName("SettingsFfmpegPathTextBox") is TextBox textBox)
+                    textBox.Text = detectedPath;
+                SetSettingsStatusMessage("Auto-detected FFmpeg");
+                ValidateSettingsFfmpegPath();
+            }
+            else
+            {
+                SetSettingsStatusMessage("Could not auto-detect FFmpeg", true);
+            }
+        }
+
+        private string DetectSettingsPlayerPath(PlayerKind kind)
+        {
+            var commonPaths = kind switch
+            {
+                PlayerKind.VLC => new[]
+                {
+                    @"C:\Program Files\VideoLAN\VLC\vlc.exe",
+                    @"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
+                    Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\VideoLAN\VLC\vlc.exe"),
+                    Environment.ExpandEnvironmentVariables(@"%ProgramFiles(x86)%\VideoLAN\VLC\vlc.exe")
+                },
+                PlayerKind.MPCHC => new[]
+                {
+                    @"C:\Program Files\MPC-HC\mpc-hc64.exe",
+                    @"C:\Program Files (x86)\MPC-HC\mpc-hc.exe",
+                    @"C:\Program Files\K-Lite Codec Pack\MPC-HC64\mpc-hc64.exe",
+                    @"C:\Program Files (x86)\K-Lite Codec Pack\MPC-HC\mpc-hc.exe"
+                },
+                PlayerKind.MPV => new[]
+                {
+                    @"C:\Program Files\mpv\mpv.exe",
+                    @"C:\Program Files (x86)\mpv\mpv.exe"
+                },
+                _ => Array.Empty<string>()
+            };
+
+            return commonPaths.FirstOrDefault(File.Exists) ?? string.Empty;
+        }
+
+        private string DetectSettingsFfmpegPath()
+        {
+            var commonPaths = new[]
+            {
+                @"C:\ffmpeg\bin\ffmpeg.exe",
+                @"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+                @"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
+                Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\ffmpeg\bin\ffmpeg.exe"),
+                "ffmpeg.exe"
+            };
+
+            foreach (var path in commonPaths)
+            {
+                try
+                {
+                    if (Path.GetFileName(path) == "ffmpeg.exe" && path == "ffmpeg.exe")
+                    {
+                        var process = Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "where",
+                            Arguments = "ffmpeg",
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            CreateNoWindow = true
+                        });
+
+                        if (process != null)
+                        {
+                            var output = process.StandardOutput.ReadToEnd();
+                            process.WaitForExit();
+                            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                            {
+                                return output.Split('\n')[0].Trim();
+                            }
+                        }
+                    }
+                    else if (File.Exists(path))
+                    {
+                        return path;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return string.Empty;
+        }
+
+        // Settings event handlers
+        private void SettingsPlayerExeTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            ValidateSettingsPlayerPath();
+        }
+
+        private void SettingsFfmpegPathTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            ValidateSettingsFfmpegPath();
+        }
+
+        private void SettingsRecordingDirTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            ValidateSettingsRecordingDirectory();
+        }
+
+        private void SettingsEpgIntervalTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            ValidateSettingsEpgInterval();
+        }
+
+        private void SettingsArgsTemplateTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (FindName("SettingsArgsTemplateTextBox") is not TextBox textBox) return;
+
+            var template = textBox.Text.Trim();
+            if (string.IsNullOrEmpty(template))
+            {
+                SetSettingsStatusMessage("Using default arguments for selected player");
+            }
+            else if (template.Contains("{url}"))
+            {
+                SetSettingsStatusMessage("Arguments template looks valid");
+            }
+            else
+            {
+                SetSettingsStatusMessage("Warning: Template should contain {url} token", true);
+            }
+        }
+
+        private void SettingsTestPlayer_Click(object sender, RoutedEventArgs e)
+        {
+            if (FindName("SettingsTestPlayerStatus") is not TextBlock status || FindName("SettingsPlayerExeTextBox") is not TextBox pathBox)
+                return;
+
+            status.Text = "Testing...";
+            status.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0xA1, 0xB9));
+
+            var path = pathBox.Text.Trim();
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                status.Text = "❌ Invalid player path";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+                return;
+            }
+
+            try
+            {
+                var testUrl = "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4";
+                var args = string.Empty;
+
+                if (FindName("SettingsArgsTemplateTextBox") is TextBox argsBox)
+                {
+                    args = string.IsNullOrEmpty(argsBox.Text)
+                        ? GetSettingsDefaultArgsForPlayer()
+                        : argsBox.Text;
+                }
+
+                args = args.Replace("{url}", $"\"{testUrl}\"")
+                          .Replace("{title}", "Test Video");
+
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = path,
+                    Arguments = args,
+                    UseShellExecute = false
+                };
+
+                using var process = Process.Start(startInfo);
+                if (process != null)
+                {
+                    status.Text = "✅ Player launched successfully";
+                    status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+                }
+                else
+                {
+                    status.Text = "❌ Failed to start player";
+                    status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+                }
+            }
+            catch (Exception ex)
+            {
+                status.Text = $"❌ Error: {ex.Message}";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+        }
+
+        private string GetSettingsDefaultArgsForPlayer()
+        {
+            return GetSettingsSelectedPlayerKind() switch
+            {
+                PlayerKind.VLC => "\"{url}\" --meta-title=\"{title}\"",
+                PlayerKind.MPCHC => "\"{url}\" /play",
+                PlayerKind.MPV => "--force-media-title=\"{title}\" \"{url}\"",
+                _ => "{url}"
+            };
+        }
+
+        private void SettingsBrowsePlayer_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Select player executable",
+                    Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*",
+                    CheckFileExists = true
+                };
+
+                if (dlg.ShowDialog() == true)
+                {
+                    if (FindName("SettingsPlayerExeTextBox") is TextBox textBox)
+                        textBox.Text = dlg.FileName;
+                    SetSettingsStatusMessage("Player executable selected");
+                }
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error selecting player: {ex.Message}", true);
+            }
+        }
+
+        private void SettingsBrowseFfmpeg_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Select ffmpeg executable",
+                    Filter = "ffmpeg (ffmpeg.exe)|ffmpeg.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*",
+                    CheckFileExists = true
+                };
+
+                if (dlg.ShowDialog() == true)
+                {
+                    if (FindName("SettingsFfmpegPathTextBox") is TextBox textBox)
+                        textBox.Text = dlg.FileName;
+                    SetSettingsStatusMessage("FFmpeg executable selected");
+                }
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error selecting FFmpeg: {ex.Message}", true);
+            }
+        }
+
+        private void SettingsBrowseRecordingDir_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dialog = new Microsoft.Win32.OpenFolderDialog
+                {
+                    Title = "Select recording directory"
+                };
+
+                if (FindName("SettingsRecordingDirTextBox") is TextBox textBox)
+                {
+                    var currentPath = textBox.Text.Trim();
+                    if (!string.IsNullOrEmpty(currentPath) && Directory.Exists(currentPath))
+                    {
+                        dialog.InitialDirectory = currentPath;
+                    }
+
+                    if (dialog.ShowDialog() == true)
+                    {
+                        textBox.Text = dialog.FolderName;
+                        SetSettingsStatusMessage("Recording directory selected");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error selecting directory: {ex.Message}", true);
+            }
+        }
+
+        private void SettingsPlayerKindCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!IsInitialized) return;
+
+            var kind = GetSettingsSelectedPlayerKind();
+
+            if (FindName("SettingsArgsTemplateTextBox") is TextBox argsBox)
+            {
+                var currentArgs = argsBox.Text.Trim();
+                if (string.IsNullOrWhiteSpace(currentArgs) ||
+                    currentArgs == "{url}" ||
+                    currentArgs.Contains("meta-title") ||
+                    currentArgs.Contains("force-media-title") ||
+                    currentArgs.Contains("/play"))
+                {
+                    argsBox.Text = GetSettingsDefaultArgsForPlayer();
+                }
+            }
+
+            if (FindName("SettingsPlayerExeTextBox") is TextBox playerBox && string.IsNullOrEmpty(playerBox.Text.Trim()))
+            {
+                var detectedPath = DetectSettingsPlayerPath(kind);
+                if (!string.IsNullOrEmpty(detectedPath))
+                {
+                    playerBox.Text = detectedPath;
+                    SetSettingsStatusMessage($"Auto-detected {kind} player");
+                }
+            }
+
+            ValidateAllSettingsFields();
+        }
+
+        private PlayerKind GetSettingsSelectedPlayerKind()
+        {
+            if (FindName("SettingsPlayerKindCombo") is ComboBox combo &&
+                combo.SelectedItem is ComboBoxItem cbi &&
+                cbi.Tag is string tag &&
+                Enum.TryParse<PlayerKind>(tag, out var val))
+                return val;
+            return PlayerKind.VLC;
+        }
+
+        private void SettingsSave_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var isValid = true;
+                var errorMessages = new List<string>();
+
+                if (FindName("SettingsEpgIntervalTextBox") is TextBox epgBox)
+                {
+                    if (!int.TryParse(epgBox.Text.Trim(), out var minutes) || minutes < 5 || minutes > 720)
+                    {
+                        errorMessages.Add("EPG refresh interval must be between 5 and 720 minutes");
+                        isValid = false;
+                    }
+                    else
+                    {
+                        Session.EpgRefreshInterval = TimeSpan.FromMinutes(minutes);
+                    }
+                }
+
+                if (FindName("SettingsPlayerExeTextBox") is TextBox playerBox)
+                {
+                    var playerPath = playerBox.Text.Trim();
+                    if (!string.IsNullOrEmpty(playerPath) && !File.Exists(playerPath))
+                    {
+                        errorMessages.Add("Player executable path is invalid");
+                        isValid = false;
+                    }
+                    else
+                    {
+                        Session.PlayerExePath = string.IsNullOrWhiteSpace(playerPath) ? null : playerPath;
+                    }
+                }
+
+                if (FindName("SettingsFfmpegPathTextBox") is TextBox ffmpegBox)
+                {
+                    var ffmpegPath = ffmpegBox.Text.Trim();
+                    if (!string.IsNullOrEmpty(ffmpegPath) && !File.Exists(ffmpegPath))
+                    {
+                        errorMessages.Add("FFmpeg executable path is invalid");
+                        isValid = false;
+                    }
+                    else
+                    {
+                        Session.FfmpegPath = string.IsNullOrWhiteSpace(ffmpegPath) ? null : ffmpegPath;
+                    }
+                }
+
+                if (!isValid)
+                {
+                    var message = "Please fix the following issues:\n\n" + string.Join("\n", errorMessages);
+                    MessageBox.Show(message, "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                Session.PreferredPlayer = GetSettingsSelectedPlayerKind();
+
+                if (FindName("SettingsArgsTemplateTextBox") is TextBox argsBox)
+                {
+                    Session.PlayerArgsTemplate = string.IsNullOrWhiteSpace(argsBox.Text)
+                        ? string.Empty
+                        : argsBox.Text.Trim();
+                }
+
+                if (FindName("SettingsRecordingDirTextBox") is TextBox recordingBox)
+                {
+                    Session.RecordingDirectory = string.IsNullOrWhiteSpace(recordingBox.Text)
+                        ? null
+                        : recordingBox.Text.Trim();
+                }
+
+                if (FindName("SettingsFfmpegArgsTextBox") is TextBox ffmpegArgsBox)
+                {
+                    Session.FfmpegArgsTemplate = string.IsNullOrWhiteSpace(ffmpegArgsBox.Text)
+                        ? Session.FfmpegArgsTemplate
+                        : ffmpegArgsBox.Text.Trim();
+                }
+
+                SettingsStore.SaveFromSession();
+                SetSettingsStatusMessage("Settings saved successfully!");
+                MessageBox.Show("Settings saved successfully!", "Settings", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error saving settings: {ex.Message}", true);
+                MessageBox.Show($"Failed to save settings: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SettingsUpdateEpgNow_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Session.RaiseEpgRefreshRequested();
+                if (FindName("SettingsLastEpgUpdateTextBox") is TextBox lastEpgBox)
+                {
+                    lastEpgBox.Text = Session.LastEpgUpdateUtc.HasValue
+                        ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g")
+                        : "(never)";
+                }
+                SetSettingsStatusMessage("EPG refresh requested");
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error requesting EPG refresh: {ex.Message}", true);
+            }
+        }
+
+        private void SettingsRestoreDefaults_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show("This will reset all settings to their default values. Continue?",
+                "Restore Defaults", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            try
+            {
+                if (FindName("SettingsPlayerKindCombo") is ComboBox playerCombo)
+                    playerCombo.SelectedIndex = 0;
+
+                if (FindName("SettingsPlayerExeTextBox") is TextBox playerBox)
+                    playerBox.Text = string.Empty;
+
+                if (FindName("SettingsArgsTemplateTextBox") is TextBox argsBox)
+                    argsBox.Text = "\"{url}\" --meta-title=\"{title}\"";
+
+                if (FindName("SettingsFfmpegPathTextBox") is TextBox ffmpegBox)
+                    ffmpegBox.Text = string.Empty;
+
+                if (FindName("SettingsRecordingDirTextBox") is TextBox recordingBox)
+                    recordingBox.Text = string.Empty;
+
+                if (FindName("SettingsFfmpegArgsTextBox") is TextBox ffmpegArgsBox)
+                    ffmpegArgsBox.Text = "-i \"{url}\" -c copy -f mpegts \"{output}\"";
+
+                if (FindName("SettingsEpgIntervalTextBox") is TextBox epgBox)
+                    epgBox.Text = "30";
+
+                ValidateAllSettingsFields();
+                SetSettingsStatusMessage("Settings restored to defaults (not saved yet)");
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error restoring defaults: {ex.Message}", true);
+            }
+        }
 
         public event PropertyChangedEventHandler? PropertyChanged; private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }

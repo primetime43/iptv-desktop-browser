@@ -454,111 +454,170 @@
                              Tag="Search movies and series..."/>
                 </StackPanel>
 
-                <!-- Content Area -->
+                <!-- Content Area with Right Panel -->
                 <Grid Grid.Row="1" Margin="16">
-                    <!-- Movies Grid -->
-                    <ScrollViewer x:Name="MoviesScrollViewer" Visibility="Visible">
-                        <ItemsControl ItemsSource="{Binding VodContentCollectionView}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Style="{StaticResource CardStyle}" Width="200" Height="280"
-                                            MouseLeftButtonDown="VodContent_Click" Cursor="Hand" Margin="8">
-                                        <Grid>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="160"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="300"/>
+                    </Grid.ColumnDefinitions>
 
-                                            <!-- Movie Poster -->
-                                            <Border Grid.Row="0" Background="#223247" CornerRadius="4">
-                                                <Grid>
-                                                    <Image Source="{Binding PosterImage}" Stretch="UniformToFill"
-                                                           VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                    <TextBlock Text="🎬" FontSize="32" Foreground="#4B5E71"
-                                                             HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                             Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}"/>
-                                                </Grid>
-                                            </Border>
+                    <!-- Left: VOD Grid -->
+                    <Grid Grid.Column="0">
+                        <!-- Movies Grid -->
+                        <ScrollViewer x:Name="MoviesScrollViewer" Visibility="Visible">
+                            <ItemsControl ItemsSource="{Binding VodContentCollectionView}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}" Width="180" Height="240"
+                                                MouseLeftButtonDown="VodContent_Click" Cursor="Hand" Margin="8">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="140"/>
+                                                    <RowDefinition Height="*"/>
+                                                </Grid.RowDefinitions>
 
-                                            <!-- Movie Info -->
-                                            <StackPanel Grid.Row="1" Margin="8" VerticalAlignment="Top">
-                                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"
-                                                         Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="40"
-                                                         TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Year}" FontSize="12" Foreground="#9DB2C7"
-                                                         Margin="0,4,0,2"/>
-                                                <TextBlock Text="{Binding Genre}" FontSize="11" Foreground="#9DB2C7"
-                                                         TextTrimming="CharacterEllipsis"/>
-                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                    <TextBlock Text="⭐" FontSize="12" Margin="0,0,4,0"/>
-                                                    <TextBlock Text="{Binding Rating}" FontSize="11" Foreground="#9DB2C7"/>
-                                                    <TextBlock Text="{Binding Duration}" FontSize="11" Foreground="#9DB2C7"
-                                                             Margin="8,0,0,0"/>
+                                                <!-- Movie Poster -->
+                                                <Border Grid.Row="0" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="UniformToFill"
+                                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="🎬" FontSize="28" Foreground="#4B5E71"
+                                                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                 Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Movie Info (Title only) -->
+                                                <StackPanel Grid.Row="1" Margin="8" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Bold"
+                                                             Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="60"
+                                                             TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                                                             TextAlignment="Center"/>
                                                 </StackPanel>
-                                            </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Series Grid -->
+                        <ScrollViewer x:Name="SeriesScrollViewer" Visibility="Collapsed">
+                            <ItemsControl ItemsSource="{Binding SeriesContentCollectionView}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}" Width="180" Height="240"
+                                                MouseLeftButtonDown="SeriesContent_Click" Cursor="Hand" Margin="8">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="140"/>
+                                                    <RowDefinition Height="*"/>
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Series Poster -->
+                                                <Border Grid.Row="0" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="UniformToFill"
+                                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="📺" FontSize="28" Foreground="#4B5E71"
+                                                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                 Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Series Info (Title only) -->
+                                                <StackPanel Grid.Row="1" Margin="8" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Bold"
+                                                             Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="60"
+                                                             TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                                                             TextAlignment="Center"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Grid>
+
+                    <!-- Right: VOD Details Panel -->
+                    <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="16,0,0,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="VodDetailsPanel" Margin="16">
+                                <!-- Default state -->
+                                <TextBlock x:Name="VodDetailsPlaceholder" Text="Select a movie or series to view details"
+                                         FontSize="14" Foreground="#8BA1B9" TextAlignment="Center"
+                                         VerticalAlignment="Center" Margin="0,50,0,0"/>
+
+                                <!-- VOD Details (Hidden by default) -->
+                                <StackPanel x:Name="VodDetailsContent" Visibility="Collapsed">
+                                    <!-- Large Poster -->
+                                    <Border Background="#223247" CornerRadius="8" Height="300" Margin="0,0,0,16">
+                                        <Grid>
+                                            <Image x:Name="VodDetailsPoster" Stretch="UniformToFill"
+                                                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            <TextBlock x:Name="VodDetailsIcon" Text="🎬" FontSize="48" Foreground="#4B5E71"
+                                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Grid>
                                     </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
 
-                    <!-- Series Grid -->
-                    <ScrollViewer x:Name="SeriesScrollViewer" Visibility="Collapsed">
-                        <ItemsControl ItemsSource="{Binding SeriesContentCollectionView}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Style="{StaticResource CardStyle}" Width="200" Height="280"
-                                            MouseLeftButtonDown="SeriesContent_Click" Cursor="Hand" Margin="8">
-                                        <Grid>
-                                            <Grid.RowDefinitions>
-                                                <RowDefinition Height="160"/>
-                                                <RowDefinition Height="*"/>
-                                            </Grid.RowDefinitions>
+                                    <!-- Title -->
+                                    <TextBlock x:Name="VodDetailsTitle" FontSize="18" FontWeight="Bold"
+                                             Foreground="#FFDDE6F2" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
-                                            <!-- Series Poster -->
-                                            <Border Grid.Row="0" Background="#223247" CornerRadius="4">
-                                                <Grid>
-                                                    <Image Source="{Binding PosterImage}" Stretch="UniformToFill"
-                                                           VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                    <TextBlock Text="📺" FontSize="32" Foreground="#4B5E71"
-                                                             HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                             Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}"/>
-                                                </Grid>
-                                            </Border>
+                                    <!-- Basic Info -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock x:Name="VodDetailsYear" FontSize="12" Foreground="#9DB2C7" Margin="0,0,16,0"/>
+                                        <TextBlock x:Name="VodDetailsDuration" FontSize="12" Foreground="#9DB2C7"/>
+                                    </StackPanel>
 
-                                            <!-- Series Info -->
-                                            <StackPanel Grid.Row="1" Margin="8" VerticalAlignment="Top">
-                                                <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"
-                                                         Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="40"
-                                                         TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Year}" FontSize="12" Foreground="#9DB2C7"
-                                                         Margin="0,4,0,2"/>
-                                                <TextBlock Text="{Binding Genre}" FontSize="11" Foreground="#9DB2C7"
-                                                         TextTrimming="CharacterEllipsis"/>
-                                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                    <TextBlock Text="📺" FontSize="12" Margin="0,0,4,0"/>
-                                                    <TextBlock Text="{Binding Rating}" FontSize="11" Foreground="#9DB2C7"/>
-                                                    <TextBlock Text="Series" FontSize="11" Foreground="#9DB2C7"
-                                                             Margin="8,0,0,0"/>
-                                                </StackPanel>
-                                            </StackPanel>
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                                    <!-- Rating -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                        <TextBlock Text="⭐" FontSize="14" Margin="0,0,4,0"/>
+                                        <TextBlock x:Name="VodDetailsRating" FontSize="12" Foreground="#9DB2C7"/>
+                                    </StackPanel>
+
+                                    <!-- Genre -->
+                                    <TextBlock Text="Genre:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="VodDetailsGenre" FontSize="12" Foreground="#FFDDE6F2"
+                                             TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                                    <!-- Cast (lazy loaded) -->
+                                    <TextBlock Text="Cast:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="VodDetailsCast" FontSize="12" Foreground="#FFDDE6F2"
+                                             TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..."/>
+
+                                    <!-- Director (lazy loaded) -->
+                                    <TextBlock Text="Director:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="VodDetailsDirector" FontSize="12" Foreground="#FFDDE6F2"
+                                             TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..."/>
+
+                                    <!-- Plot (lazy loaded) -->
+                                    <TextBlock Text="Plot:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="VodDetailsPlot" FontSize="12" Foreground="#FFDDE6F2"
+                                             TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..."/>
+
+                                    <!-- Actions -->
+                                    <StackPanel Margin="0,16,0,0">
+                                        <Button x:Name="VodPlayButton" Content="▶ Play" Background="#28A745" Foreground="White"
+                                                Padding="12,8" Margin="0,0,0,8" Click="VodPlayButton_Click"/>
+                                        <Button x:Name="VodTrailerButton" Content="🎬 Trailer" Background="#6C757D" Foreground="White"
+                                                Padding="12,8" Click="VodTrailerButton_Click"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
                 </Grid>
             </Grid>
 
@@ -706,6 +765,134 @@
                 </ScrollViewer>
             </Grid>
 
+            <!-- Settings Page -->
+            <Grid x:Name="SettingsPage" Visibility="Collapsed">
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Settings" Style="{StaticResource HeaderTextStyle}"/>
+
+                        <!-- Status bar -->
+                        <Border Background="#1A242F" Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <TextBlock x:Name="SettingsStatusText" Text="Configure your IPTV player and recording settings"
+                                       Foreground="#8BA1B9" FontSize="12"/>
+                        </Border>
+
+                        <!-- Player Settings Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="🎬 Player Settings" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="External Player" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="SettingsPlayerKindCombo" SelectedIndex="0" SelectionChanged="SettingsPlayerKindCombo_SelectionChanged">
+                                        <ComboBoxItem Tag="VLC" Content="VLC Media Player"/>
+                                        <ComboBoxItem Tag="MPCHC" Content="MPC-HC"/>
+                                        <ComboBoxItem Tag="MPV" Content="mpv"/>
+                                        <ComboBoxItem Tag="Custom" Content="Custom Player"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Player Executable Path" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="SettingsPlayerExeTextBox" Height="34" TextChanged="SettingsPlayerExeTextBox_TextChanged"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                                        <Button Content="Browse" Width="110" Height="32" Margin="0,0,8,0"
+                                                Click="SettingsBrowsePlayer_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                        <Button x:Name="SettingsAutoDetectPlayerBtn" Content="Auto-detect" Width="110" Height="32"
+                                                Click="SettingsAutoDetectPlayer_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="SettingsPlayerPathStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#22863A"/>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Arguments Template" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="SettingsArgsTemplateTextBox" Height="34" TextChanged="SettingsArgsTemplateTextBox_TextChanged"/>
+                                    <TextBlock Text="Tokens: {url} {title}. Leave blank to use default for selected player."
+                                             Foreground="#657A91" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <Button x:Name="SettingsTestPlayerBtn" Content="Test Player" Width="100" Height="28"
+                                                Click="SettingsTestPlayer_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                        <TextBlock x:Name="SettingsTestPlayerStatus" FontSize="11" Margin="8,0,0,0"
+                                                 VerticalAlignment="Center" Foreground="#8BA1B9"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Recording Settings Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="🎥 Recording Settings" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="FFmpeg Path" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="SettingsFfmpegPathTextBox" Height="34" TextChanged="SettingsFfmpegPathTextBox_TextChanged"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                                        <Button Content="Browse" Width="110" Height="32" Margin="0,0,8,0"
+                                                Click="SettingsBrowseFfmpeg_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                        <Button x:Name="SettingsAutoDetectFfmpegBtn" Content="Auto-detect" Width="110" Height="32"
+                                                Click="SettingsAutoDetectFfmpeg_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="SettingsFfmpegPathStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#22863A"/>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Recording Directory" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="SettingsRecordingDirTextBox" Height="34" TextChanged="SettingsRecordingDirTextBox_TextChanged"/>
+                                    <Button Content="Browse" Width="110" Height="32" Margin="0,4,0,8"
+                                            Click="SettingsBrowseRecordingDir_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    <TextBlock x:Name="SettingsRecordingDirStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#8BA1B9"/>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="FFmpeg Args Template" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="SettingsFfmpegArgsTextBox" Height="34"/>
+                                    <TextBlock Text="Tokens: {url} {output} {title}. Default copies stream without re-encoding."
+                                             Foreground="#657A91" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- EPG Settings Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="📺 EPG Settings" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Last EPG Update" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="SettingsLastEpgUpdateTextBox" Height="34" IsReadOnly="True"/>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="EPG Refresh Interval (minutes)" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="SettingsEpgIntervalTextBox" Height="34" TextChanged="SettingsEpgIntervalTextBox_TextChanged"/>
+                                    <Button Content="Update EPG Now" Width="150" Height="32" Margin="0,4,0,8"
+                                            Click="SettingsUpdateEpgNow_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    <TextBlock x:Name="SettingsEpgIntervalStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#8BA1B9"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Actions -->
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Actions" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Restore Defaults" Width="140" Height="40" Margin="0,0,12,0"
+                                            Click="SettingsRestoreDefaults_Click" Background="#DC3545" Foreground="White" Padding="12,6"/>
+                                    <Button Content="Save Settings" Width="120" Height="40"
+                                            Click="SettingsSave_Click" Background="#28A745" Foreground="White" Padding="12,6"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
         </Grid>
     </Grid>
 </Window>
