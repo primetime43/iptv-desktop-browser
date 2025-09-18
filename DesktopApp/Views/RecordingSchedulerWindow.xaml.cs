@@ -134,7 +134,22 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
                 Session.M3uEpgByChannel.TryGetValue(channel.EpgChannelId, out var entries))
             {
                 programs = entries
-                    .Where(epg => epg.StartUtc >= now)
+                    .Where(epg => epg.EndUtc > now) // Include currently airing shows (end time must be in future)
+                    .Select(epg =>
+                    {
+                        var isCurrentlyAiring = epg.StartUtc <= now && epg.EndUtc > now;
+                        var displayTitle = isCurrentlyAiring
+                            ? $"🔴 {epg.Title} (LIVE NOW)"
+                            : epg.Title;
+
+                        return new EpgEntry
+                        {
+                            StartUtc = epg.StartUtc,
+                            EndUtc = epg.EndUtc,
+                            Title = displayTitle,
+                            Description = epg.Description
+                        };
+                    })
                     .OrderBy(epg => epg.StartUtc)
                     .Take(50) // Limit to next 50 programs
                     .ToList();
@@ -168,18 +183,23 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
                                 var end = GetUnixTimestamp(el, "stop_timestamp");
 
                                 if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
-                                if (start < now) continue; // Skip past programs
+                                if (end <= now) continue; // Skip programs that have already ended (but include currently airing)
 
                                 var title = GetStringValue(el, "title", "name", "programme", "program");
                                 var desc = GetStringValue(el, "description", "desc", "info", "plot", "short_description");
 
                                 if (!string.IsNullOrWhiteSpace(title))
                                 {
+                                    var isCurrentlyAiring = start <= now && end > now;
+                                    var displayTitle = isCurrentlyAiring
+                                        ? $"🔴 {DecodeMaybeBase64(title)} (LIVE NOW)"
+                                        : DecodeMaybeBase64(title);
+
                                     programs.Add(new EpgEntry
                                     {
                                         StartUtc = start,
                                         EndUtc = end,
-                                        Title = DecodeMaybeBase64(title),
+                                        Title = displayTitle,
                                         Description = DecodeMaybeBase64(desc ?? "")
                                     });
                                 }
@@ -215,7 +235,11 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
         {
             _selectedProgram = program;
             if (TitleBox != null)
-                TitleBox.Text = program.Title;
+            {
+                // Remove the LIVE NOW indicator for the title box
+                var cleanTitle = program.Title.Replace("🔴 ", "").Replace(" (LIVE NOW)", "");
+                TitleBox.Text = cleanTitle;
+            }
             if (ProgramTimeText != null)
                 ProgramTimeText.Text = program.TimeRangeLocal;
             UpdateOutputFilePath();
@@ -315,14 +339,19 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
                     return;
                 }
 
+                // For currently airing shows, start recording now instead of at the original start time
+                var now = DateTime.UtcNow;
+                var isCurrentlyAiring = _selectedProgram.StartUtc <= now && _selectedProgram.EndUtc > now;
+                var effectiveStartTime = isCurrentlyAiring ? now : _selectedProgram.StartUtc;
+
                 recording = new ScheduledRecording
                 {
-                    Title = _selectedProgram.Title,
+                    Title = _selectedProgram.Title.Replace("🔴 ", "").Replace(" (LIVE NOW)", ""),
                     Description = _selectedProgram.Description ?? "",
                     ChannelId = _selectedChannel.Id,
                     ChannelName = _selectedChannel.Name,
                     StreamUrl = GetStreamUrlForChannel(_selectedChannel),
-                    StartTime = _selectedProgram.StartUtc,
+                    StartTime = effectiveStartTime,
                     EndTime = _selectedProgram.EndUtc,
                     IsEpgBased = true,
                     EpgProgramId = _selectedProgram.GetHashCode().ToString()
@@ -450,6 +479,32 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
             _scheduler.DeleteCompletedRecordings();
             LoadScheduledRecordings();
         }
+    }
+
+    private void PropertiesRecording_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
+            return;
+
+        var properties = $"Recording Properties\n\n" +
+                        $"Title: {recording.Title}\n" +
+                        $"Channel: {recording.ChannelName}\n" +
+                        $"Status: {recording.StatusText}\n" +
+                        $"Start Time: {recording.StartTimeLocal}\n" +
+                        $"End Time: {recording.EndTimeLocal}\n" +
+                        $"Duration: {recording.DurationText}\n" +
+                        $"Pre-buffer: {recording.PreBufferMinutes} minutes\n" +
+                        $"Post-buffer: {recording.PostBufferMinutes} minutes\n" +
+                        $"EPG-based: {(recording.IsEpgBased ? "Yes" : "No")}\n" +
+                        $"Output File: {recording.OutputFilePath}\n" +
+                        $"Stream URL: {recording.StreamUrl}\n";
+
+        if (!string.IsNullOrEmpty(recording.Description))
+        {
+            properties += $"Description: {recording.Description}\n";
+        }
+
+        MessageBox.Show(properties, "Recording Properties", MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void EditRecording_Click(object sender, RoutedEventArgs e)

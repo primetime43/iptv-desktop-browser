@@ -135,22 +135,23 @@ public class ScheduledRecording : INotifyPropertyChanged
     // Check if this recording should start now (within a tolerance)
     public bool ShouldStartNow(TimeSpan tolerance = default)
     {
-        if (tolerance == default) tolerance = TimeSpan.FromMinutes(1);
+        if (tolerance == default) tolerance = TimeSpan.FromMinutes(2); // Increased tolerance to 2 minutes
         var now = DateTime.UtcNow;
         var adjustedStartTime = StartTime.AddMinutes(-PreBufferMinutes);
+
         return Status == RecordingScheduleStatus.Scheduled &&
-               now >= adjustedStartTime.Subtract(tolerance) &&
+               now >= adjustedStartTime &&
                now <= adjustedStartTime.Add(tolerance);
     }
 
     // Check if this recording should stop now
     public bool ShouldStopNow(TimeSpan tolerance = default)
     {
-        if (tolerance == default) tolerance = TimeSpan.FromMinutes(1);
+        if (tolerance == default) tolerance = TimeSpan.FromMinutes(2); // Increased tolerance to 2 minutes
         var now = DateTime.UtcNow;
         var adjustedEndTime = EndTime.AddMinutes(PostBufferMinutes);
         return Status == RecordingScheduleStatus.Recording &&
-               now >= adjustedEndTime.Subtract(tolerance);
+               now >= adjustedEndTime;
     }
 
     // Check if this recording has been missed

@@ -117,6 +117,40 @@
             <Setter Property="Padding" Value="8,4"/>
             <Setter Property="SelectionBrush" Value="#FF347DFF"/>
         </Style>
+
+        <!-- DataGrid Row Selection Style -->
+        <Style TargetType="DataGridRow">
+            <Setter Property="Background" Value="#FF2A3A4F"/>
+            <Setter Property="Foreground" Value="#FFDDE6F2"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#FF347DFF"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF475B70"/>
+                </Trigger>
+                <MultiTrigger>
+                    <MultiTrigger.Conditions>
+                        <Condition Property="IsSelected" Value="True"/>
+                        <Condition Property="IsMouseOver" Value="True"/>
+                    </MultiTrigger.Conditions>
+                    <Setter Property="Background" Value="#FF2E5BFF"/>
+                </MultiTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- DataGrid Cell Style -->
+        <Style TargetType="DataGridCell">
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="10">
@@ -257,7 +291,7 @@
                                 <TextBlock Grid.Row="1" Grid.Column="0" Text="2. Date:"
                                            Foreground="#FF9DB2C7" Margin="0,5,10,5"/>
                                 <DatePicker Grid.Row="1" Grid.Column="1" x:Name="StartDatePicker"
-                                            Margin="0,5,0,5"
+                                             Foreground="Black" Margin="0,5,0,5"
                                             SelectedDateChanged="CustomTime_Changed"/>
 
                                 <TextBlock Grid.Row="2" Grid.Column="0" Text="3. Start:"
@@ -378,16 +412,20 @@
                             <DataGridTextColumn Header="End Time" Binding="{Binding EndTimeLocal}" Width="140"/>
                             <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="80"/>
                             <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="100"/>
-                            <DataGridTemplateColumn Header="Actions" Width="120">
+                            <DataGridTemplateColumn Header="Actions" Width="180">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal">
-                                            <Button Content="Edit" Background="#FF6C757D" Foreground="White"
-                                                    BorderBrush="#FF6C757D" Padding="5,2" Margin="0,0,5,0"
-                                                    IsEnabled="{Binding CanEdit}" FontSize="10"
+                                            <Button Content="Props" Background="#FF28A745"
+                                                    BorderBrush="#FF28A745" Padding="4,2" Margin="0,0,2,0"
+                                                    FontSize="9" ToolTip="Show recording properties"
+                                                    Click="PropertiesRecording_Click"/>
+                                            <Button Content="Edit" Background="#FF6C757D"
+                                                    BorderBrush="#FF6C757D" Padding="4,2" Margin="0,0,2,0"
+                                                    IsEnabled="{Binding CanEdit}" FontSize="9"
                                                     Click="EditRecording_Click"/>
-                                            <Button Content="Cancel" Background="#FFDC3545" Foreground="White"
-                                                    BorderBrush="#FFDC3545" Padding="5,2" FontSize="10"
+                                            <Button Content="Cancel" Background="#FFDC3545" 
+                                                    BorderBrush="#FFDC3545" Padding="4,2" FontSize="9"
                                                     IsEnabled="{Binding CanCancel}"
                                                     Click="CancelRecording_Click"/>
                                         </StackPanel>

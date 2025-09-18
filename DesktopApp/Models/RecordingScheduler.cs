@@ -35,7 +35,7 @@ public class RecordingScheduler : INotifyPropertyChanged
 
         LoadScheduledRecordings();
 
-        // Check for scheduled recordings every 30 seconds
+        // Check for scheduled recordings every 30 seconds for better accuracy
         _schedulerTimer = new Timer(CheckScheduledRecordings, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
     }
 
@@ -52,8 +52,14 @@ public class RecordingScheduler : INotifyPropertyChanged
             if (recording.StartTime >= recording.EndTime)
                 throw new ArgumentException("Start time must be before end time");
 
-            if (recording.StartTime <= DateTime.UtcNow.AddMinutes(-recording.PreBufferMinutes))
+            // For EPG-based recordings, allow past start times if the show is still airing
+            var now = DateTime.UtcNow;
+            if (!recording.IsEpgBased && recording.StartTime <= now.AddMinutes(-recording.PreBufferMinutes))
                 throw new ArgumentException("Cannot schedule recording in the past");
+
+            // For EPG-based recordings, check if the show has already ended
+            if (recording.IsEpgBased && recording.EndTime <= now)
+                throw new ArgumentException("Cannot record a show that has already ended");
 
             // Generate output file path if not set
             if (string.IsNullOrEmpty(recording.OutputFilePath))
@@ -65,6 +71,14 @@ public class RecordingScheduler : INotifyPropertyChanged
             SaveScheduledRecordings();
 
             Log($"Scheduled recording: {recording.Title} on {recording.ChannelName} from {recording.StartTimeLocal} to {recording.EndTimeLocal}");
+
+            // If this recording should start immediately (within 1 minute), start it now
+            var timeDiff = recording.StartTime.AddMinutes(-recording.PreBufferMinutes) - now;
+            if (timeDiff.TotalMinutes <= 1)
+            {
+                Log($"Recording scheduled to start immediately: {recording.Title}");
+                Task.Run(() => StartRecording(recording));
+            }
         }
     }
 
@@ -141,12 +155,14 @@ public class RecordingScheduler : INotifyPropertyChanged
                     // Check if recording should start
                     if (recording.ShouldStartNow())
                     {
+                        Log($"Starting recording: {recording.Title} (scheduled: {recording.StartTimeLocal}, now: {DateTime.Now:MM/dd/yyyy hh:mm:ss tt})");
                         StartRecording(recording);
                     }
 
                     // Check if recording should stop
                     if (recording.ShouldStopNow())
                     {
+                        Log($"Stopping recording: {recording.Title} (scheduled end: {recording.EndTimeLocal}, now: {DateTime.Now:MM/dd/yyyy hh:mm:ss tt})");
                         StopRecording(recording);
                     }
                 }
