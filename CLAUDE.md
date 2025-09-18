@@ -9,15 +9,16 @@ This is an IPTV Desktop Browser - a Windows WPF application built with .NET 9 th
 - **Xtream Codes portals** (player_api/panel_api endpoints)
 - **M3U/M3U8 playlists** (remote URLs or local files)
 - **XMLTV EPG support** for program data
+- **Video on Demand (VOD)** browsing and playback for Xtream services
 
 ## Architecture
 
 ### Core Components
 
 - **MainWindow.xaml.cs**: Main login window that handles credential management, API endpoint discovery, and M3U playlist loading
-- **DashboardWindow.xaml.cs**: Primary interface showing categories, channels, EPG data, and player controls
+- **DashboardWindow.xaml.cs**: Primary interface showing categories, channels, EPG data, VOD content, and player controls
 - **Session.cs**: Static session management with connection details, user info, and global settings
-- **Models/**: Data models for channels, categories, EPG entries, credentials, and user info
+- **Models/**: Data models for channels, categories, EPG entries, VOD content, credentials, and user info
 - **Views/**: Additional windows like credential manager and settings
 
 ### Key Architectural Patterns
@@ -34,8 +35,9 @@ This is an IPTV Desktop Browser - a Windows WPF application built with .NET 9 th
 
 1. **Login Flow**: MainWindow validates credentials → populates Session → opens DashboardWindow
 2. **Channel Loading**: DashboardWindow loads categories → loads channels per category → loads EPG data
-3. **Playback**: Double-click channel → builds stream URL → launches external player
-4. **Recording**: Uses FFmpeg with configurable arguments and output directory
+3. **VOD Loading**: DashboardWindow loads VOD categories → loads VOD content per category → loads poster images
+4. **Playback**: Double-click channel/VOD → builds stream URL → launches external player
+5. **Recording**: Uses FFmpeg with configurable arguments and output directory
 
 ## Development Commands
 
@@ -97,6 +99,14 @@ dotnet run --project DesktopApp/DesktopApp.csproj -c Release
 - Automatic filename sanitization and timestamp generation
 - Recording status management via `RecordingManager` singleton
 
+### Video on Demand (VOD) System
+- Xtream API integration via `get_vod_categories` and `get_vod_streams` endpoints
+- Category-based browsing with dropdown selection in VOD view
+- Poster image loading and caching for movie artwork
+- `VodContent` model with metadata: plot, cast, director, genre, rating, duration, etc.
+- `Session.BuildVodStreamUrl()` constructs movie stream URLs with proper container extensions
+- Search functionality across movie titles, genres, and plot descriptions
+
 ## Common Workflows
 
 ### Adding New Player Support
@@ -106,7 +116,8 @@ dotnet run --project DesktopApp/DesktopApp.csproj -c Release
 
 ### API Endpoint Modifications
 - Xtream API calls are built via `Session.BuildApi()` method
-- Stream URLs via `Session.BuildStreamUrl()` method
+- Live stream URLs via `Session.BuildStreamUrl()` method
+- VOD stream URLs via `Session.BuildVodStreamUrl()` method
 - All HTTP requests use the shared `HttpClient _http` instance
 
 ### UI State Management

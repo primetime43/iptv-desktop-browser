@@ -104,6 +104,7 @@
                     <StackPanel Orientation="Horizontal" Margin="40 0 0 0" VerticalAlignment="Center">
                         <Button x:Name="NavCategoriesBtn" Content="Categories" Click="NavCategories_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
                         <Button x:Name="NavGuideBtn" Content="Guide" Click="NavGuide_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
+                        <Button x:Name="NavVodBtn" Content="VOD" Click="NavVod_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
                         <Button x:Name="NavProfileBtn" Content="Profile" Click="NavProfile_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
                         <Button x:Name="NavOutputBtn" Content="Raw Output" Click="NavOutput_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
                     </StackPanel>
@@ -319,6 +320,8 @@
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
+                    <!-- VOD View (deprecated in main window, kept collapsed) -->
+                    <Grid x:Name="VodView" Visibility="Collapsed" />
                     <!-- Raw Output View -->
                     <Grid x:Name="OutputView" Visibility="Collapsed">
                         <Grid Margin="12">
