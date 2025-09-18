@@ -608,14 +608,10 @@
                                     <TextBlock x:Name="VodDetailsTitle" FontSize="18" FontWeight="Bold"
                                              Foreground="#FFDDE6F2" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
-                                    <!-- Basic Info -->
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                        <TextBlock x:Name="VodDetailsYear" FontSize="12" Foreground="#9DB2C7" Margin="0,0,16,0"/>
-                                        <TextBlock x:Name="VodDetailsDuration" FontSize="12" Foreground="#9DB2C7"/>
-                                    </StackPanel>
-
-                                    <!-- Rating -->
+                                    <!-- Basic Info (Year, Runtime, Rating) -->
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                        <TextBlock x:Name="VodDetailsYear" FontSize="12" Foreground="#9DB2C7" Margin="0,0,16,0"/>
+                                        <TextBlock x:Name="VodDetailsDuration" FontSize="12" Foreground="#9DB2C7" Margin="0,0,16,0"/>
                                         <TextBlock Text="⭐" FontSize="14" Margin="0,0,4,0" Foreground="#FFD700"/>
                                         <TextBlock x:Name="VodDetailsRating" FontSize="12" Foreground="#9DB2C7"/>
                                     </StackPanel>
@@ -647,12 +643,9 @@
                                         <StackPanel>
                                             <TextBlock Text="📺 Episodes" FontSize="14" FontWeight="Bold"
                                                      Foreground="#F0F6FC" Margin="0,0,0,12"/>
-                                            <ScrollViewer x:Name="EpisodesScrollViewer" MaxHeight="300"
-                                                        VerticalScrollBarVisibility="Auto">
-                                                <StackPanel x:Name="SeasonsPanel">
-                                                    <!-- Seasons and Episodes will be populated in code-behind -->
-                                                </StackPanel>
-                                            </ScrollViewer>
+                                            <StackPanel x:Name="SeasonsPanel">
+                                                <!-- Seasons and Episodes will be populated in code-behind -->
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
 
