@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using DesktopApp.Models;
@@ -121,19 +122,83 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
         }
     }
 
-    private void LoadProgramsForChannel(Channel channel)
+    private async void LoadProgramsForChannel(Channel channel)
     {
         var now = DateTime.UtcNow;
         var programs = new List<EpgEntry>();
 
-        if (!string.IsNullOrWhiteSpace(channel.EpgChannelId) &&
-            Session.M3uEpgByChannel.TryGetValue(channel.EpgChannelId, out var entries))
+        if (Session.Mode == SessionMode.M3u)
         {
-            programs = entries
-                .Where(epg => epg.StartUtc >= now)
-                .OrderBy(epg => epg.StartUtc)
-                .Take(50) // Limit to next 50 programs
-                .ToList();
+            // For M3U mode, use cached EPG data
+            if (!string.IsNullOrWhiteSpace(channel.EpgChannelId) &&
+                Session.M3uEpgByChannel.TryGetValue(channel.EpgChannelId, out var entries))
+            {
+                programs = entries
+                    .Where(epg => epg.StartUtc >= now)
+                    .OrderBy(epg => epg.StartUtc)
+                    .Take(50) // Limit to next 50 programs
+                    .ToList();
+            }
+        }
+        else if (Session.Mode == SessionMode.Xtream)
+        {
+            // For Xtream mode, fetch EPG data via API
+            try
+            {
+                using var http = new System.Net.Http.HttpClient();
+                var url = Session.BuildApi("get_simple_data_table") + "&stream_id=" + channel.Id;
+
+                System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Fetching EPG for channel {channel.Name}: {url}");
+
+                using var resp = await http.GetAsync(url);
+                var json = await resp.Content.ReadAsStringAsync();
+
+                if (!string.IsNullOrWhiteSpace(json))
+                {
+                    var trimmed = json.AsSpan().TrimStart();
+                    if (trimmed.Length > 0 && (trimmed[0] == '{' || trimmed[0] == '['))
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(json);
+                        if (doc.RootElement.TryGetProperty("epg_listings", out var listings) &&
+                            listings.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var el in listings.EnumerateArray())
+                            {
+                                var start = GetUnixTimestamp(el, "start_timestamp");
+                                var end = GetUnixTimestamp(el, "stop_timestamp");
+
+                                if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
+                                if (start < now) continue; // Skip past programs
+
+                                var title = GetStringValue(el, "title", "name", "programme", "program");
+                                var desc = GetStringValue(el, "description", "desc", "info", "plot", "short_description");
+
+                                if (!string.IsNullOrWhiteSpace(title))
+                                {
+                                    programs.Add(new EpgEntry
+                                    {
+                                        StartUtc = start,
+                                        EndUtc = end,
+                                        Title = DecodeMaybeBase64(title),
+                                        Description = DecodeMaybeBase64(desc ?? "")
+                                    });
+                                }
+                            }
+
+                            programs = programs
+                                .OrderBy(epg => epg.StartUtc)
+                                .Take(50)
+                                .ToList();
+                        }
+                    }
+                }
+
+                System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Loaded {programs.Count} programs for channel {channel.Name}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Error loading EPG for channel {channel.Name}: {ex.Message}");
+            }
         }
 
         ProgramCombo.ItemsSource = programs;
@@ -413,4 +478,48 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    // Helper methods for parsing EPG JSON data (copied from DashboardWindow)
+    private static DateTime GetUnixTimestamp(System.Text.Json.JsonElement el, params string[] props)
+    {
+        foreach (var prop in props)
+        {
+            if (el.TryGetProperty(prop, out var val))
+            {
+                if (val.ValueKind == System.Text.Json.JsonValueKind.String && long.TryParse(val.GetString(), out var ts))
+                    return DateTimeOffset.FromUnixTimeSeconds(ts).UtcDateTime;
+                if (val.ValueKind == System.Text.Json.JsonValueKind.Number && val.TryGetInt64(out var tsNum))
+                    return DateTimeOffset.FromUnixTimeSeconds(tsNum).UtcDateTime;
+            }
+        }
+        return DateTime.MinValue;
+    }
+
+    private static string GetStringValue(System.Text.Json.JsonElement el, params string[] props)
+    {
+        foreach (var prop in props)
+        {
+            if (el.TryGetProperty(prop, out var val) && val.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var str = val.GetString();
+                if (!string.IsNullOrWhiteSpace(str)) return str;
+            }
+        }
+        return "";
+    }
+
+    private static string DecodeMaybeBase64(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+        try
+        {
+            var bytes = Convert.FromBase64String(input);
+            var decoded = System.Text.Encoding.UTF8.GetString(bytes);
+            return string.IsNullOrWhiteSpace(decoded) ? input : decoded;
+        }
+        catch
+        {
+            return input;
+        }
+    }
 }
