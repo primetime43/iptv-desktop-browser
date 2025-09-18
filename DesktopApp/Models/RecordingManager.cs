@@ -66,6 +66,12 @@ public sealed class RecordingManager : INotifyPropertyChanged
     private string? _channelName;
     public string? ChannelName { get => _channelName; private set { if (value != _channelName) { _channelName = value; OnPropertyChanged(); } } }
 
+    private int? _recordingChannelId;
+    public int? RecordingChannelId { get => _recordingChannelId; private set { if (value != _recordingChannelId) { _recordingChannelId = value; OnPropertyChanged(); } } }
+
+    private bool _isManualRecording;
+    public bool IsManualRecording { get => _isManualRecording; private set { if (value != _isManualRecording) { _isManualRecording = value; OnPropertyChanged(); } } }
+
     private string? _filePath;
     public string? FilePath
     {
@@ -123,10 +129,12 @@ public sealed class RecordingManager : INotifyPropertyChanged
         _ => "Idle"
     };
 
-    public void Start(string filePath, string? channel)
+    public void Start(string filePath, string? channel, int? channelId = null, bool isManual = true)
     {
         FilePath = filePath;
         ChannelName = channel;
+        RecordingChannelId = channelId;
+        IsManualRecording = isManual;
         StartUtc = DateTime.UtcNow;
         SizeBytes = 0;
         State = RecordingState.Recording;
@@ -136,8 +144,13 @@ public sealed class RecordingManager : INotifyPropertyChanged
 
     public void Stop()
     {
+        // Only allow stopping manual recordings
+        if (!IsManualRecording) return;
+
         IsRecording = false;
         State = RecordingState.Stopped;
+        RecordingChannelId = null;
+        IsManualRecording = false;
         OnPropertyChanged(nameof(DurationDisplay));
     }
 
@@ -145,8 +158,35 @@ public sealed class RecordingManager : INotifyPropertyChanged
     {
         IsRecording = false;
         State = RecordingState.Idle;
-        FilePath = null; ChannelName = null; StartUtc = null; SizeBytes = 0;
+        FilePath = null; ChannelName = null; RecordingChannelId = null; StartUtc = null; SizeBytes = 0;
+        IsManualRecording = false;
         OnPropertyChanged(nameof(DurationDisplay));
+    }
+
+    // Method to force stop any recording (used by scheduled recordings)
+    public void ForceStop()
+    {
+        IsRecording = false;
+        State = RecordingState.Stopped;
+        RecordingChannelId = null;
+        IsManualRecording = false;
+        OnPropertyChanged(nameof(DurationDisplay));
+    }
+
+    // Methods used by RecordingScheduler
+    public void StartRecording(string streamUrl, string outputPath, string? title, int? channelId = null)
+    {
+        // Scheduled recordings should NOT update the UI state
+        // Only track the channel ID for visual indicators
+        RecordingChannelId = channelId;
+        // Do NOT set IsRecording, State, or other UI properties for scheduled recordings
+    }
+
+    public void StopRecording()
+    {
+        // Only reset channel ID for scheduled recordings
+        RecordingChannelId = null;
+        // Do NOT change IsRecording, State, or other UI properties for scheduled recordings
     }
 
     public void Refresh()
