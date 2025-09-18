@@ -2310,6 +2310,13 @@ namespace DesktopApp.Views
             {
                 content.Visibility = Visibility.Collapsed;
             }
+
+            // Hide episodes section when clearing
+            HideEpisodesUI();
+
+            // Hide actions panel when clearing
+            if (FindName("VodActionsPanel") is StackPanel actionsPanel)
+                actionsPanel.Visibility = Visibility.Collapsed;
         }
 
         private void ShowVodDetailsPanel(VodContent vod)
@@ -2417,6 +2424,13 @@ namespace DesktopApp.Views
 
             if (FindName("VodDetailsPlot") is TextBlock plot)
                 plot.Text = !string.IsNullOrWhiteSpace(vod.Plot) ? vod.Plot : "No plot available";
+
+            // Hide episodes section for movies
+            HideEpisodesUI();
+
+            // Show play button for movies only
+            if (FindName("VodActionsPanel") is StackPanel actionsPanel)
+                actionsPanel.Visibility = Visibility.Visible;
         }
 
         private SeriesContent? _currentSubscribedSeries;
@@ -2526,8 +2540,83 @@ namespace DesktopApp.Views
 
             if (FindName("VodDetailsPlot") is TextBlock plot)
                 plot.Text = !string.IsNullOrWhiteSpace(series.Plot) ? series.Plot : "No plot available";
+
+            // Hide play button for TV shows (use episodes instead)
+            if (FindName("VodActionsPanel") is StackPanel actionsPanel)
+                actionsPanel.Visibility = Visibility.Collapsed;
+
+            // Show episodes section for series and populate it
+            PopulateEpisodesUI(series);
         }
 
+        private void PopulateEpisodesUI(SeriesContent series)
+        {
+            // Show episodes section
+            if (FindName("EpisodesSection") is Border episodesSection)
+                episodesSection.Visibility = Visibility.Visible;
+
+            // Clear existing episodes
+            if (FindName("SeasonsPanel") is StackPanel seasonsPanel)
+            {
+                seasonsPanel.Children.Clear();
+
+                foreach (var season in series.Seasons)
+                {
+                    // Create season header
+                    var seasonHeader = new Border
+                    {
+                        Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47)),
+                        CornerRadius = new CornerRadius(4),
+                        Margin = new Thickness(0, 4, 0, 2),
+                        Padding = new Thickness(8, 4, 8, 4)
+                    };
+
+                    var seasonHeaderText = new TextBlock
+                    {
+                        Text = $"{season.DisplayName} ({season.Episodes.Count} episodes)",
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0xDD, 0xE6, 0xF2)),
+                        FontSize = 12
+                    };
+
+                    seasonHeader.Child = seasonHeaderText;
+                    seasonsPanel.Children.Add(seasonHeader);
+
+                    // Create episodes list
+                    foreach (var episode in season.Episodes)
+                    {
+                        var episodeButton = new Button
+                        {
+                            Content = episode.DisplayTitle,
+                            Margin = new Thickness(8, 1, 0, 1),
+                            Padding = new Thickness(8, 4, 8, 4),
+                            Background = Brushes.Transparent,
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7)),
+                            BorderBrush = Brushes.Transparent,
+                            BorderThickness = new Thickness(0),
+                            HorizontalAlignment = HorizontalAlignment.Stretch,
+                            HorizontalContentAlignment = HorizontalAlignment.Left,
+                            FontSize = 11,
+                            Cursor = System.Windows.Input.Cursors.Hand
+                        };
+
+                        episodeButton.Click += (s, e) => TryLaunchEpisodeInPlayer(episode);
+                        seasonsPanel.Children.Add(episodeButton);
+                    }
+                }
+            }
+        }
+
+        private void HideEpisodesUI()
+        {
+            // Hide episodes section
+            if (FindName("EpisodesSection") is Border episodesSection)
+                episodesSection.Visibility = Visibility.Collapsed;
+
+            // Clear episodes
+            if (FindName("SeasonsPanel") is StackPanel seasonsPanel)
+                seasonsPanel.Children.Clear();
+        }
 
         private void VodPlayButton_Click(object sender, RoutedEventArgs e)
         {
@@ -2541,11 +2630,6 @@ namespace DesktopApp.Views
             }
         }
 
-        private void VodTrailerButton_Click(object sender, RoutedEventArgs e)
-        {
-            // Could implement trailer functionality in the future
-            MessageBox.Show("Trailer functionality not yet implemented.", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
 
         // Profile page methods
         private void LoadProfileData()

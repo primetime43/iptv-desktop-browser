@@ -640,12 +640,26 @@
                                     <TextBlock x:Name="VodDetailsPlot" FontSize="12" Foreground="#FFDDE6F2"
                                              TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..."/>
 
-                                    <!-- Actions -->
-                                    <StackPanel Margin="0,16,0,0">
+                                    <!-- Episodes Section (for TV Shows only) -->
+                                    <Border x:Name="EpisodesSection" Background="#182433" CornerRadius="6"
+                                            BorderBrush="#223247" BorderThickness="1" Padding="12" Margin="0,0,0,16"
+                                            Visibility="Collapsed">
+                                        <StackPanel>
+                                            <TextBlock Text="📺 Episodes" FontSize="14" FontWeight="Bold"
+                                                     Foreground="#F0F6FC" Margin="0,0,0,12"/>
+                                            <ScrollViewer x:Name="EpisodesScrollViewer" MaxHeight="300"
+                                                        VerticalScrollBarVisibility="Auto">
+                                                <StackPanel x:Name="SeasonsPanel">
+                                                    <!-- Seasons and Episodes will be populated in code-behind -->
+                                                </StackPanel>
+                                            </ScrollViewer>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Actions (Movies only) -->
+                                    <StackPanel x:Name="VodActionsPanel" Margin="0,16,0,0" Visibility="Collapsed">
                                         <Button x:Name="VodPlayButton" Content="▶ Play" Background="#28A745" Foreground="White"
-                                                Padding="12,8" Margin="0,0,0,8" Click="VodPlayButton_Click"/>
-                                        <Button x:Name="VodTrailerButton" Content="🎬 Trailer" Background="#6C757D" Foreground="White"
-                                                Padding="12,8" Click="VodTrailerButton_Click"/>
+                                                Padding="12,8" Click="VodPlayButton_Click"/>
                                     </StackPanel>
                                 </StackPanel>
                             </StackPanel>
