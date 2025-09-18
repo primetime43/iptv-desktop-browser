@@ -781,7 +781,7 @@
                             <TabItem Style="{StaticResource SchedulerTabItemStyle}">
                                 <TabItem.Header>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="📅" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="●" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
                                         <TextBlock Text="Schedule Recording" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </TabItem.Header>
@@ -792,7 +792,7 @@
                                                 BorderBrush="#30363D" BorderThickness="1">
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                    <TextBlock Text="🎯" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="►" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
                                                     <TextBlock Text="How to Schedule a Recording" FontSize="16" FontWeight="SemiBold"
                                                                Foreground="#DDE6F2" VerticalAlignment="Center"/>
                                                 </StackPanel>
@@ -805,14 +805,14 @@
                                         <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                    <TextBlock Text="1️⃣" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="❶" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
                                                     <TextBlock Text="Recording Type" FontSize="16" FontWeight="Bold"
                                                              Foreground="#F0F6FC" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                                 <RadioButton x:Name="EpgRadio" Foreground="#9DB2C7" Margin="0,0,0,12" IsChecked="True"
                                                              Checked="RecordingType_Changed">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="📺" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="◆" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#28A745"/>
                                                         <StackPanel>
                                                             <TextBlock Text="From TV Guide (EPG)" FontWeight="SemiBold" Foreground="#DDE6F2"/>
                                                             <TextBlock Text="Select a show from the program guide" FontSize="11" Foreground="#9DB2C7"/>
@@ -822,7 +822,7 @@
                                                 <RadioButton x:Name="CustomRadio" Foreground="#9DB2C7"
                                                              Checked="RecordingType_Changed">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="⏰" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="◇" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#FFC107"/>
                                                         <StackPanel>
                                                             <TextBlock Text="Custom Time Range" FontWeight="SemiBold" Foreground="#DDE6F2"/>
                                                             <TextBlock Text="Set your own start and end times" FontSize="11" Foreground="#9DB2C7"/>
@@ -844,7 +844,7 @@
                                             <Border x:Name="EpgPanel" Grid.Column="0" Style="{StaticResource CardStyle}">
                                                 <StackPanel>
                                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                        <TextBlock Text="2️⃣" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="❷" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
                                                         <TextBlock Text="Select from TV Guide" FontSize="16" FontWeight="Bold"
                                                                  Foreground="#F0F6FC" VerticalAlignment="Center"/>
                                                     </StackPanel>
@@ -867,7 +867,7 @@
                                             <Border x:Name="CustomPanel" Grid.Column="2" Style="{StaticResource CardStyle}" IsEnabled="False">
                                                 <StackPanel>
                                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                        <TextBlock Text="2️⃣" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="❷" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
                                                         <TextBlock Text="Set Custom Times" FontSize="16" FontWeight="Bold"
                                                                  Foreground="#F0F6FC" VerticalAlignment="Center"/>
                                                     </StackPanel>
@@ -949,7 +949,7 @@
                                         <Border Style="{StaticResource CardStyle}">
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                    <TextBlock Text="3️⃣" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="❸" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
                                                     <TextBlock Text="Recording Settings" FontSize="16" FontWeight="Bold"
                                                              Foreground="#F0F6FC" VerticalAlignment="Center"/>
                                                 </StackPanel>
@@ -1057,7 +1057,7 @@
                             <TabItem Style="{StaticResource SchedulerTabItemStyle}">
                                 <TabItem.Header>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="📋" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="●" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#DC3545"/>
                                         <TextBlock Text="Scheduled Recordings" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </TabItem.Header>
@@ -1068,7 +1068,7 @@
                                                 BorderBrush="#30363D" BorderThickness="1">
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                    <TextBlock Text="ℹ️" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="►" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#17A2B8"/>
                                                     <TextBlock Text="Recording Management" FontSize="16" FontWeight="SemiBold"
                                                                Foreground="#DDE6F2" VerticalAlignment="Center"/>
                                                 </StackPanel>
@@ -1085,7 +1085,7 @@
                                                         BorderThickness="0" Padding="16,8" Margin="0,0,12,0"
                                                         Click="RefreshScheduled_Click">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="🔄" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="↻" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White"/>
                                                         <TextBlock Text="Refresh List" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
@@ -1094,7 +1094,7 @@
                                                         Click="DeleteCompleted_Click"
                                                         ToolTip="Remove all completed, failed, and cancelled recordings from the list">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="🗑️" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="✖" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White"/>
                                                         <TextBlock Text="Delete Completed" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
