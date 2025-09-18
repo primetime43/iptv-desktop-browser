@@ -2048,6 +2048,9 @@ namespace DesktopApp.Views
         {
             ShowPage("Scheduler");
             SetSelectedNavButton(sender as Button);
+
+            // Initialize the scheduler when navigating to it
+            InitializeScheduler();
         }
 
         private void NavigateToProfile(object sender, RoutedEventArgs e)
@@ -2272,10 +2275,558 @@ namespace DesktopApp.Views
         }
 
 
-        private void OpenRecordingScheduler_Click(object sender, RoutedEventArgs e)
+        // Recording Scheduler Properties and Methods
+        private readonly RecordingScheduler _scheduler = RecordingScheduler.Instance;
+        private Channel? _schedulerSelectedChannel;
+        private EpgEntry? _schedulerSelectedProgram;
+
+        private void RecordingType_Changed(object sender, RoutedEventArgs e)
         {
-            var scheduler = new RecordingSchedulerWindow { Owner = this };
-            scheduler.Show();
+            if (FindName("EpgPanel") is Panel epgPanel && FindName("CustomPanel") is Panel customPanel)
+            {
+                if (FindName("EpgRadio") is RadioButton epgRadio && epgRadio.IsChecked == true)
+                {
+                    epgPanel.IsEnabled = true;
+                    customPanel.IsEnabled = false;
+                }
+                else
+                {
+                    epgPanel.IsEnabled = false;
+                    customPanel.IsEnabled = true;
+                }
+
+                UpdateOutputFilePath();
+            }
+        }
+        private void ChannelCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (FindName("ChannelCombo") is ComboBox channelCombo && channelCombo.SelectedItem is Channel channel)
+            {
+                _schedulerSelectedChannel = channel;
+                LoadProgramsForChannel(channel);
+                UpdateOutputFilePath();
+            }
+        }
+        private void ProgramCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (FindName("ProgramCombo") is ComboBox programCombo && programCombo.SelectedItem is EpgEntry program)
+            {
+                _schedulerSelectedProgram = program;
+                if (FindName("TitleBox") is TextBox titleBox)
+                {
+                    // Remove the LIVE NOW indicator for the title box
+                    var cleanTitle = program.Title.Replace("🔴 ", "").Replace(" (LIVE NOW)", "");
+                    titleBox.Text = cleanTitle;
+                }
+                if (FindName("ProgramTimeText") is TextBlock programTimeText)
+                    programTimeText.Text = program.TimeRangeLocal;
+                UpdateOutputFilePath();
+            }
+        }
+        private void CustomChannelCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateOutputFilePath();
+        }
+        private void CustomTime_Changed(object sender, EventArgs e)
+        {
+            UpdateOutputFilePath();
+        }
+        private void BrowseOutput_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "Transport Stream|*.ts|MP4 Video|*.mp4|All Files|*.*",
+                DefaultExt = ".ts"
+            };
+
+            if (FindName("OutputFileBox") is TextBox outputFileBox && !string.IsNullOrEmpty(outputFileBox.Text))
+            {
+                dialog.FileName = Path.GetFileName(outputFileBox.Text);
+                dialog.InitialDirectory = Path.GetDirectoryName(outputFileBox.Text);
+            }
+
+            if (dialog.ShowDialog() == true)
+            {
+                if (FindName("OutputFileBox") is TextBox box)
+                    box.Text = dialog.FileName;
+            }
+        }
+        private void ScheduleRecording_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ScheduledRecording recording;
+
+                if (FindName("EpgRadio") is RadioButton epgRadio && epgRadio.IsChecked == true)
+                {
+                    // EPG-based recording
+                    if (_schedulerSelectedChannel == null || _schedulerSelectedProgram == null)
+                    {
+                        MessageBox.Show("Please select a channel and program.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    // For currently airing shows, start recording now instead of at the original start time
+                    var now = DateTime.UtcNow;
+                    var isCurrentlyAiring = _schedulerSelectedProgram.StartUtc <= now && _schedulerSelectedProgram.EndUtc > now;
+                    var effectiveStartTime = isCurrentlyAiring ? now : _schedulerSelectedProgram.StartUtc;
+
+                    recording = new ScheduledRecording
+                    {
+                        Title = _schedulerSelectedProgram.Title.Replace("🔴 ", "").Replace(" (LIVE NOW)", ""),
+                        Description = _schedulerSelectedProgram.Description ?? "",
+                        ChannelId = _schedulerSelectedChannel.Id,
+                        ChannelName = _schedulerSelectedChannel.Name,
+                        StreamUrl = GetStreamUrlForChannel(_schedulerSelectedChannel),
+                        StartTime = effectiveStartTime,
+                        EndTime = _schedulerSelectedProgram.EndUtc,
+                        IsEpgBased = true,
+                        EpgProgramId = _schedulerSelectedProgram.GetHashCode().ToString()
+                    };
+                }
+                else
+                {
+                    // Custom time recording
+                    if (FindName("CustomChannelCombo") is not ComboBox customChannelCombo || customChannelCombo.SelectedItem is not Channel customChannel)
+                    {
+                        MessageBox.Show("Please select a channel.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    var startTimeBox = FindName("StartTimeBox") as TextBox;
+                    var endTimeBox = FindName("EndTimeBox") as TextBox;
+
+                    if (!DateTime.TryParse(startTimeBox?.Text, out var startTime) ||
+                        !DateTime.TryParse(endTimeBox?.Text, out var endTime))
+                    {
+                        MessageBox.Show("Please enter valid start and end times (HH:mm format).", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    var startDatePicker = FindName("StartDatePicker") as DatePicker;
+                    var startDate = startDatePicker?.SelectedDate ?? DateTime.Today;
+                    var startDateTime = startDate.Date.Add(startTime.TimeOfDay);
+                    var endDateTime = startDate.Date.Add(endTime.TimeOfDay);
+
+                    // If end time is before start time, assume it's the next day
+                    if (endDateTime <= startDateTime)
+                    {
+                        endDateTime = endDateTime.AddDays(1);
+                    }
+
+                    var titleBox = FindName("TitleBox") as TextBox;
+                    recording = new ScheduledRecording
+                    {
+                        Title = string.IsNullOrWhiteSpace(titleBox?.Text) ? "Custom Recording" : titleBox.Text,
+                        ChannelId = customChannel.Id,
+                        ChannelName = customChannel.Name,
+                        StreamUrl = GetStreamUrlForChannel(customChannel),
+                        StartTime = startDateTime.ToUniversalTime(),
+                        EndTime = endDateTime.ToUniversalTime(),
+                        IsEpgBased = false
+                    };
+                }
+
+                // Set buffer times
+                if (FindName("PreBufferBox") is TextBox preBufferBox && int.TryParse(preBufferBox.Text, out var preBuffer))
+                    recording.PreBufferMinutes = preBuffer;
+                if (FindName("PostBufferBox") is TextBox postBufferBox && int.TryParse(postBufferBox.Text, out var postBuffer))
+                    recording.PostBufferMinutes = postBuffer;
+
+                // Set output file path
+                if (FindName("OutputFileBox") is TextBox outputFileBox && !string.IsNullOrWhiteSpace(outputFileBox.Text))
+                    recording.OutputFilePath = outputFileBox.Text;
+
+                // Check for conflicts
+                if (_scheduler.HasConflictingRecording(recording.StartTime, recording.EndTime))
+                {
+                    var result = MessageBox.Show(
+                        "This recording conflicts with an existing scheduled recording. Do you want to schedule it anyway?",
+                        "Recording Conflict", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+                    if (result != MessageBoxResult.Yes)
+                        return;
+                }
+
+                // Schedule the recording
+                _scheduler.ScheduleRecording(recording);
+
+                MessageBox.Show($"Recording scheduled successfully!\n\nTitle: {recording.Title}\nTime: {recording.TimeRangeText}",
+                    "Recording Scheduled", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // Reset form
+                ResetSchedulerForm();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error scheduling recording: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ResetSchedulerForm()
+        {
+            if (FindName("TitleBox") is TextBox titleBox)
+                titleBox.Text = "";
+            if (FindName("ChannelCombo") is ComboBox channelCombo)
+                channelCombo.SelectedIndex = -1;
+            if (FindName("ProgramCombo") is ComboBox programCombo)
+                programCombo.ItemsSource = null;
+            if (FindName("ProgramTimeText") is TextBlock programTimeText)
+                programTimeText.Text = "";
+            if (FindName("CustomChannelCombo") is ComboBox customChannelCombo)
+                customChannelCombo.SelectedIndex = -1;
+            if (FindName("StartDatePicker") is DatePicker startDatePicker)
+                startDatePicker.SelectedDate = DateTime.Today;
+            if (FindName("StartTimeBox") is TextBox startTimeBox)
+                startTimeBox.Text = "20:00";
+            if (FindName("EndTimeBox") is TextBox endTimeBox)
+                endTimeBox.Text = "21:00";
+            if (FindName("PreBufferBox") is TextBox preBufferBox)
+                preBufferBox.Text = "2";
+            if (FindName("PostBufferBox") is TextBox postBufferBox)
+                postBufferBox.Text = "5";
+            if (FindName("OutputFileBox") is TextBox outputFileBox)
+                outputFileBox.Text = "";
+
+            _schedulerSelectedChannel = null;
+            _schedulerSelectedProgram = null;
+        }
+        private void RefreshScheduled_Click(object sender, RoutedEventArgs e)
+        {
+            LoadScheduledRecordings();
+        }
+        private void DeleteCompleted_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "This will delete all completed, failed, and cancelled recordings from the list. Continue?",
+                "Delete Completed Recordings", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _scheduler.DeleteCompletedRecordings();
+            }
+        }
+        private void PropertiesRecording_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
+                return;
+
+            var properties = $"Recording Properties\n\n" +
+                            $"Title: {recording.Title}\n" +
+                            $"Channel: {recording.ChannelName}\n" +
+                            $"Status: {recording.StatusText}\n" +
+                            $"Start Time: {recording.StartTimeLocal}\n" +
+                            $"End Time: {recording.EndTimeLocal}\n" +
+                            $"Duration: {recording.DurationText}\n" +
+                            $"Pre-buffer: {recording.PreBufferMinutes} minutes\n" +
+                            $"Post-buffer: {recording.PostBufferMinutes} minutes\n" +
+                            $"EPG-based: {(recording.IsEpgBased ? "Yes" : "No")}\n" +
+                            $"Output File: {recording.OutputFilePath}\n" +
+                            $"Stream URL: {recording.StreamUrl}\n";
+
+            if (!string.IsNullOrEmpty(recording.Description))
+            {
+                properties += $"Description: {recording.Description}\n";
+            }
+
+            MessageBox.Show(properties, "Recording Properties", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        private void EditRecording_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
+                return;
+
+            // Simple edit dialog using message boxes for now
+            var editMessage = $"Current recording details:\n\n" +
+                             $"Title: {recording.Title}\n" +
+                             $"Pre-buffer: {recording.PreBufferMinutes} minutes\n" +
+                             $"Post-buffer: {recording.PostBufferMinutes} minutes\n\n" +
+                             $"This is a basic edit confirmation. Would you like to add 1 minute to both pre and post buffer?";
+
+            var result = MessageBox.Show(editMessage, "Edit Recording",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            // Update the recording with increased buffer times
+            var updatedRecording = new ScheduledRecording
+            {
+                Id = recording.Id,
+                Title = recording.Title,
+                Description = recording.Description,
+                ChannelId = recording.ChannelId,
+                ChannelName = recording.ChannelName,
+                StreamUrl = recording.StreamUrl,
+                StartTime = recording.StartTime,
+                EndTime = recording.EndTime,
+                Status = recording.Status,
+                OutputFilePath = recording.OutputFilePath,
+                IsEpgBased = recording.IsEpgBased,
+                EpgProgramId = recording.EpgProgramId,
+                PreBufferMinutes = recording.PreBufferMinutes + 1,
+                PostBufferMinutes = recording.PostBufferMinutes + 1,
+                CreatedAt = recording.CreatedAt
+            };
+
+            _scheduler.UpdateRecording(updatedRecording);
+
+            MessageBox.Show("Recording updated successfully!", "Edit Recording",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        private void CancelRecording_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
+                return;
+
+            var result = MessageBox.Show($"Cancel recording '{recording.Title}'?", "Cancel Recording",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _scheduler.CancelRecording(recording.Id);
+            }
+        }
+
+        // Initialize scheduler when navigating to Scheduler tab
+        private void InitializeScheduler()
+        {
+            InitializeSchedulerWindow();
+            LoadSchedulerChannels();
+            LoadScheduledRecordings();
+        }
+
+        private void InitializeSchedulerWindow()
+        {
+            if (FindName("StartDatePicker") is DatePicker startDatePicker)
+                startDatePicker.SelectedDate = DateTime.Today;
+            if (FindName("StartTimeBox") is TextBox startTimeBox)
+                startTimeBox.Text = "20:00";
+            if (FindName("EndTimeBox") is TextBox endTimeBox)
+                endTimeBox.Text = "21:00";
+            UpdateOutputFilePath();
+        }
+
+        private void LoadSchedulerChannels()
+        {
+            var channels = Channels.OrderBy(c => c.Name).ToList();
+            if (FindName("ChannelCombo") is ComboBox channelCombo)
+                channelCombo.ItemsSource = channels;
+            if (FindName("CustomChannelCombo") is ComboBox customChannelCombo)
+                customChannelCombo.ItemsSource = channels;
+        }
+
+        private void LoadScheduledRecordings()
+        {
+            if (FindName("ScheduledGrid") is DataGrid scheduledGrid)
+                scheduledGrid.ItemsSource = _scheduler.ScheduledRecordings;
+        }
+
+        private async void LoadProgramsForChannel(Channel channel)
+        {
+            var now = DateTime.UtcNow;
+            var programs = new List<EpgEntry>();
+
+            if (Session.Mode == SessionMode.M3u)
+            {
+                // For M3U mode, use cached EPG data
+                if (!string.IsNullOrWhiteSpace(channel.EpgChannelId) &&
+                    Session.M3uEpgByChannel.TryGetValue(channel.EpgChannelId, out var entries))
+                {
+                    programs = entries
+                        .Where(epg => epg.EndUtc > now) // Include currently airing shows (end time must be in future)
+                        .Select(epg =>
+                        {
+                            var isCurrentlyAiring = epg.StartUtc <= now && epg.EndUtc > now;
+                            var displayTitle = isCurrentlyAiring
+                                ? $"🔴 {epg.Title} (LIVE NOW)"
+                                : epg.Title;
+
+                            return new EpgEntry
+                            {
+                                StartUtc = epg.StartUtc,
+                                EndUtc = epg.EndUtc,
+                                Title = displayTitle,
+                                Description = epg.Description
+                            };
+                        })
+                        .OrderBy(epg => epg.StartUtc)
+                        .Take(50) // Limit to next 50 programs
+                        .ToList();
+                }
+            }
+            else if (Session.Mode == SessionMode.Xtream)
+            {
+                // For Xtream mode, fetch EPG data via API
+                try
+                {
+                    using var http = new System.Net.Http.HttpClient();
+                    var url = Session.BuildApi("get_simple_data_table") + "&stream_id=" + channel.Id;
+
+                    System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Fetching EPG for channel {channel.Name}: {url}");
+
+                    using var resp = await http.GetAsync(url);
+                    var json = await resp.Content.ReadAsStringAsync();
+
+                    if (!string.IsNullOrWhiteSpace(json))
+                    {
+                        var trimmed = json.AsSpan().TrimStart();
+                        if (trimmed.Length > 0 && (trimmed[0] == '{' || trimmed[0] == '['))
+                        {
+                            using var doc = System.Text.Json.JsonDocument.Parse(json);
+                            if (doc.RootElement.TryGetProperty("epg_listings", out var listings) &&
+                                listings.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            {
+                                foreach (var el in listings.EnumerateArray())
+                                {
+                                    var start = GetUnixTimestamp(el, "start_timestamp");
+                                    var end = GetUnixTimestamp(el, "stop_timestamp");
+
+                                    if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
+                                    if (end <= now) continue; // Skip programs that have already ended (but include currently airing)
+
+                                    var title = GetStringValue(el, "title", "name", "programme", "program");
+                                    var desc = GetStringValue(el, "description", "desc", "info", "plot", "short_description");
+
+                                    if (!string.IsNullOrWhiteSpace(title))
+                                    {
+                                        var isCurrentlyAiring = start <= now && end > now;
+                                        var displayTitle = isCurrentlyAiring
+                                            ? $"🔴 {DecodeMaybeBase64(title)} (LIVE NOW)"
+                                            : DecodeMaybeBase64(title);
+
+                                        programs.Add(new EpgEntry
+                                        {
+                                            StartUtc = start,
+                                            EndUtc = end,
+                                            Title = displayTitle,
+                                            Description = DecodeMaybeBase64(desc ?? "")
+                                        });
+                                    }
+                                }
+
+                                programs = programs
+                                    .OrderBy(epg => epg.StartUtc)
+                                    .Take(50)
+                                    .ToList();
+                            }
+                        }
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Loaded {programs.Count} programs for channel {channel.Name}");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Error loading EPG for channel {channel.Name}: {ex.Message}");
+                }
+            }
+
+            if (FindName("ProgramCombo") is ComboBox programCombo)
+            {
+                programCombo.ItemsSource = programs;
+
+                if (programs.Any())
+                {
+                    programCombo.SelectedIndex = 0;
+                }
+            }
+        }
+
+        private void UpdateOutputFilePath()
+        {
+            if (FindName("OutputFileBox") is not TextBox outputFileBox) return;
+
+            if (FindName("EpgRadio") is RadioButton epgRadio && epgRadio.IsChecked == true && _schedulerSelectedChannel != null && _schedulerSelectedProgram != null)
+            {
+                // Clean the title by removing emoji and LIVE NOW indicator
+                var cleanTitle = _schedulerSelectedProgram.Title.Replace("🔴 ", "").Replace(" (LIVE NOW)", "");
+                var sanitizedTitle = SanitizeFileName(cleanTitle);
+                var sanitizedChannel = SanitizeFileName(_schedulerSelectedChannel.Name);
+                var timestamp = _schedulerSelectedProgram.StartUtc.ToLocalTime().ToString("yyyy-MM-dd_HH-mm");
+                var fileName = $"{sanitizedChannel}_{sanitizedTitle}_{timestamp}.ts";
+                var recordingDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+                outputFileBox.Text = Path.Combine(recordingDir, fileName);
+            }
+            else if (FindName("CustomRadio") is RadioButton customRadio && customRadio.IsChecked == true && FindName("CustomChannelCombo") is ComboBox customChannelCombo && customChannelCombo.SelectedItem is Channel customChannel)
+            {
+                var titleBox = FindName("TitleBox") as TextBox;
+                var title = string.IsNullOrWhiteSpace(titleBox?.Text) ? "Custom_Recording" : titleBox.Text;
+                var sanitizedTitle = SanitizeFileName(title);
+                var sanitizedChannel = SanitizeFileName(customChannel.Name);
+                var startDatePicker = FindName("StartDatePicker") as DatePicker;
+                var startDate = startDatePicker?.SelectedDate ?? DateTime.Today;
+                var timestamp = startDate.ToString("yyyy-MM-dd_HH-mm");
+                var fileName = $"{sanitizedChannel}_{sanitizedTitle}_{timestamp}.ts";
+                var recordingDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+                outputFileBox.Text = Path.Combine(recordingDir, fileName);
+            }
+        }
+
+        private static string SanitizeFileName(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName)) return "Unknown";
+
+            // First remove emoji and LIVE NOW indicators
+            var cleaned = fileName.Replace("🔴 ", "").Replace(" (LIVE NOW)", "");
+
+            // Remove other emoji characters (basic cleanup)
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"[\uD800-\uDBFF\uDC00-\uDFFF]", "");
+
+            // Remove invalid file name characters
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var result = string.Join("_", cleaned.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+
+            // Trim and ensure we have something
+            result = result.Trim('_', ' ');
+            return string.IsNullOrWhiteSpace(result) ? "Recording" : result;
+        }
+
+        private string GetStreamUrlForChannel(Channel channel)
+        {
+            if (Session.Mode == SessionMode.M3u)
+            {
+                // For M3U mode, find the corresponding playlist entry
+                var playlistEntry = Session.PlaylistChannels.FirstOrDefault(p => p.Id == channel.Id);
+                return playlistEntry?.StreamUrl ?? "";
+            }
+            else
+            {
+                // For Xtream mode, build the stream URL
+                return Session.BuildStreamUrl(channel.Id, "ts");
+            }
+        }
+
+        // Helper methods for recording scheduler EPG parsing
+        private static DateTime GetUnixTimestamp(System.Text.Json.JsonElement el, params string[] props)
+        {
+            foreach (var prop in props)
+            {
+                if (el.TryGetProperty(prop, out var val))
+                {
+                    if (val.ValueKind == System.Text.Json.JsonValueKind.String && long.TryParse(val.GetString(), out var ts))
+                        return DateTimeOffset.FromUnixTimeSeconds(ts).UtcDateTime;
+                    if (val.ValueKind == System.Text.Json.JsonValueKind.Number && val.TryGetInt64(out var tsNum))
+                        return DateTimeOffset.FromUnixTimeSeconds(tsNum).UtcDateTime;
+                }
+            }
+            return DateTime.MinValue;
+        }
+
+        private static string GetStringValue(System.Text.Json.JsonElement el, params string[] props)
+        {
+            foreach (var prop in props)
+            {
+                if (el.TryGetProperty(prop, out var val) && val.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    var str = val.GetString();
+                    if (!string.IsNullOrWhiteSpace(str)) return str;
+                }
+            }
+            return "";
         }
 
         // VOD Details Panel Methods

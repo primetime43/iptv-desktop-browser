@@ -699,19 +699,318 @@
 
             <!-- Scheduler Page (Hidden by default) -->
             <Grid x:Name="SchedulerPage" Visibility="Collapsed">
-                <StackPanel Margin="16">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <TextBlock Text="Recording Scheduler" Style="{StaticResource HeaderTextStyle}"/>
-                        <Button Content="Open Scheduler" Background="#347DFF" Foreground="White"
-                                BorderThickness="0" Padding="16,8" Margin="32,0,0,0"
-                                Click="OpenRecordingScheduler_Click"/>
-                    </StackPanel>
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <!-- Header -->
+                        <TextBlock Text="Recording Scheduler" Style="{StaticResource HeaderTextStyle}" Margin="0,0,0,16"/>
 
-                    <Border Style="{StaticResource CardStyle}">
-                        <TextBlock Text="Use the Recording Scheduler to set up automatic recordings based on TV guide information or custom time ranges."
-                                 FontSize="14" Foreground="#9DB2C7" TextWrapping="Wrap"/>
-                    </Border>
-                </StackPanel>
+                        <!-- Main Content -->
+                        <TabControl Background="Transparent" BorderThickness="0">
+                            <!-- Schedule New Recording Tab -->
+                            <TabItem Header="Schedule Recording">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16">
+                                    <StackPanel>
+                                        <!-- Instructions -->
+                                        <TextBlock Text="Choose how to schedule your recording:"
+                                                   Foreground="#DDE6F2" FontSize="14" FontWeight="SemiBold"
+                                                   Margin="0,0,0,16"/>
+
+                                        <!-- Recording Type Selection -->
+                                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                                            <StackPanel>
+                                                <TextBlock Text="Step 1: Recording Type" FontSize="16" FontWeight="Bold"
+                                                         Foreground="#F0F6FC" Margin="0,0,0,12"/>
+                                                <RadioButton x:Name="EpgRadio" Content="From TV Guide (EPG) - Select a show from the program guide"
+                                                             Foreground="#9DB2C7" Margin="0,0,0,8" IsChecked="True"
+                                                             Checked="RecordingType_Changed"/>
+                                                <RadioButton x:Name="CustomRadio" Content="Custom Time Range - Set your own start and end times"
+                                                             Foreground="#9DB2C7"
+                                                             Checked="RecordingType_Changed"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Recording Options -->
+                                        <Grid Margin="0,0,0,16">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="16"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- EPG-based Recording Panel -->
+                                            <Border x:Name="EpgPanel" Grid.Column="0" Style="{StaticResource CardStyle}">
+                                                <StackPanel>
+                                                    <TextBlock Text="Step 2a: Select from TV Guide" FontSize="16" FontWeight="Bold"
+                                                             Foreground="#F0F6FC" Margin="0,0,0,12"/>
+
+                                                    <TextBlock Text="1. Choose a channel:" Foreground="#9DB2C7" Margin="0,0,0,8"/>
+                                                    <ComboBox x:Name="ChannelCombo" Margin="0,0,0,12"
+                                                              DisplayMemberPath="Name" SelectedValuePath="Id"
+                                                              SelectionChanged="ChannelCombo_SelectionChanged"/>
+
+                                                    <TextBlock Text="2. Pick a show to record:" Foreground="#9DB2C7" Margin="0,0,0,8"/>
+                                                    <ComboBox x:Name="ProgramCombo" Margin="0,0,0,8"
+                                                              DisplayMemberPath="Title" SelectedValuePath="Id"
+                                                              SelectionChanged="ProgramCombo_SelectionChanged"/>
+                                                    <TextBlock x:Name="ProgramTimeText" Text="" Foreground="#6C757D"
+                                                               FontSize="11"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Custom Time Recording Panel -->
+                                            <Border x:Name="CustomPanel" Grid.Column="2" Style="{StaticResource CardStyle}" IsEnabled="False">
+                                                <StackPanel>
+                                                    <TextBlock Text="Step 2b: Set Custom Times" FontSize="16" FontWeight="Bold"
+                                                             Foreground="#F0F6FC" Margin="0,0,0,12"/>
+
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="1. Channel:"
+                                                                   Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CustomChannelCombo" Margin="0,0,0,8"
+                                                                  DisplayMemberPath="Name" SelectedValuePath="Id"
+                                                                  SelectionChanged="CustomChannelCombo_SelectionChanged"/>
+
+                                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="2. Date:"
+                                                                   Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                        <DatePicker Grid.Row="1" Grid.Column="1" x:Name="StartDatePicker" Margin="0,0,0,8"
+                                                                    SelectedDateChanged="CustomTime_Changed"/>
+
+                                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="3. Start:"
+                                                                   Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                        <Grid Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
+                                                            <TextBox x:Name="StartTimeBox"
+                                                                     Text="20:00"
+                                                                     ToolTip="Format: HH:mm (e.g., 20:00 for 8:00 PM)"
+                                                                     TextChanged="CustomTime_Changed"/>
+                                                            <TextBlock Text="Format: HH:mm (20:00)" IsHitTestVisible="False"
+                                                                      Foreground="#667788" Margin="8,0,0,0"
+                                                                      VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Text, ElementName=StartTimeBox}" Value="">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Grid>
+
+                                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="4. End:"
+                                                                   Foreground="#9DB2C7" Margin="0,0,12,0"/>
+                                                        <Grid Grid.Row="3" Grid.Column="1">
+                                                            <TextBox x:Name="EndTimeBox"
+                                                                     Text="21:00"
+                                                                     ToolTip="Format: HH:mm (e.g., 21:00 for 9:00 PM)"
+                                                                     TextChanged="CustomTime_Changed"/>
+                                                            <TextBlock Text="Format: HH:mm (21:00)" IsHitTestVisible="False"
+                                                                      Foreground="#667788" Margin="8,0,0,0"
+                                                                      VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Text, ElementName=EndTimeBox}" Value="">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Grid>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Recording Details -->
+                                        <Border Style="{StaticResource CardStyle}">
+                                            <StackPanel>
+                                                <TextBlock Text="Step 3: Recording Settings" FontSize="16" FontWeight="Bold"
+                                                         Foreground="#F0F6FC" Margin="0,0,0,12"/>
+
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Title:"
+                                                               Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                    <Grid Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,0,0,8">
+                                                        <TextBox x:Name="TitleBox"/>
+                                                        <TextBlock Text="Recording title" IsHitTestVisible="False"
+                                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                                  VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Text, ElementName=TitleBox}" Value="">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Grid>
+
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Pre-buffer (min):"
+                                                               Foreground="#9DB2C7" Margin="0,0,12,8"
+                                                               ToolTip="Minutes to start recording before the scheduled time"/>
+                                                    <Grid Grid.Row="1" Grid.Column="1" Margin="0,0,12,8">
+                                                        <TextBox x:Name="PreBufferBox" Text="2"
+                                                                 ToolTip="Start recording this many minutes early"/>
+                                                        <TextBlock Text="2" IsHitTestVisible="False"
+                                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                                  VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Text, ElementName=PreBufferBox}" Value="">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Grid>
+
+                                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Post-buffer (min):"
+                                                               Foreground="#9DB2C7" Margin="0,0,12,8"
+                                                               ToolTip="Minutes to continue recording after the scheduled end time"/>
+                                                    <Grid Grid.Row="1" Grid.Column="3" Margin="0,0,0,8">
+                                                        <TextBox x:Name="PostBufferBox" Text="5"
+                                                                 ToolTip="Continue recording this many minutes past the end time"/>
+                                                        <TextBlock Text="5" IsHitTestVisible="False"
+                                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                                  VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Text, ElementName=PostBufferBox}" Value="">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Grid>
+
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Output File:"
+                                                               Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                    <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="OutputFileBox"
+                                                             IsReadOnly="True" Margin="0,0,12,8"/>
+                                                    <Button Grid.Row="2" Grid.Column="3" Content="Browse..."
+                                                            Background="#347DFF" Foreground="White"
+                                                            BorderThickness="0" Margin="0,0,0,8"
+                                                            Click="BrowseOutput_Click"/>
+
+                                                    <Button Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                                                            Content="Schedule Recording" Background="#28A745"
+                                                            Foreground="White" BorderThickness="0"
+                                                            Padding="24,12" Margin="0,16,0,0" HorizontalAlignment="Center"
+                                                            Click="ScheduleRecording_Click"/>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+
+                            <!-- Scheduled Recordings Tab -->
+                            <TabItem Header="Scheduled Recordings">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16">
+                                    <StackPanel>
+                                        <!-- Info and Toolbar -->
+                                        <TextBlock Text="View and manage your scheduled recordings. The app automatically checks for recordings to start every 30 seconds."
+                                                   Foreground="#9DB2C7" FontSize="12" Margin="0,0,0,16"/>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                            <Button Content="Refresh" Background="#347DFF" Foreground="White"
+                                                    BorderThickness="0" Padding="16,8" Margin="0,0,16,0"
+                                                    Click="RefreshScheduled_Click"/>
+                                            <Button Content="Delete Completed" Background="#DC3545" Foreground="White"
+                                                    BorderThickness="0" Padding="16,8"
+                                                    Click="DeleteCompleted_Click"
+                                                    ToolTip="Remove all completed, failed, and cancelled recordings from the list"/>
+                                        </StackPanel>
+
+                                        <!-- Scheduled Recordings List -->
+                                        <Border Style="{StaticResource CardStyle}">
+                                            <DataGrid x:Name="ScheduledGrid" AutoGenerateColumns="False"
+                                                      Background="Transparent" Foreground="#DDE6F2"
+                                                      GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                                      RowBackground="Transparent" AlternatingRowBackground="#182433"
+                                                      BorderThickness="0" CanUserAddRows="False">
+                                                <DataGrid.ColumnHeaderStyle>
+                                                    <Style TargetType="DataGridColumnHeader">
+                                                        <Setter Property="Background" Value="#223247"/>
+                                                        <Setter Property="Foreground" Value="#DDE6F2"/>
+                                                        <Setter Property="BorderBrush" Value="#30363D"/>
+                                                        <Setter Property="Padding" Value="12,8"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </Style>
+                                                </DataGrid.ColumnHeaderStyle>
+
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
+                                                    <DataGridTextColumn Header="Channel" Binding="{Binding ChannelName}" Width="120"/>
+                                                    <DataGridTextColumn Header="Start Time" Binding="{Binding StartTimeLocal}" Width="140"/>
+                                                    <DataGridTextColumn Header="End Time" Binding="{Binding EndTimeLocal}" Width="140"/>
+                                                    <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="80"/>
+                                                    <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="100"/>
+                                                    <DataGridTemplateColumn Header="Actions" Width="180">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <Button Content="Props" Background="#28A745"
+                                                                            BorderThickness="0" Padding="8,4" Margin="0,0,4,0"
+                                                                            FontSize="9" ToolTip="Show recording properties"
+                                                                            Click="PropertiesRecording_Click"/>
+                                                                    <Button Content="Edit" Background="#6C757D"
+                                                                            BorderThickness="0" Padding="8,4" Margin="0,0,4,0"
+                                                                            IsEnabled="{Binding CanEdit}" FontSize="9"
+                                                                            Click="EditRecording_Click"/>
+                                                                    <Button Content="Cancel" Background="#DC3545"
+                                                                            BorderThickness="0" Padding="8,4" FontSize="9"
+                                                                            IsEnabled="{Binding CanCancel}"
+                                                                            Click="CancelRecording_Click"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+                        </TabControl>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
 
             <!-- Profile Page (Hidden by default) -->
