@@ -112,6 +112,10 @@
                                             Margin="8,3,23,3"
                                             VerticalAlignment="Center"
                                             HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="PlaceholderText" Text="{TemplateBinding Tag}"
+                                     IsHitTestVisible="False" Margin="8,3,23,3"
+                                     VerticalAlignment="Center" HorizontalAlignment="Left"
+                                     Foreground="#667788" Visibility="Collapsed"/>
                             <TextBox x:Name="PART_EditableTextBox" Style="{x:Null}"
                                    HorizontalAlignment="Left" VerticalAlignment="Center"
                                    Margin="3,3,23,3" Focusable="True"
@@ -130,6 +134,11 @@
                                 </Grid>
                             </Popup>
                         </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="SelectedItem" Value="{x:Null}">
+                                <Setter TargetName="PlaceholderText" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -276,6 +285,7 @@
                     <ComboBox x:Name="CategoryCombo" Width="200" Margin="16,0,0,0"
                               DisplayMemberPath="Name" SelectedValuePath="Id"
                               ItemsSource="{Binding CategoriesCollectionView}"
+                              Tag="Select category..."
                               SelectionChanged="CategoryCombo_SelectionChanged"
                               Background="#21262D" BorderBrush="#30363D"/>
                 </StackPanel>
@@ -375,10 +385,26 @@
                                 <TextBlock Text="Search" FontWeight="Bold" Foreground="#F0F6FC" Margin="0,0,0,8"/>
                                 <Border Background="#182433" CornerRadius="6" BorderBrush="#223247" BorderThickness="1" Padding="8" Margin="0,0,0,16">
                                     <StackPanel>
-                                        <TextBox x:Name="ChannelSearchBox" Margin="0,0,0,4" BorderThickness="0"
-                                                Background="#0E1620" Foreground="#DDE6F2" Padding="6,4"
-                                                Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                                                ToolTip="Search categories or channels"/>
+                                        <Grid>
+                                            <TextBox x:Name="ChannelSearchBox" Margin="0,0,0,4" BorderThickness="0"
+                                                    Background="#0E1620" Foreground="#DDE6F2" Padding="6,4"
+                                                    Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                                    ToolTip="Search categories or channels"/>
+                                            <TextBlock Text="Search channels..." IsHitTestVisible="False"
+                                                      Foreground="#667788" Margin="6,4,0,4"
+                                                      VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Text, ElementName=ChannelSearchBox}" Value="">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
                                         <CheckBox Content="Search All Channels" Margin="0,8,0,0" VerticalAlignment="Center"
                                                  Foreground="#DDE6F2" IsChecked="{Binding SearchAllChannels}"
                                                  ToolTip="Search across all channels"/>
@@ -447,18 +473,35 @@
                     <ComboBox x:Name="VodCategoryCombo" Width="200" Margin="16,0,16,0"
                               DisplayMemberPath="CategoryName" SelectedValuePath="CategoryId"
                               ItemsSource="{Binding VodCategoriesCollectionView}"
+                              Tag="Select category..."
                               SelectionChanged="VodCategoryCombo_SelectionChanged"/>
-                    <TextBox x:Name="VodSearchBox" Width="300" Margin="0,0,0,0"
-                             Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
-                             Padding="8" Text="{Binding VodSearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                             Tag="Search movies and series..."/>
+                    <Grid Width="300">
+                        <TextBox x:Name="VodSearchBox" Margin="0,0,0,0"
+                                 Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                 Padding="8" Text="{Binding VodSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                 Tag="Search movies and series..."/>
+                        <TextBlock Text="Search movies and series..." IsHitTestVisible="False"
+                                  Foreground="#667788" Margin="8,0,0,0"
+                                  VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=VodSearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
                 </StackPanel>
 
                 <!-- Content Area with Right Panel -->
                 <Grid Grid.Row="1" Margin="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="300"/>
+                        <ColumnDefinition Width="400"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- Left: VOD Grid -->
@@ -484,7 +527,7 @@
                                                 <!-- Movie Poster -->
                                                 <Border Grid.Row="0" Background="#223247" CornerRadius="4">
                                                     <Grid>
-                                                        <Image Source="{Binding PosterImage}" Stretch="UniformToFill"
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform"
                                                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                                         <TextBlock Text="🎬" FontSize="28" Foreground="#4B5E71"
                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -527,7 +570,7 @@
                                                 <!-- Series Poster -->
                                                 <Border Grid.Row="0" Background="#223247" CornerRadius="4">
                                                     <Grid>
-                                                        <Image Source="{Binding PosterImage}" Stretch="UniformToFill"
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform"
                                                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                                         <TextBlock Text="📺" FontSize="28" Foreground="#4B5E71"
                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -561,16 +604,6 @@
 
                                 <!-- VOD Details (Hidden by default) -->
                                 <StackPanel x:Name="VodDetailsContent" Visibility="Collapsed">
-                                    <!-- Large Poster -->
-                                    <Border Background="#223247" CornerRadius="8" Height="300" Margin="0,0,0,16">
-                                        <Grid>
-                                            <Image x:Name="VodDetailsPoster" Stretch="UniformToFill"
-                                                   VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                            <TextBlock x:Name="VodDetailsIcon" Text="🎬" FontSize="48" Foreground="#4B5E71"
-                                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Grid>
-                                    </Border>
-
                                     <!-- Title -->
                                     <TextBlock x:Name="VodDetailsTitle" FontSize="18" FontWeight="Bold"
                                              Foreground="#FFDDE6F2" TextWrapping="Wrap" Margin="0,0,0,8"/>
@@ -583,7 +616,7 @@
 
                                     <!-- Rating -->
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                                        <TextBlock Text="⭐" FontSize="14" Margin="0,0,4,0"/>
+                                        <TextBlock Text="⭐" FontSize="14" Margin="0,0,4,0" Foreground="#FFD700"/>
                                         <TextBlock x:Name="VodDetailsRating" FontSize="12" Foreground="#9DB2C7"/>
                                     </StackPanel>
 
@@ -785,7 +818,7 @@
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="External Player" Foreground="#8BA1B9" Margin="0,0,0,4"/>
-                                    <ComboBox x:Name="SettingsPlayerKindCombo" SelectedIndex="0" SelectionChanged="SettingsPlayerKindCombo_SelectionChanged">
+                                    <ComboBox x:Name="SettingsPlayerKindCombo" SelectedIndex="0" SelectionChanged="SettingsPlayerKindCombo_SelectionChanged" Tag="Select player...">
                                         <ComboBoxItem Tag="VLC" Content="VLC Media Player"/>
                                         <ComboBoxItem Tag="MPCHC" Content="MPC-HC"/>
                                         <ComboBoxItem Tag="MPV" Content="mpv"/>
@@ -795,7 +828,23 @@
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="Player Executable Path" Foreground="#8BA1B9" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="SettingsPlayerExeTextBox" Height="34" TextChanged="SettingsPlayerExeTextBox_TextChanged"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsPlayerExeTextBox" Height="34" TextChanged="SettingsPlayerExeTextBox_TextChanged"/>
+                                        <TextBlock Text="C:\Program Files\VideoLAN\VLC\vlc.exe" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsPlayerExeTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                         <Button Content="Browse" Width="110" Height="32" Margin="0,0,8,0"
                                                 Click="SettingsBrowsePlayer_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
@@ -807,7 +856,23 @@
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="Arguments Template" Foreground="#8BA1B9" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="SettingsArgsTemplateTextBox" Height="34" TextChanged="SettingsArgsTemplateTextBox_TextChanged"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsArgsTemplateTextBox" Height="34" TextChanged="SettingsArgsTemplateTextBox_TextChanged"/>
+                                        <TextBlock Text="{}{url} --meta-title {title}" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsArgsTemplateTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
                                     <TextBlock Text="Tokens: {url} {title}. Leave blank to use default for selected player."
                                              Foreground="#657A91" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,0"/>
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
@@ -828,7 +893,23 @@
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="FFmpeg Path" Foreground="#8BA1B9" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="SettingsFfmpegPathTextBox" Height="34" TextChanged="SettingsFfmpegPathTextBox_TextChanged"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsFfmpegPathTextBox" Height="34" TextChanged="SettingsFfmpegPathTextBox_TextChanged"/>
+                                        <TextBlock Text="ffmpeg.exe or full path" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsFfmpegPathTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                         <Button Content="Browse" Width="110" Height="32" Margin="0,0,8,0"
                                                 Click="SettingsBrowseFfmpeg_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
@@ -840,7 +921,23 @@
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="Recording Directory" Foreground="#8BA1B9" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="SettingsRecordingDirTextBox" Height="34" TextChanged="SettingsRecordingDirTextBox_TextChanged"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsRecordingDirTextBox" Height="34" TextChanged="SettingsRecordingDirTextBox_TextChanged"/>
+                                        <TextBlock Text="C:\Users\Username\Videos" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsRecordingDirTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
                                     <Button Content="Browse" Width="110" Height="32" Margin="0,4,0,8"
                                             Click="SettingsBrowseRecordingDir_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
                                     <TextBlock x:Name="SettingsRecordingDirStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#8BA1B9"/>
@@ -848,7 +945,23 @@
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="FFmpeg Args Template" Foreground="#8BA1B9" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="SettingsFfmpegArgsTextBox" Height="34"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsFfmpegArgsTextBox" Height="34"/>
+                                        <TextBlock Text="{}-i {url} -c copy {output}" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsFfmpegArgsTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
                                     <TextBlock Text="Tokens: {url} {output} {title}. Default copies stream without re-encoding."
                                              Foreground="#657A91" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,0"/>
                                 </StackPanel>
@@ -868,7 +981,23 @@
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="EPG Refresh Interval (minutes)" Foreground="#8BA1B9" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="SettingsEpgIntervalTextBox" Height="34" TextChanged="SettingsEpgIntervalTextBox_TextChanged"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsEpgIntervalTextBox" Height="34" TextChanged="SettingsEpgIntervalTextBox_TextChanged"/>
+                                        <TextBlock Text="60" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsEpgIntervalTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
                                     <Button Content="Update EPG Now" Width="150" Height="32" Margin="0,4,0,8"
                                             Click="SettingsUpdateEpgNow_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
                                     <TextBlock x:Name="SettingsEpgIntervalStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#8BA1B9"/>

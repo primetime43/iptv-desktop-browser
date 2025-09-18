@@ -2210,6 +2210,9 @@ namespace DesktopApp.Views
                 combo.DisplayMemberPath = "CategoryName";
                 combo.SelectedValuePath = "CategoryId";
             }
+
+            // Clear VOD details panel
+            ClearVodDetailsPanel();
         }
 
         private void ShowSeriesView_Click(object sender, RoutedEventArgs e)
@@ -2238,6 +2241,9 @@ namespace DesktopApp.Views
                 combo.DisplayMemberPath = "CategoryName";
                 combo.SelectedValuePath = "CategoryId";
             }
+
+            // Clear VOD details panel
+            ClearVodDetailsPanel();
         }
 
         private void SeriesContent_Click(object sender, RoutedEventArgs e)
@@ -2274,6 +2280,37 @@ namespace DesktopApp.Views
 
         // VOD Details Panel Methods
         private VodContent? _currentSubscribedVod;
+
+        private void ClearVodDetailsPanel()
+        {
+            // Clear selections
+            SelectedVodContent = null;
+            SelectedSeriesContent = null;
+
+            // Unsubscribe from property changes
+            if (_currentSubscribedVod != null)
+            {
+                _currentSubscribedVod.PropertyChanged -= VodContent_PropertyChanged;
+                _currentSubscribedVod = null;
+            }
+            if (_currentSubscribedSeries != null)
+            {
+                _currentSubscribedSeries.PropertyChanged -= SeriesContent_PropertyChanged;
+                _currentSubscribedSeries = null;
+            }
+
+            // Reset UI to show placeholder
+            if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+            {
+                placeholder.Text = "Select a movie or series to view details";
+                placeholder.Visibility = Visibility.Visible;
+            }
+
+            if (FindName("VodDetailsContent") is StackPanel content)
+            {
+                content.Visibility = Visibility.Collapsed;
+            }
+        }
 
         private void ShowVodDetailsPanel(VodContent vod)
         {
@@ -2345,23 +2382,6 @@ namespace DesktopApp.Views
             // Set title
             if (FindName("VodDetailsTitle") is TextBlock title)
                 title.Text = vod.Name ?? "Unknown";
-
-            // Set poster if available
-            if (FindName("VodDetailsPoster") is Image poster && FindName("VodDetailsIcon") is TextBlock icon)
-            {
-                if (vod.PosterImage != null)
-                {
-                    poster.Source = vod.PosterImage;
-                    poster.Visibility = Visibility.Visible;
-                    icon.Visibility = Visibility.Collapsed;
-                }
-                else
-                {
-                    poster.Visibility = Visibility.Collapsed;
-                    icon.Visibility = Visibility.Visible;
-                    icon.Text = "🎬";
-                }
-            }
 
             // Update all detail fields
             UpdateVodDetailsDisplay(vod);
@@ -2471,23 +2491,6 @@ namespace DesktopApp.Views
             // Set title
             if (FindName("VodDetailsTitle") is TextBlock title)
                 title.Text = series.Name ?? "Unknown";
-
-            // Set poster if available
-            if (FindName("VodDetailsPoster") is Image poster && FindName("VodDetailsIcon") is TextBlock icon)
-            {
-                if (series.PosterImage != null)
-                {
-                    poster.Source = series.PosterImage;
-                    poster.Visibility = Visibility.Visible;
-                    icon.Visibility = Visibility.Collapsed;
-                }
-                else
-                {
-                    poster.Visibility = Visibility.Collapsed;
-                    icon.Visibility = Visibility.Visible;
-                    icon.Text = "📺";
-                }
-            }
 
             // Update all detail fields
             UpdateSeriesDetailsDisplay(series);
