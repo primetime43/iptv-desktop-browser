@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace DesktopApp.Models;
@@ -107,6 +108,10 @@ public class ScheduledRecording : INotifyPropertyChanged
     public int PostBufferMinutes { get; set; } = 5;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Internal process reference for stopping recording (not serialized)
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Process? RecordingProcess { get; set; }
 
     // Display properties
     public string StartTimeLocal => StartTime.ToLocalTime().ToString("MM/dd/yyyy hh:mm tt");

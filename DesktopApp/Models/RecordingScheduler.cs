@@ -183,18 +183,12 @@ public class RecordingScheduler : INotifyPropertyChanged
             recording.Status = RecordingScheduleStatus.Recording;
             Log($"Starting scheduled recording: {recording.Title}");
 
-            // Start the actual recording using the existing recording system
+            // Start the actual FFmpeg recording process
             Task.Run(() =>
             {
                 try
                 {
-                    RecordingManager.Instance.StartRecording(
-                        recording.StreamUrl,
-                        recording.OutputFilePath,
-                        recording.Title,
-                        recording.ChannelId
-                    );
-
+                    StartFfmpegRecording(recording);
                     RecordingStarted?.Invoke(recording);
                 }
                 catch (Exception ex)
@@ -213,13 +207,105 @@ public class RecordingScheduler : INotifyPropertyChanged
         }
     }
 
+    private void StartFfmpegRecording(ScheduledRecording recording)
+    {
+        // Validate FFmpeg path
+        if (string.IsNullOrWhiteSpace(Session.FfmpegPath) || !System.IO.File.Exists(Session.FfmpegPath))
+        {
+            throw new InvalidOperationException("FFmpeg path not set or file not found. Please configure FFmpeg path in Settings.");
+        }
+
+        // Ensure output directory exists
+        var outputDir = System.IO.Path.GetDirectoryName(recording.OutputFilePath);
+        if (!string.IsNullOrEmpty(outputDir))
+        {
+            System.IO.Directory.CreateDirectory(outputDir);
+        }
+
+        // Build FFmpeg process
+        var psi = Session.BuildFfmpegRecordProcess(recording.StreamUrl, recording.Title, recording.OutputFilePath);
+        if (psi == null)
+        {
+            throw new InvalidOperationException("Unable to build FFmpeg process configuration.");
+        }
+
+        // Start FFmpeg process
+        var process = new System.Diagnostics.Process
+        {
+            StartInfo = psi,
+            EnableRaisingEvents = true
+        };
+
+        process.OutputDataReceived += (s, e) =>
+        {
+            if (!string.IsNullOrEmpty(e.Data))
+                Log($"FFMPEG [{recording.Title}]: {e.Data}");
+        };
+
+        process.ErrorDataReceived += (s, e) =>
+        {
+            if (!string.IsNullOrEmpty(e.Data))
+                Log($"FFMPEG [{recording.Title}]: {e.Data}");
+        };
+
+        process.Exited += (s, e) =>
+        {
+            Log($"FFmpeg process exited for recording: {recording.Title}");
+        };
+
+        if (process.Start())
+        {
+            try
+            {
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+            }
+            catch { }
+
+            // Update RecordingManager UI state
+            RecordingManager.Instance.StartRecording(recording.StreamUrl, recording.OutputFilePath, recording.Title, recording.ChannelId);
+
+            // Store process reference for stopping later
+            recording.RecordingProcess = process;
+
+            Log($"Started FFmpeg recording process for: {recording.Title} -> {recording.OutputFilePath}");
+        }
+        else
+        {
+            process.Dispose();
+            throw new InvalidOperationException($"Failed to start FFmpeg process for recording: {recording.Title}");
+        }
+    }
+
     private void StopRecording(ScheduledRecording recording)
     {
         try
         {
             Log($"Stopping scheduled recording: {recording.Title}");
 
-            // Stop the recording using the existing recording system
+            // Stop the FFmpeg process if it exists
+            if (recording.RecordingProcess != null && !recording.RecordingProcess.HasExited)
+            {
+                try
+                {
+                    recording.RecordingProcess.CloseMainWindow();
+                    if (!recording.RecordingProcess.WaitForExit(5000)) // Wait 5 seconds
+                    {
+                        recording.RecordingProcess.Kill(); // Force kill if it doesn't stop gracefully
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"Error stopping FFmpeg process for {recording.Title}: {ex.Message}");
+                }
+                finally
+                {
+                    recording.RecordingProcess?.Dispose();
+                    recording.RecordingProcess = null;
+                }
+            }
+
+            // Update RecordingManager UI state
             RecordingManager.Instance.StopRecording();
 
             recording.Status = RecordingScheduleStatus.Completed;
