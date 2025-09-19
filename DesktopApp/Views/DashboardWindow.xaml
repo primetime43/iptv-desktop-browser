@@ -413,6 +413,26 @@
                                         <Border Style="{StaticResource CardStyle}" Width="200" Height="120"
                                                 PreviewMouseLeftButtonDown="ChannelTile_PreviewMouseLeftButtonDown"
                                                 MouseEnter="ChannelTile_MouseEnter" Cursor="Hand">
+                                            <Border.Triggers>
+                                                <EventTrigger RoutedEvent="MouseEnter">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="RecordingButton"
+                                                                           Storyboard.TargetProperty="Opacity"
+                                                                           To="1" Duration="0:0:0.2"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                                <EventTrigger RoutedEvent="MouseLeave">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="RecordingButton"
+                                                                           Storyboard.TargetProperty="Opacity"
+                                                                           To="0" Duration="0:0:0.2"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Border.Triggers>
                                             <Grid>
                                                 <Grid.RowDefinitions>
                                                     <RowDefinition Height="*"/>
@@ -440,6 +460,56 @@
                                                         Visibility="{Binding IsRecording, Converter={StaticResource BoolToVisibilityConverter}}">
                                                     <Ellipse Width="8" Height="8" Fill="White"/>
                                                 </Border>
+
+                                                <!-- Recording Button (appears on hover) -->
+                                                <Button x:Name="RecordingButton" Grid.Row="0"
+                                                        Background="#28A745" Width="32" Height="32"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                        Margin="0,0,8,8" BorderThickness="0"
+                                                        Click="ChannelRecordButton_Click"
+                                                        Opacity="0" Cursor="Hand"
+                                                        ToolTip="Start/Stop Recording">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock x:Name="RecordingButtonIcon" Text="⏺️" FontSize="14" Foreground="White">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Text" Value="⏺️"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                                                                            <Setter Property="Text" Value="⏹️"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <Button.Style>
+                                                        <Style TargetType="Button">
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Border Background="{TemplateBinding Background}"
+                                                                                CornerRadius="16"
+                                                                                Width="32" Height="32">
+                                                                            <ContentPresenter HorizontalAlignment="Center"
+                                                                                            VerticalAlignment="Center"/>
+                                                                        </Border>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                                                                    <Setter Property="Background" Value="#DC3545"/>
+                                                                    <Setter Property="ToolTip" Value="Stop Recording"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsRecording}" Value="False">
+                                                                    <Setter Property="Background" Value="#28A745"/>
+                                                                    <Setter Property="ToolTip" Value="Start Recording"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
                                             </Grid>
                                         </Border>
                                     </DataTemplate>

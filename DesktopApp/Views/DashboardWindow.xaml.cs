@@ -1246,6 +1246,48 @@ namespace DesktopApp.Views
 
         private void ChannelTile_Click(object sender, RoutedEventArgs e) { }
 
+        private void ChannelRecordButton_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true; // Prevent the channel tile click event from firing
+
+            if (sender is Button button && button.DataContext is Channel channel)
+            {
+                // Set the selected channel (this ensures the recording tab shows the correct channel)
+                SelectedChannel = channel;
+
+                // Check if this channel is currently being recorded
+                bool isCurrentlyRecording = RecordingManager.Instance.IsRecording &&
+                                          RecordingManager.Instance.RecordingChannelId == channel.Id;
+
+                if (isCurrentlyRecording)
+                {
+                    // Stop recording
+                    if (RecordingManager.Instance.IsManualRecording)
+                    {
+                        StopRecording();
+                    }
+                    else
+                    {
+                        MessageBox.Show(this, "Cannot stop scheduled recording manually. Use the Recording Scheduler to cancel scheduled recordings.",
+                            "Scheduled Recording Active", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                else
+                {
+                    // Check if another recording is active
+                    if (_recordProcess != null)
+                    {
+                        MessageBox.Show(this, "Another recording is already in progress. Stop the current recording before starting a new one.",
+                            "Recording Active", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    // Start recording this channel
+                    StartRecording();
+                }
+            }
+        }
+
         private DateTime _lastChannelClickTime;
         private FrameworkElement? _lastChannelClickedElement;
         private void ChannelTile_PreviewMouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
