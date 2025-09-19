@@ -60,6 +60,8 @@ namespace DesktopApp.Views
         private bool _allChannelsIndexLoading;
         private bool _allChannelsIndexLoaded => _allChannelsIndex != null;
 
+        public bool IsSearchLoading => _allChannelsIndexLoading;
+
         public ICollectionView CategoriesCollectionView { get; }
         public ICollectionView ChannelsCollectionView { get; }
         public ICollectionView VodContentCollectionView { get; }
@@ -801,7 +803,9 @@ namespace DesktopApp.Views
             if (_allChannelsIndexLoading || _allChannelsIndexLoaded || Session.Mode != SessionMode.Xtream) return;
             try
             {
-                _allChannelsIndexLoading = true; SetGuideLoading(true);
+                _allChannelsIndexLoading = true;
+                OnPropertyChanged(nameof(IsSearchLoading));
+                SetGuideLoading(true);
                 var url = Session.BuildApi("get_live_streams"); Log($"GET {url} (index all channels)\n");
                 var json = await _http.GetStringAsync(url, _cts.Token); Log("(length=" + json.Length + ")\n\n");
                 var list = new List<Channel>();
@@ -827,7 +831,11 @@ namespace DesktopApp.Views
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading all channels index: " + ex.Message + "\n"); }
-            finally { _allChannelsIndexLoading = false; SetGuideLoading(false); }
+            finally {
+                _allChannelsIndexLoading = false;
+                OnPropertyChanged(nameof(IsSearchLoading));
+                SetGuideLoading(false);
+            }
         }
 
         // ===================== M3U XMLTV EPG =====================

@@ -685,6 +685,39 @@
                                                     </Style>
                                                 </TextBlock.Style>
                                             </TextBlock>
+
+                                            <!-- Search Loading Indicator -->
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                                       VerticalAlignment="Center" Margin="0,0,8,4">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSearchLoading}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <Ellipse Width="16" Height="16" Stroke="#347DFF" StrokeThickness="2"
+                                                        StrokeDashArray="25.13" RenderTransformOrigin="0.5,0.5">
+                                                    <Ellipse.RenderTransform>
+                                                        <RotateTransform/>
+                                                    </Ellipse.RenderTransform>
+                                                    <Ellipse.Triggers>
+                                                        <EventTrigger RoutedEvent="Loaded">
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever">
+                                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                                   From="0" To="360" Duration="0:0:1"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Ellipse.Triggers>
+                                                </Ellipse>
+                                                <TextBlock Text="Searching..." FontSize="10" Foreground="#347DFF"
+                                                          Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
                                         </Grid>
                                         <CheckBox Content="Search All Channels" Margin="0,8,0,0" VerticalAlignment="Center"
                                                  Foreground="#DDE6F2" IsChecked="{Binding SearchAllChannels}"
