@@ -1495,7 +1495,7 @@
             <Grid x:Name="ProfilePage" Visibility="Collapsed">
                 <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="Profile &amp; Debug Info" Style="{StaticResource HeaderTextStyle}"/>
+                        <TextBlock Text="Profile" Style="{StaticResource HeaderTextStyle}"/>
 
                         <!-- Account Information -->
                         <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
@@ -1542,19 +1542,6 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Profile Actions -->
-                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
-                            <StackPanel>
-                                <TextBlock Text="Profile Actions" FontSize="18" FontWeight="Bold"
-                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
-
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="Refresh Profile" Background="#28A745" Foreground="White"
-                                            BorderThickness="0" Padding="16,8"
-                                            Click="RefreshProfile_Click"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
 
                     </StackPanel>
                 </ScrollViewer>
