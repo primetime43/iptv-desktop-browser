@@ -374,18 +374,6 @@
                 <StackPanel Margin="16" VerticalAlignment="Bottom">
                     <Separator Background="#21262D" Margin="0,0,0,16"/>
 
-                    <!-- Connection Status -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                        <Ellipse x:Name="ConnectionStatus" Width="8" Height="8" Fill="#28A745" Margin="0,0,8,0"/>
-                        <TextBlock x:Name="ConnectionText" Text="Connected" FontSize="12" Foreground="#9DB2C7"/>
-                    </StackPanel>
-
-                    <!-- Recording Status -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                        <Ellipse x:Name="RecordingStatusIndicator" Width="8" Height="8" Fill="#6C757D" Margin="0,0,8,0"/>
-                        <TextBlock x:Name="RecordingStatusText" Text="Idle" FontSize="12" Foreground="#9DB2C7"/>
-                    </StackPanel>
-
                     <!-- Logout Button -->
                     <Button Content="Logout" Style="{StaticResource NavButtonStyle}"
                             Foreground="#DC3545" Click="Logout_Click" Margin="0,8,0,0"/>
