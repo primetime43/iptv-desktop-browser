@@ -406,13 +406,7 @@
                 <!-- Page Header -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,16,16,0">
                     <TextBlock Text="Live TV" Style="{StaticResource HeaderTextStyle}"/>
-                    <Button x:Name="CategoriesViewBtn" Content="Categories" Margin="32,0,8,0" Padding="12,6"
-                            Background="#223247" Foreground="#FFDDE6F2" BorderThickness="0"
-                            Click="ShowCategoriesView_Click"/>
-                    <Button x:Name="ChannelsViewBtn" Content="Channels" Margin="0,0,16,0" Padding="12,6"
-                            Background="Transparent" Foreground="#9DB2C7" BorderThickness="0"
-                            Click="ShowChannelsView_Click"/>
-                    <ComboBox x:Name="CategoryCombo" Width="200" Margin="16,0,0,0"
+                    <ComboBox x:Name="CategoryCombo" Width="200" Margin="32,0,16,0"
                               DisplayMemberPath="Name" SelectedValuePath="Id"
                               ItemsSource="{Binding CategoriesCollectionView}"
                               Tag="Select category..."
@@ -452,55 +446,8 @@
 
                     <!-- Main Content Area -->
                     <Grid Grid.Column="0" Margin="0,0,16,0">
-                        <!-- Categories Grid -->
-                        <ScrollViewer x:Name="CategoriesScrollViewer" Visibility="Visible">
-                            <ItemsControl ItemsSource="{Binding CategoriesCollectionView}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Click="CategoryTile_Click" Padding="0" Margin="8" Cursor="Hand"
-                                                Background="Transparent" BorderThickness="0">
-                                            <Border Style="{StaticResource CardStyle}" Width="200" Height="120">
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock Text="📁" FontSize="32" Margin="0,0,0,8"
-                                                             HorizontalAlignment="Center"/>
-                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"
-                                                             Foreground="#FFDDE6F2" TextAlignment="Center"
-                                                             TextWrapping="Wrap"/>
-                                                    <TextBlock Text="{Binding ChannelCount, StringFormat='{}{0} channels'}"
-                                                             FontSize="12" Foreground="#9DB2C7" TextAlignment="Center"
-                                                             Margin="0,4,0,0"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-
-                        <!-- Categories Loading Overlay -->
-                        <Grid x:Name="CategoriesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
-                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Grid Width="40" Height="40">
-                                    <Ellipse x:Name="SpinnerEllipse" Width="32" Height="32"
-                                           Stroke="#347DFF" StrokeThickness="3"
-                                           StrokeDashArray="50.26"
-                                           RenderTransformOrigin="0.5,0.5">
-                                        <Ellipse.RenderTransform>
-                                            <RotateTransform/>
-                                        </Ellipse.RenderTransform>
-                                    </Ellipse>
-                                </Grid>
-                                <TextBlock Text="Loading categories..." Style="{StaticResource LoadingTextStyle}"/>
-                            </StackPanel>
-                        </Grid>
-
                         <!-- Channels Grid View -->
-                        <ScrollViewer x:Name="ChannelsGridScrollViewer" Visibility="Collapsed">
+                        <ScrollViewer x:Name="ChannelsGridScrollViewer" Visibility="Visible">
                             <ItemsControl x:Name="ChannelsGridItemsControl" ItemsSource="{Binding ChannelsCollectionView}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>

@@ -385,6 +385,7 @@ namespace DesktopApp.Views
             }
         }
 
+
         private TileSize _currentTileSize = TileSize.Medium;
         private bool _updatingTileSize = false;
 
@@ -2629,69 +2630,9 @@ namespace DesktopApp.Views
             if (sender is ComboBox combo && combo.SelectedItem is Category category)
             {
                 await LoadChannelsForCategoryAsync(category);
-                ShowChannelsView_Click(null, null);
             }
         }
 
-        private void ShowCategoriesView_Click(object sender, RoutedEventArgs e)
-        {
-            if (FindName("CategoriesScrollViewer") is ScrollViewer categoriesViewer)
-                categoriesViewer.Visibility = Visibility.Visible;
-            if (FindName("ChannelsGridScrollViewer") is ScrollViewer channelsGridViewer)
-                channelsGridViewer.Visibility = Visibility.Collapsed;
-            if (FindName("ChannelsListScrollViewer") is ScrollViewer channelsListViewer)
-                channelsListViewer.Visibility = Visibility.Collapsed;
-
-            // Update button states
-            if (FindName("CategoriesViewBtn") is Button categoriesBtn)
-            {
-                categoriesBtn.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47));
-                categoriesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xDD, 0xE6));
-            }
-            if (FindName("ChannelsViewBtn") is Button channelsBtn)
-            {
-                channelsBtn.Background = Brushes.Transparent;
-                channelsBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7));
-            }
-        }
-
-        private void ShowChannelsView_Click(object sender, RoutedEventArgs e)
-        {
-            if (FindName("CategoriesScrollViewer") is ScrollViewer categoriesViewer)
-                categoriesViewer.Visibility = Visibility.Collapsed;
-
-            // Show the appropriate channels view based on current view mode
-            UpdateChannelsViewVisibility();
-
-            // Update button states
-            if (FindName("CategoriesViewBtn") is Button categoriesBtn)
-            {
-                categoriesBtn.Background = Brushes.Transparent;
-                categoriesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7));
-            }
-            if (FindName("ChannelsViewBtn") is Button channelsBtn)
-            {
-                channelsBtn.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47));
-                channelsBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xDD, 0xE6));
-            }
-        }
-
-        private async void CategoryTile_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement element && element.DataContext is Category category)
-            {
-                await LoadChannelsForCategoryAsync(category);
-
-                // Switch to channels view
-                ShowChannelsView_Click(null, null);
-
-                // Update category combo selection
-                if (FindName("CategoryCombo") is ComboBox combo)
-                {
-                    combo.SelectedItem = category;
-                }
-            }
-        }
 
         private async void VodCategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -4557,6 +4498,7 @@ namespace DesktopApp.Views
             UpdateVodViewVisibility();
         }
 
+
         private void UpdateChannelsViewButtons()
         {
             if (FindName("ChannelsGridViewBtn") is Button gridBtn)
@@ -4595,6 +4537,7 @@ namespace DesktopApp.Views
             if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListScrollViewer)
                 seriesListScrollViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
         }
+
 
         private void TileSize_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
