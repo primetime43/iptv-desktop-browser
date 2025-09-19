@@ -406,7 +406,7 @@
                 <!-- Page Header -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,16,16,0">
                     <TextBlock Text="Live TV" Style="{StaticResource HeaderTextStyle}"/>
-                    <ComboBox x:Name="CategoryCombo" Width="200" Margin="32,0,16,0"
+                    <ComboBox x:Name="CategoryCombo" Width="200" Height="32" Margin="32,0,16,0"
                               DisplayMemberPath="Name" SelectedValuePath="Id"
                               ItemsSource="{Binding CategoriesCollectionView}"
                               Tag="Select category..."
@@ -427,7 +427,7 @@
                         </Border>
 
                         <!-- Tile Size Selector -->
-                        <ComboBox x:Name="TileSizeCombo" Width="80" Margin="8,0,0,0"
+                        <ComboBox x:Name="TileSizeCombo" Width="80" Height="32" Margin="8,0,0,0"
                                  SelectionChanged="TileSize_SelectionChanged"
                                  Background="#21262D" BorderBrush="#30363D" Foreground="#FFDDE6F2">
                             <ComboBoxItem Content="S" Tag="Small"/>
@@ -666,8 +666,9 @@
                                 <Border Background="#182433" CornerRadius="6" BorderBrush="#223247" BorderThickness="1" Padding="8" Margin="0,0,0,16">
                                     <StackPanel>
                                         <Grid>
-                                            <TextBox x:Name="ChannelSearchBox" Margin="0,0,0,4" BorderThickness="0"
+                                            <TextBox x:Name="ChannelSearchBox" Height="32" Margin="0,0,0,4" BorderThickness="0"
                                                     Background="#0E1620" Foreground="#DDE6F2" Padding="6,4"
+                                                    VerticalContentAlignment="Center"
                                                     Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
                                                     ToolTip="Search categories or channels"/>
                                             <TextBlock Text="Search channels..." IsHitTestVisible="False"
@@ -742,23 +743,34 @@
                 </Grid.RowDefinitions>
 
                 <!-- Page Header -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,16,16,0">
-                    <TextBlock Text="Video on Demand" Style="{StaticResource HeaderTextStyle}"/>
-                    <Button x:Name="MoviesViewBtn" Content="Movies" Margin="32,0,8,0" Padding="12,6"
+                <Grid Grid.Row="0" Margin="16,16,16,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="250"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="Video on Demand" Style="{StaticResource HeaderTextStyle}"/>
+                    <Button Grid.Column="1" x:Name="MoviesViewBtn" Content="Movies" Margin="32,0,8,0" Padding="12,6"
                             Background="#223247" Foreground="#FFDDE6F2" BorderThickness="0"
                             Click="ShowMoviesView_Click"/>
-                    <Button x:Name="SeriesViewBtn" Content="TV Series" Margin="0,0,16,0" Padding="12,6"
+                    <Button Grid.Column="2" x:Name="SeriesViewBtn" Content="TV Series" Margin="0,0,16,0" Padding="12,6"
                             Background="Transparent" Foreground="#9DB2C7" BorderThickness="0"
                             Click="ShowSeriesView_Click"/>
-                    <ComboBox x:Name="VodCategoryCombo" Width="200" Margin="16,0,16,0"
+                    <ComboBox Grid.Column="3" x:Name="VodCategoryCombo" Height="32" Margin="16,0,16,0"
                               DisplayMemberPath="CategoryName" SelectedValuePath="CategoryId"
                               ItemsSource="{Binding VodCategoriesCollectionView}"
                               Tag="Select category..."
                               SelectionChanged="VodCategoryCombo_SelectionChanged"/>
-                    <Grid Width="300">
-                        <TextBox x:Name="VodSearchBox" Margin="0,0,0,0"
+                    <Grid Grid.Column="4" Margin="0,0,16,0">
+                        <TextBox x:Name="VodSearchBox" Height="32" Margin="0,0,0,0"
                                  Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
-                                 Padding="8" Text="{Binding VodSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                 Padding="8,6" VerticalContentAlignment="Center"
+                                 Text="{Binding VodSearchQuery, UpdateSourceTrigger=PropertyChanged}"
                                  Tag="Search movies and series..."/>
                         <TextBlock Text="Search movies and series..." IsHitTestVisible="False"
                                   Foreground="#667788" Margin="8,0,0,0"
@@ -777,7 +789,7 @@
                     </Grid>
 
                     <!-- VOD View Mode Toggle Buttons -->
-                    <StackPanel Orientation="Horizontal" Margin="16,0,0,0">
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" HorizontalAlignment="Right">
                         <Border Background="#161B22" CornerRadius="4" Padding="2">
                             <StackPanel Orientation="Horizontal">
                                 <Button x:Name="VodGridViewBtn" Content="⊞" Width="32" Height="32" Margin="0,0,2,0"
@@ -790,7 +802,7 @@
                         </Border>
 
                         <!-- VOD Tile Size Selector -->
-                        <ComboBox x:Name="VodTileSizeCombo" Width="80" Margin="8,0,0,0"
+                        <ComboBox x:Name="VodTileSizeCombo" Width="80" Height="32" Margin="8,0,0,0"
                                  SelectionChanged="TileSize_SelectionChanged"
                                  Background="#21262D" BorderBrush="#30363D" Foreground="#FFDDE6F2">
                             <ComboBoxItem Content="S" Tag="Small"/>
@@ -798,13 +810,13 @@
                             <ComboBoxItem Content="L" Tag="Large"/>
                         </ComboBox>
                     </StackPanel>
-                </StackPanel>
+                </Grid>
 
                 <!-- Content Area with Right Panel -->
                 <Grid Grid.Row="1" Margin="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="400"/>
+                        <ColumnDefinition Width="320"/>
                     </Grid.ColumnDefinitions>
 
                     <!-- Left: VOD Grid -->
