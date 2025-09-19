@@ -927,14 +927,17 @@ namespace DesktopApp.Views
                 {
                     try
                     {
-                        var tasks = _channels.Select(ch => Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch)).Task).ToList();
-                        await Task.WhenAll(tasks);
+                        await LoadEpgDataBatchedAsync(_channels.ToList());
                         if (Session.LastEpgUpdateUtc == null)
                         {
-                            Session.LastEpgUpdateUtc = DateTime.UtcNow; Dispatcher.Invoke(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
+                            Session.LastEpgUpdateUtc = DateTime.UtcNow;
+                            Dispatcher.Invoke(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        Log($"ERROR in EPG batch loading: {ex.Message}\n");
+                    }
                 }, _cts.Token);
             }
             catch (OperationCanceledException) { }
@@ -993,6 +996,73 @@ namespace DesktopApp.Views
         }
 
         // ===================== Xtream EPG loading =====================
+        private async Task LoadEpgDataBatchedAsync(List<Channel> channels)
+        {
+            if (Session.Mode != SessionMode.Xtream || _cts.IsCancellationRequested) return;
+
+            const int batchSize = 3; // Limit concurrent API calls to avoid overwhelming server
+            const int maxRetries = 3;
+            const int retryDelayMs = 2000;
+
+            Log($"Starting batched EPG loading for {channels.Count} channels (batch size: {batchSize})\n");
+
+            for (int i = 0; i < channels.Count; i += batchSize)
+            {
+                if (_cts.IsCancellationRequested) break;
+
+                var batch = channels.Skip(i).Take(batchSize).ToList();
+                var tasks = batch.Select(async ch =>
+                {
+                    for (int retry = 0; retry < maxRetries; retry++)
+                    {
+                        if (_cts.IsCancellationRequested) break;
+                        if (ch.EpgLoaded && !string.IsNullOrEmpty(ch.NowTitle)) break;
+
+                        try
+                        {
+                            await Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch, force: retry > 0));
+                            // Small delay to check if loading succeeded
+                            await Task.Delay(500, _cts.Token);
+
+                            if (ch.EpgLoaded && !string.IsNullOrEmpty(ch.NowTitle))
+                            {
+                                Log($"EPG loaded successfully for channel {ch.Name} (attempt {retry + 1})\n");
+                                break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"EPG loading failed for channel {ch.Name} (attempt {retry + 1}): {ex.Message}\n");
+                        }
+
+                        if (retry < maxRetries - 1)
+                        {
+                            Log($"Retrying EPG load for channel {ch.Name} in {retryDelayMs}ms...\n");
+                            await Task.Delay(retryDelayMs, _cts.Token);
+                        }
+                    }
+                }).ToList();
+
+                try
+                {
+                    await Task.WhenAll(tasks);
+                }
+                catch (Exception ex)
+                {
+                    Log($"ERROR in EPG batch processing: {ex.Message}\n");
+                }
+
+                // Small delay between batches to be respectful to the server
+                if (i + batchSize < channels.Count && !_cts.IsCancellationRequested)
+                {
+                    await Task.Delay(1000, _cts.Token);
+                }
+            }
+
+            var successCount = channels.Count(ch => ch.EpgLoaded && !string.IsNullOrEmpty(ch.NowTitle));
+            Log($"EPG batch loading completed: {successCount}/{channels.Count} channels loaded successfully\n");
+        }
+
         private async Task EnsureEpgLoadedAsync(Channel ch, bool force = false)
         {
             if (Session.Mode != SessionMode.Xtream) return; if (_cts.IsCancellationRequested) return; if (!force && (ch.EpgLoaded || ch.EpgLoading)) return; if (!force && ch.EpgAttempts >= 3 && !string.IsNullOrEmpty(ch.NowTitle)) return; await LoadEpgCurrentOnlyAsync(ch, force);
@@ -1024,7 +1094,7 @@ namespace DesktopApp.Views
                 }
                 catch (Exception ex) { Log("PARSE ERROR (current epg): " + ex.Message + "\n"); }
                 if (!found && fallbackFirstFuture != null) { ApplyNow(ch, fallbackFirstFuture.Title, fallbackFirstFuture.Description ?? string.Empty, fallbackFirstFuture.StartUtc, fallbackFirstFuture.EndUtc); found = true; }
-                if (!found) { ch.EpgLoaded = false; if (ch.EpgAttempts < 3 && !force) _ = Task.Delay(1500, _cts.Token).ContinueWith(t => { if (!t.IsCanceled) _ = Dispatcher.InvokeAsync(() => EnsureEpgLoadedAsync(ch)); }); }
+                if (!found) { ch.EpgLoaded = false; Log($"No current EPG data found for channel {ch.Name} (attempt {ch.EpgAttempts})\n"); }
                 else ch.EpgLoaded = true;
             }
             catch (OperationCanceledException) { ch.EpgLoaded = true; }
