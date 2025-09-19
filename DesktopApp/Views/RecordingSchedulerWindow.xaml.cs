@@ -496,6 +496,33 @@ public partial class RecordingSchedulerWindow : Window, INotifyPropertyChanged
         }
     }
 
+    private void OpenOutputFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var recordingDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+
+            // Create directory if it doesn't exist
+            if (!Directory.Exists(recordingDir))
+            {
+                Directory.CreateDirectory(recordingDir);
+            }
+
+            // Open the folder in Windows Explorer
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"\"{recordingDir}\"",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Unable to open recording folder: {ex.Message}",
+                "Folder Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void PropertiesRecording_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.DataContext is not ScheduledRecording recording)

@@ -383,9 +383,13 @@
                                     BorderBrush="#FF347DFF" Padding="10,5" Margin="0,0,10,0"
                                     Click="RefreshScheduled_Click"/>
                             <Button Content="Delete Completed" Background="#FFDC3545" Foreground="White"
-                                    BorderBrush="#FFDC3545" Padding="10,5"
+                                    BorderBrush="#FFDC3545" Padding="10,5" Margin="0,0,10,0"
                                     Click="DeleteCompleted_Click"
                                     ToolTip="Remove all completed, failed, and cancelled recordings from the list"/>
+                            <Button Content="📂 Open Output Folder" Background="#FF28A745" Foreground="White"
+                                    BorderBrush="#FF28A745" Padding="10,5"
+                                    Click="OpenOutputFolder_Click"
+                                    ToolTip="Open the directory where recordings are saved"/>
                         </StackPanel>
                     </StackPanel>
 

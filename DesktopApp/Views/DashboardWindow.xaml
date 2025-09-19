@@ -1017,7 +1017,7 @@
 
                                                 <StackPanel>
                                                     <TextBlock Text="Output Directory:" FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,2"/>
-                                                    <TextBlock Text="C:\Users\Videos" FontSize="10" Foreground="#DDE6F2"
+                                                    <TextBlock x:Name="RecordingOutputDirectoryText" Text="C:\Users\Videos" FontSize="10" Foreground="#DDE6F2"
                                                              TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
 
                                                     <TextBlock Text="FFmpeg Status:" FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,2"/>
@@ -1416,12 +1416,21 @@
                                                     </StackPanel>
                                                 </Button>
                                                 <Button Background="#DC3545" Foreground="White"
-                                                        BorderThickness="0" Padding="16,8"
+                                                        BorderThickness="0" Padding="16,8" Margin="0,0,12,0"
                                                         Click="DeleteCompleted_Click"
                                                         ToolTip="Remove all completed, failed, and cancelled recordings from the list">
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="✖" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White"/>
                                                         <TextBlock Text="Delete Completed" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Background="#28A745" Foreground="White"
+                                                        BorderThickness="0" Padding="16,8"
+                                                        Click="OpenRecordingFolder_Click"
+                                                        ToolTip="Open the directory where recordings are saved">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="📂" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White"/>
+                                                        <TextBlock Text="Open Output Folder" VerticalAlignment="Center"/>
                                                     </StackPanel>
                                                 </Button>
                                             </StackPanel>

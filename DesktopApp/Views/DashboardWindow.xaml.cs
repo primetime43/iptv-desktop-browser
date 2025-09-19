@@ -1089,7 +1089,15 @@ namespace DesktopApp.Views
         }
 
         // ===================== Misc UI actions =====================
-        private void OpenSettings_Click(object sender, RoutedEventArgs e) { var settings = new SettingsWindow { Owner = this }; if (settings.ShowDialog() == true) _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval; }
+        private void OpenSettings_Click(object sender, RoutedEventArgs e)
+        {
+            var settings = new SettingsWindow { Owner = this };
+            if (settings.ShowDialog() == true)
+            {
+                _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
+                UpdateRecordingPageDisplay(); // Update recording page to reflect any changed settings
+            }
+        }
         private void Log(string text)
         {
             try
@@ -2376,6 +2384,13 @@ namespace DesktopApp.Views
                     detailsPanel.Visibility = Visibility.Collapsed;
                     idlePanel.Visibility = Visibility.Visible;
                 }
+            }
+
+            // Update output directory display
+            if (FindName("RecordingOutputDirectoryText") is TextBlock outputDirText)
+            {
+                string actualDirectory = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+                outputDirText.Text = actualDirectory;
             }
         }
 
