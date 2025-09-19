@@ -241,6 +241,64 @@
                 </Style>
             </Style.Resources>
         </Style>
+
+        <!-- Loading Spinner Style -->
+        <Style x:Key="LoadingSpinnerStyle" TargetType="Grid">
+            <Setter Property="Background" Value="#80000000"/>
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Resources>
+                <Storyboard x:Key="SpinAnimation" RepeatBehavior="Forever">
+                    <DoubleAnimation Storyboard.TargetName="SpinnerEllipse"
+                                   Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                   From="0" To="360" Duration="0:0:1"/>
+                </Storyboard>
+            </Style.Resources>
+            <Style.Triggers>
+                <Trigger Property="Visibility" Value="Visible">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard Storyboard="{StaticResource SpinAnimation}"/>
+                    </Trigger.EnterActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Loading Progress Bar Style -->
+        <Style x:Key="LoadingProgressBarStyle" TargetType="ProgressBar">
+            <Setter Property="Background" Value="#30363D"/>
+            <Setter Property="Foreground" Value="#347DFF"/>
+            <Setter Property="Height" Value="4"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="IsIndeterminate" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="2">
+                            <Grid>
+                                <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="2"/>
+                                <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}"
+                                      HorizontalAlignment="Left" CornerRadius="2"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Loading Overlay Style -->
+        <Style x:Key="LoadingOverlayStyle" TargetType="Grid">
+            <Setter Property="Background" Value="#80161B22"/>
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Setter Property="Panel.ZIndex" Value="999"/>
+        </Style>
+
+        <!-- Loading Text Style -->
+        <Style x:Key="LoadingTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#DDE6F2"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,8,0,0"/>
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -400,6 +458,23 @@
                             </ItemsControl>
                         </ScrollViewer>
 
+                        <!-- Categories Loading Overlay -->
+                        <Grid x:Name="CategoriesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="40" Height="40">
+                                    <Ellipse x:Name="SpinnerEllipse" Width="32" Height="32"
+                                           Stroke="#347DFF" StrokeThickness="3"
+                                           StrokeDashArray="50.26"
+                                           RenderTransformOrigin="0.5,0.5">
+                                        <Ellipse.RenderTransform>
+                                            <RotateTransform/>
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                                <TextBlock Text="Loading categories..." Style="{StaticResource LoadingTextStyle}"/>
+                            </StackPanel>
+                        </Grid>
+
                         <!-- Channels Grid -->
                         <ScrollViewer x:Name="ChannelsScrollViewer" Visibility="Collapsed">
                             <ItemsControl x:Name="ChannelsItemsControl" ItemsSource="{Binding ChannelsCollectionView}">
@@ -516,6 +591,23 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
+
+                        <!-- Channels Loading Overlay -->
+                        <Grid x:Name="ChannelsLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="40" Height="40">
+                                    <Ellipse Width="32" Height="32"
+                                           Stroke="#347DFF" StrokeThickness="3"
+                                           StrokeDashArray="50.26"
+                                           RenderTransformOrigin="0.5,0.5">
+                                        <Ellipse.RenderTransform>
+                                            <RotateTransform/>
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                                <TextBlock Text="Loading channels..." Style="{StaticResource LoadingTextStyle}"/>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
 
                     <!-- Channel Info Panel -->
@@ -690,6 +782,23 @@
                             </ItemsControl>
                         </ScrollViewer>
 
+                        <!-- Movies Loading Overlay -->
+                        <Grid x:Name="MoviesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="40" Height="40">
+                                    <Ellipse Width="32" Height="32"
+                                           Stroke="#347DFF" StrokeThickness="3"
+                                           StrokeDashArray="50.26"
+                                           RenderTransformOrigin="0.5,0.5">
+                                        <Ellipse.RenderTransform>
+                                            <RotateTransform/>
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                                <TextBlock Text="Loading movies..." Style="{StaticResource LoadingTextStyle}"/>
+                            </StackPanel>
+                        </Grid>
+
                         <!-- Series Grid -->
                         <ScrollViewer x:Name="SeriesScrollViewer" Visibility="Collapsed">
                             <ItemsControl ItemsSource="{Binding SeriesContentCollectionView}">
@@ -732,6 +841,23 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                         </ScrollViewer>
+
+                        <!-- Series Loading Overlay -->
+                        <Grid x:Name="SeriesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="40" Height="40">
+                                    <Ellipse Width="32" Height="32"
+                                           Stroke="#347DFF" StrokeThickness="3"
+                                           StrokeDashArray="50.26"
+                                           RenderTransformOrigin="0.5,0.5">
+                                        <Ellipse.RenderTransform>
+                                            <RotateTransform/>
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                                <TextBlock Text="Loading series..." Style="{StaticResource LoadingTextStyle}"/>
+                            </StackPanel>
+                        </Grid>
                     </Grid>
 
                     <!-- Right: VOD Details Panel -->

@@ -835,6 +835,7 @@ namespace DesktopApp.Views
         private async Task LoadCategoriesAsync()
         {
             if (Session.Mode != SessionMode.Xtream) return;
+            ShowLoadingOverlay("CategoriesLoadingOverlay");
             try
             {
                 var url = Session.BuildApi("get_live_categories"); Log($"GET {url}\n"); var json = await _http.GetStringAsync(url, _cts.Token); Log(json + "\n\n");
@@ -858,6 +859,7 @@ namespace DesktopApp.Views
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR: " + ex.Message + "\n"); }
+            finally { HideLoadingOverlay("CategoriesLoadingOverlay"); }
         }
         private void SetGuideLoading(bool loading)
         {
@@ -874,6 +876,8 @@ namespace DesktopApp.Views
 
             if (IsGlobalSearchActive)
                 return; // avoid overriding global results
+
+            ShowLoadingOverlay("ChannelsLoadingOverlay");
             if (Session.Mode == SessionMode.M3u)
             {
                 SetGuideLoading(true);
@@ -935,7 +939,11 @@ namespace DesktopApp.Views
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading channels: " + ex.Message + "\n"); }
-            finally { SetGuideLoading(false); }
+            finally
+            {
+                SetGuideLoading(false);
+                HideLoadingOverlay("ChannelsLoadingOverlay");
+            }
             ApplySearch();
         }
 
@@ -1473,6 +1481,16 @@ namespace DesktopApp.Views
         private async Task LoadVodContentAsync(string categoryId)
         {
             if (Session.Mode != SessionMode.Xtream || string.IsNullOrEmpty(categoryId)) return;
+
+            // Show appropriate loading overlay based on current view
+            if (FindName("MoviesViewBtn") is Button moviesBtn && moviesBtn.Background.ToString().Contains("223247"))
+            {
+                ShowLoadingOverlay("MoviesLoadingOverlay");
+            }
+            else if (FindName("SeriesViewBtn") is Button seriesBtn && seriesBtn.Background.ToString().Contains("223247"))
+            {
+                ShowLoadingOverlay("SeriesLoadingOverlay");
+            }
             try
             {
                 var url = Session.BuildApi("get_vod_streams") + "&category_id=" + Uri.EscapeDataString(categoryId);
@@ -1555,6 +1573,11 @@ namespace DesktopApp.Views
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading VOD content: " + ex.Message + "\n"); }
+            finally
+            {
+                HideLoadingOverlay("MoviesLoadingOverlay");
+                HideLoadingOverlay("SeriesLoadingOverlay");
+            }
         }
 
         private async Task LoadVodPosterAsync(VodContent vod)
@@ -4255,6 +4278,28 @@ namespace DesktopApp.Views
                 MessageBox.Show($"Failed to save log: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private void ShowLoadingOverlay(string overlayName)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (FindName(overlayName) is Grid overlay)
+                {
+                    overlay.Visibility = Visibility.Visible;
+                }
+            });
+        }
+
+        private void HideLoadingOverlay(string overlayName)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (FindName(overlayName) is Grid overlay)
+                {
+                    overlay.Visibility = Visibility.Collapsed;
+                }
+            });
         }
 
         public event PropertyChangedEventHandler? PropertyChanged; private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
