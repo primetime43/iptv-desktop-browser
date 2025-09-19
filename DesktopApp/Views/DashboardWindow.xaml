@@ -1681,7 +1681,9 @@
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="External Player" Foreground="#8BA1B9" Margin="0,0,0,4"/>
-                                    <ComboBox x:Name="SettingsPlayerKindCombo" SelectedIndex="0" SelectionChanged="SettingsPlayerKindCombo_SelectionChanged" Tag="Select player...">
+                                    <ComboBox x:Name="SettingsPlayerKindCombo" SelectedIndex="0"
+                                             Background="#21262D" BorderBrush="#30363D" Foreground="#FFDDE6F2"
+                                             SelectionChanged="SettingsPlayerKindCombo_SelectionChanged" Tag="Select player...">
                                         <ComboBoxItem Tag="VLC" Content="VLC Media Player"/>
                                         <ComboBoxItem Tag="MPCHC" Content="MPC-HC"/>
                                         <ComboBoxItem Tag="MPV" Content="mpv"/>
@@ -1692,7 +1694,9 @@
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="Player Executable Path" Foreground="#8BA1B9" Margin="0,0,0,4"/>
                                     <Grid>
-                                        <TextBox x:Name="SettingsPlayerExeTextBox" Height="34" TextChanged="SettingsPlayerExeTextBox_TextChanged"/>
+                                        <TextBox x:Name="SettingsPlayerExeTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsPlayerExeTextBox_TextChanged"/>
                                         <TextBlock Text="C:\Program Files\VideoLAN\VLC\vlc.exe" IsHitTestVisible="False"
                                                   Foreground="#667788" Margin="8,0,0,0"
                                                   VerticalAlignment="Center">
@@ -1720,7 +1724,9 @@
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="Arguments Template" Foreground="#8BA1B9" Margin="0,0,0,4"/>
                                     <Grid>
-                                        <TextBox x:Name="SettingsArgsTemplateTextBox" Height="34" TextChanged="SettingsArgsTemplateTextBox_TextChanged"/>
+                                        <TextBox x:Name="SettingsArgsTemplateTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsArgsTemplateTextBox_TextChanged"/>
                                         <TextBlock Text="{}{url} --meta-title {title}" IsHitTestVisible="False"
                                                   Foreground="#667788" Margin="8,0,0,0"
                                                   VerticalAlignment="Center">
@@ -1757,7 +1763,9 @@
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="FFmpeg Path" Foreground="#8BA1B9" Margin="0,0,0,4"/>
                                     <Grid>
-                                        <TextBox x:Name="SettingsFfmpegPathTextBox" Height="34" TextChanged="SettingsFfmpegPathTextBox_TextChanged"/>
+                                        <TextBox x:Name="SettingsFfmpegPathTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsFfmpegPathTextBox_TextChanged"/>
                                         <TextBlock Text="ffmpeg.exe or full path" IsHitTestVisible="False"
                                                   Foreground="#667788" Margin="8,0,0,0"
                                                   VerticalAlignment="Center">
@@ -1785,7 +1793,9 @@
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="Recording Directory" Foreground="#8BA1B9" Margin="0,0,0,4"/>
                                     <Grid>
-                                        <TextBox x:Name="SettingsRecordingDirTextBox" Height="34" TextChanged="SettingsRecordingDirTextBox_TextChanged"/>
+                                        <TextBox x:Name="SettingsRecordingDirTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsRecordingDirTextBox_TextChanged"/>
                                         <TextBlock Text="C:\Users\Username\Videos" IsHitTestVisible="False"
                                                   Foreground="#667788" Margin="8,0,0,0"
                                                   VerticalAlignment="Center">
@@ -1809,7 +1819,9 @@
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="FFmpeg Args Template" Foreground="#8BA1B9" Margin="0,0,0,4"/>
                                     <Grid>
-                                        <TextBox x:Name="SettingsFfmpegArgsTextBox" Height="34"/>
+                                        <TextBox x:Name="SettingsFfmpegArgsTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8"/>
                                         <TextBlock Text="{}-i {url} -c copy {output}" IsHitTestVisible="False"
                                                   Foreground="#667788" Margin="8,0,0,0"
                                                   VerticalAlignment="Center">
@@ -1839,13 +1851,17 @@
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="Last EPG Update" Foreground="#8BA1B9" Margin="0,0,0,4"/>
-                                    <TextBox x:Name="SettingsLastEpgUpdateTextBox" Height="34" IsReadOnly="True"/>
+                                    <TextBox x:Name="SettingsLastEpgUpdateTextBox" Height="34" IsReadOnly="True"
+                                            Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                            Padding="8"/>
                                 </StackPanel>
 
                                 <StackPanel Margin="0,0,0,12">
                                     <TextBlock Text="EPG Refresh Interval (minutes)" Foreground="#8BA1B9" Margin="0,0,0,4"/>
                                     <Grid>
-                                        <TextBox x:Name="SettingsEpgIntervalTextBox" Height="34" TextChanged="SettingsEpgIntervalTextBox_TextChanged"/>
+                                        <TextBox x:Name="SettingsEpgIntervalTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsEpgIntervalTextBox_TextChanged"/>
                                         <TextBlock Text="60" IsHitTestVisible="False"
                                                   Foreground="#667788" Margin="8,0,0,0"
                                                   VerticalAlignment="Center">
