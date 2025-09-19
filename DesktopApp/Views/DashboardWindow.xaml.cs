@@ -349,6 +349,137 @@ namespace DesktopApp.Views
         private string _profileActiveConnections = string.Empty; public string ProfileActiveConnections { get => _profileActiveConnections; set { if (value != _profileActiveConnections) { _profileActiveConnections = value; OnPropertyChanged(); } } }
         private string _profileRawJson = string.Empty; public string ProfileRawJson { get => _profileRawJson; set { if (value != _profileRawJson) { _profileRawJson = value; OnPropertyChanged(); } } }
 
+        // View mode properties
+        public enum ViewMode { Grid, List }
+        public enum TileSize { Small, Medium, Large }
+
+        private ViewMode _channelsViewMode = ViewMode.Grid;
+        public ViewMode ChannelsViewMode
+        {
+            get => _channelsViewMode;
+            set
+            {
+                if (value != _channelsViewMode)
+                {
+                    _channelsViewMode = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(IsChannelsGridView));
+                    OnPropertyChanged(nameof(IsChannelsListView));
+                }
+            }
+        }
+
+        private ViewMode _vodViewMode = ViewMode.Grid;
+        public ViewMode VodViewMode
+        {
+            get => _vodViewMode;
+            set
+            {
+                if (value != _vodViewMode)
+                {
+                    _vodViewMode = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(IsVodGridView));
+                    OnPropertyChanged(nameof(IsVodListView));
+                }
+            }
+        }
+
+        private TileSize _currentTileSize = TileSize.Medium;
+        private bool _updatingTileSize = false;
+
+        public TileSize CurrentTileSize
+        {
+            get => _currentTileSize;
+            set
+            {
+                if (value != _currentTileSize)
+                {
+                    _currentTileSize = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(TileWidth));
+                    OnPropertyChanged(nameof(TileHeight));
+                    OnPropertyChanged(nameof(VodTileHeight));
+                }
+            }
+        }
+
+        // Computed properties for UI binding
+        public bool IsChannelsGridView => ChannelsViewMode == ViewMode.Grid;
+        public bool IsChannelsListView => ChannelsViewMode == ViewMode.List;
+        public bool IsVodGridView => VodViewMode == ViewMode.Grid;
+        public bool IsVodListView => VodViewMode == ViewMode.List;
+
+        public double TileWidth => GetResponsiveTileWidth();
+
+        private double GetResponsiveTileWidth()
+        {
+            var baseWidth = CurrentTileSize switch
+            {
+                TileSize.Small => 150,
+                TileSize.Medium => 200,
+                TileSize.Large => 250,
+                _ => 200
+            };
+
+            // Adjust based on window width for responsiveness
+            var windowWidth = ActualWidth > 0 ? ActualWidth : Width;
+            var scaleFactor = windowWidth switch
+            {
+                < 1200 => 0.8,  // Smaller tiles on smaller screens
+                < 1600 => 1.0,  // Normal size
+                _ => 1.2        // Larger tiles on bigger screens
+            };
+
+            return baseWidth * scaleFactor;
+        }
+
+        public double TileHeight => GetResponsiveTileHeight();
+
+        private double GetResponsiveTileHeight()
+        {
+            var baseHeight = CurrentTileSize switch
+            {
+                TileSize.Small => 120,
+                TileSize.Medium => 160,
+                TileSize.Large => 200,
+                _ => 160
+            };
+
+            var windowWidth = ActualWidth > 0 ? ActualWidth : Width;
+            var scaleFactor = windowWidth switch
+            {
+                < 1200 => 0.8,
+                < 1600 => 1.0,
+                _ => 1.2
+            };
+
+            return baseHeight * scaleFactor;
+        }
+
+        public double VodTileHeight => GetResponsiveVodTileHeight();
+
+        private double GetResponsiveVodTileHeight()
+        {
+            var baseHeight = CurrentTileSize switch
+            {
+                TileSize.Small => 180,  // Taller for VOD posters
+                TileSize.Medium => 240,
+                TileSize.Large => 300,
+                _ => 240
+            };
+
+            var windowWidth = ActualWidth > 0 ? ActualWidth : Width;
+            var scaleFactor = windowWidth switch
+            {
+                < 1200 => 0.8,
+                < 1600 => 1.0,
+                _ => 1.2
+            };
+
+            return baseHeight * scaleFactor;
+        }
+
         // View selection
         private string _currentViewKey = "categories";
         public string CurrentViewKey
@@ -411,6 +542,12 @@ namespace DesktopApp.Views
 
             if (Session.Mode == SessionMode.M3u)
                 Session.M3uEpgUpdated += OnM3uEpgUpdated;
+
+            // Subscribe to window size changes for responsive design
+            SizeChanged += DashboardWindow_SizeChanged;
+
+            // Initialize tile size ComboBoxes with default selection
+            SetTileSizeSelection(CurrentTileSize);
 
             Loaded += async (_, __) =>
             {
@@ -2500,8 +2637,10 @@ namespace DesktopApp.Views
         {
             if (FindName("CategoriesScrollViewer") is ScrollViewer categoriesViewer)
                 categoriesViewer.Visibility = Visibility.Visible;
-            if (FindName("ChannelsScrollViewer") is ScrollViewer channelsViewer)
-                channelsViewer.Visibility = Visibility.Collapsed;
+            if (FindName("ChannelsGridScrollViewer") is ScrollViewer channelsGridViewer)
+                channelsGridViewer.Visibility = Visibility.Collapsed;
+            if (FindName("ChannelsListScrollViewer") is ScrollViewer channelsListViewer)
+                channelsListViewer.Visibility = Visibility.Collapsed;
 
             // Update button states
             if (FindName("CategoriesViewBtn") is Button categoriesBtn)
@@ -2520,8 +2659,9 @@ namespace DesktopApp.Views
         {
             if (FindName("CategoriesScrollViewer") is ScrollViewer categoriesViewer)
                 categoriesViewer.Visibility = Visibility.Collapsed;
-            if (FindName("ChannelsScrollViewer") is ScrollViewer channelsViewer)
-                channelsViewer.Visibility = Visibility.Visible;
+
+            // Show the appropriate channels view based on current view mode
+            UpdateChannelsViewVisibility();
 
             // Update button states
             if (FindName("CategoriesViewBtn") is Button categoriesBtn)
@@ -2558,11 +2698,16 @@ namespace DesktopApp.Views
             if (sender is ComboBox combo && combo.SelectedValue is string categoryId)
             {
                 // Load content based on current view (Movies or Series)
-                if (FindName("MoviesScrollViewer") is ScrollViewer moviesViewer && moviesViewer.Visibility == Visibility.Visible)
+                bool isMoviesVisible = (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridViewer && moviesGridViewer.Visibility == Visibility.Visible) ||
+                                     (FindName("MoviesListScrollViewer") is ScrollViewer moviesListViewer && moviesListViewer.Visibility == Visibility.Visible);
+                bool isSeriesVisible = (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridViewer && seriesGridViewer.Visibility == Visibility.Visible) ||
+                                     (FindName("SeriesListScrollViewer") is ScrollViewer seriesListViewer && seriesListViewer.Visibility == Visibility.Visible);
+
+                if (isMoviesVisible)
                 {
                     await LoadVodContentAsync(categoryId);
                 }
-                else if (FindName("SeriesScrollViewer") is ScrollViewer seriesViewer && seriesViewer.Visibility == Visibility.Visible)
+                else if (isSeriesVisible)
                 {
                     await LoadSeriesContentAsync(categoryId);
                 }
@@ -2571,10 +2716,15 @@ namespace DesktopApp.Views
 
         private void ShowMoviesView_Click(object sender, RoutedEventArgs e)
         {
-            if (FindName("MoviesScrollViewer") is ScrollViewer moviesViewer)
-                moviesViewer.Visibility = Visibility.Visible;
-            if (FindName("SeriesScrollViewer") is ScrollViewer seriesViewer)
-                seriesViewer.Visibility = Visibility.Collapsed;
+            // Show movies and hide series based on current view mode
+            if (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridViewer)
+                moviesGridViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("MoviesListScrollViewer") is ScrollViewer moviesListViewer)
+                moviesListViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridViewer)
+                seriesGridViewer.Visibility = Visibility.Collapsed;
+            if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListViewer)
+                seriesListViewer.Visibility = Visibility.Collapsed;
 
             // Update button states
             if (FindName("MoviesViewBtn") is Button moviesBtn)
@@ -2602,10 +2752,15 @@ namespace DesktopApp.Views
 
         private void ShowSeriesView_Click(object sender, RoutedEventArgs e)
         {
-            if (FindName("MoviesScrollViewer") is ScrollViewer moviesViewer)
-                moviesViewer.Visibility = Visibility.Collapsed;
-            if (FindName("SeriesScrollViewer") is ScrollViewer seriesViewer)
-                seriesViewer.Visibility = Visibility.Visible;
+            // Show series and hide movies based on current view mode
+            if (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridViewer)
+                moviesGridViewer.Visibility = Visibility.Collapsed;
+            if (FindName("MoviesListScrollViewer") is ScrollViewer moviesListViewer)
+                moviesListViewer.Visibility = Visibility.Collapsed;
+            if (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridViewer)
+                seriesGridViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListViewer)
+                seriesListViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
 
             // Update button states
             if (FindName("MoviesViewBtn") is Button moviesBtn)
@@ -4370,6 +4525,153 @@ namespace DesktopApp.Views
                     overlay.Visibility = Visibility.Collapsed;
                 }
             });
+        }
+
+
+        // View mode event handlers
+        private void ChannelsGridView_Click(object sender, RoutedEventArgs e)
+        {
+            ChannelsViewMode = ViewMode.Grid;
+            UpdateChannelsViewButtons();
+            UpdateChannelsViewVisibility();
+        }
+
+        private void ChannelsListView_Click(object sender, RoutedEventArgs e)
+        {
+            ChannelsViewMode = ViewMode.List;
+            UpdateChannelsViewButtons();
+            UpdateChannelsViewVisibility();
+        }
+
+        private void VodGridView_Click(object sender, RoutedEventArgs e)
+        {
+            VodViewMode = ViewMode.Grid;
+            UpdateVodViewButtons();
+            UpdateVodViewVisibility();
+        }
+
+        private void VodListView_Click(object sender, RoutedEventArgs e)
+        {
+            VodViewMode = ViewMode.List;
+            UpdateVodViewButtons();
+            UpdateVodViewVisibility();
+        }
+
+        private void UpdateChannelsViewButtons()
+        {
+            if (FindName("ChannelsGridViewBtn") is Button gridBtn)
+                gridBtn.Background = IsChannelsGridView ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#223247")) : Brushes.Transparent;
+            if (FindName("ChannelsListViewBtn") is Button listBtn)
+                listBtn.Background = IsChannelsListView ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#223247")) : Brushes.Transparent;
+        }
+
+        private void UpdateVodViewButtons()
+        {
+            if (FindName("VodGridViewBtn") is Button gridBtn)
+                gridBtn.Background = IsVodGridView ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#223247")) : Brushes.Transparent;
+            if (FindName("VodListViewBtn") is Button listBtn)
+                listBtn.Background = IsVodListView ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#223247")) : Brushes.Transparent;
+        }
+
+        private void UpdateChannelsViewVisibility()
+        {
+            if (FindName("ChannelsGridScrollViewer") is ScrollViewer gridScrollViewer)
+                gridScrollViewer.Visibility = IsChannelsGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("ChannelsListScrollViewer") is ScrollViewer listScrollViewer)
+                listScrollViewer.Visibility = IsChannelsListView ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void UpdateVodViewVisibility()
+        {
+            // Update Movies view visibility
+            if (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridScrollViewer)
+                moviesGridScrollViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("MoviesListScrollViewer") is ScrollViewer moviesListScrollViewer)
+                moviesListScrollViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
+
+            // Update Series view visibility
+            if (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridScrollViewer)
+                seriesGridScrollViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListScrollViewer)
+                seriesListScrollViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void TileSize_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_updatingTileSize) return;
+
+            if (sender is ComboBox combo && combo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            {
+                CurrentTileSize = tag switch
+                {
+                    "Small" => TileSize.Small,
+                    "Large" => TileSize.Large,
+                    _ => TileSize.Medium
+                };
+
+                // Keep both ComboBoxes in sync
+                SetTileSizeSelection(CurrentTileSize);
+            }
+        }
+
+        private void SetTileSizeSelection(TileSize tileSize)
+        {
+            _updatingTileSize = true;
+
+            string targetTag = tileSize switch
+            {
+                TileSize.Small => "Small",
+                TileSize.Large => "Large",
+                _ => "Medium"
+            };
+
+            // Update both ComboBoxes
+            if (FindName("TileSizeCombo") is ComboBox tileSizeCombo)
+            {
+                foreach (ComboBoxItem item in tileSizeCombo.Items)
+                {
+                    if (item.Tag?.ToString() == targetTag)
+                    {
+                        tileSizeCombo.SelectedItem = item;
+                        break;
+                    }
+                }
+            }
+
+            if (FindName("VodTileSizeCombo") is ComboBox vodTileSizeCombo)
+            {
+                foreach (ComboBoxItem item in vodTileSizeCombo.Items)
+                {
+                    if (item.Tag?.ToString() == targetTag)
+                    {
+                        vodTileSizeCombo.SelectedItem = item;
+                        break;
+                    }
+                }
+            }
+
+            _updatingTileSize = false;
+        }
+
+
+        private void DefaultViewMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox combo && combo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            {
+                var newMode = tag == "List" ? ViewMode.List : ViewMode.Grid;
+                ChannelsViewMode = newMode;
+                VodViewMode = newMode;
+                UpdateChannelsViewButtons();
+                UpdateVodViewButtons();
+            }
+        }
+
+        private void DashboardWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            // Update tile sizes when window size changes for responsive design
+            OnPropertyChanged(nameof(TileWidth));
+            OnPropertyChanged(nameof(TileHeight));
+            OnPropertyChanged(nameof(VodTileHeight));
         }
 
         public event PropertyChangedEventHandler? PropertyChanged; private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
