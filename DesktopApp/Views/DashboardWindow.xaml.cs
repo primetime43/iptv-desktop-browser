@@ -16,6 +16,7 @@ using System.Threading;
 using System.Diagnostics;
 using System.Windows.Data;
 using System.Windows.Threading;
+using System.Windows.Media;
 
 namespace DesktopApp.Views
 {
@@ -59,9 +60,14 @@ namespace DesktopApp.Views
         private bool _allChannelsIndexLoading;
         private bool _allChannelsIndexLoaded => _allChannelsIndex != null;
 
+        public bool IsSearchLoading => _allChannelsIndexLoading;
+
         public ICollectionView CategoriesCollectionView { get; }
         public ICollectionView ChannelsCollectionView { get; }
         public ICollectionView VodContentCollectionView { get; }
+        public ICollectionView VodCategoriesCollectionView { get; }
+        public ICollectionView SeriesContentCollectionView { get; }
+        public ICollectionView SeriesCategoriesCollectionView { get; }
 
         // Search
         private CancellationTokenSource? _searchDebounceCts;
@@ -91,6 +97,21 @@ namespace DesktopApp.Views
                     _searchAllChannels = value;
                     OnPropertyChanged();
                     OnSearchAllToggle();
+                }
+            }
+        }
+
+        private string _vodSearchQuery = string.Empty;
+        public string VodSearchQuery
+        {
+            get => _vodSearchQuery;
+            set
+            {
+                if (value != _vodSearchQuery)
+                {
+                    _vodSearchQuery = value;
+                    OnPropertyChanged();
+                    VodContentCollectionView.Refresh();
                 }
             }
         }
@@ -202,7 +223,6 @@ namespace DesktopApp.Views
         // Series collections
         private readonly ObservableCollection<SeriesCategory> _seriesCategories = new(); public ObservableCollection<SeriesCategory> SeriesCategories => _seriesCategories;
         private readonly ObservableCollection<SeriesContent> _seriesContent = new(); public ObservableCollection<SeriesContent> SeriesContent => _seriesContent;
-        public ICollectionView SeriesContentCollectionView { get; }
 
         private string _selectedSeriesCategoryId = string.Empty;
         public string SelectedSeriesCategoryId
@@ -303,6 +323,9 @@ namespace DesktopApp.Views
         private bool _logoutRequested;
         private bool _isClosing;
         private readonly CancellationTokenSource _cts = new();
+
+        // Buffer for log messages during startup before UI is ready
+        private readonly List<string> _startupLogBuffer = new();
         private DateTime _nextScheduledEpgRefreshUtc;
         private string _lastEpgUpdateText = "(never)";
         public string LastEpgUpdateText
@@ -327,6 +350,138 @@ namespace DesktopApp.Views
         private string _profileMaxConnections = string.Empty; public string ProfileMaxConnections { get => _profileMaxConnections; set { if (value != _profileMaxConnections) { _profileMaxConnections = value; OnPropertyChanged(); } } }
         private string _profileActiveConnections = string.Empty; public string ProfileActiveConnections { get => _profileActiveConnections; set { if (value != _profileActiveConnections) { _profileActiveConnections = value; OnPropertyChanged(); } } }
         private string _profileRawJson = string.Empty; public string ProfileRawJson { get => _profileRawJson; set { if (value != _profileRawJson) { _profileRawJson = value; OnPropertyChanged(); } } }
+
+        // View mode properties
+        public enum ViewMode { Grid, List }
+        public enum TileSize { Small, Medium, Large }
+
+        private ViewMode _channelsViewMode = ViewMode.Grid;
+        public ViewMode ChannelsViewMode
+        {
+            get => _channelsViewMode;
+            set
+            {
+                if (value != _channelsViewMode)
+                {
+                    _channelsViewMode = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(IsChannelsGridView));
+                    OnPropertyChanged(nameof(IsChannelsListView));
+                }
+            }
+        }
+
+        private ViewMode _vodViewMode = ViewMode.Grid;
+        public ViewMode VodViewMode
+        {
+            get => _vodViewMode;
+            set
+            {
+                if (value != _vodViewMode)
+                {
+                    _vodViewMode = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(IsVodGridView));
+                    OnPropertyChanged(nameof(IsVodListView));
+                }
+            }
+        }
+
+
+        private TileSize _currentTileSize = TileSize.Medium;
+        private bool _updatingTileSize = false;
+
+        public TileSize CurrentTileSize
+        {
+            get => _currentTileSize;
+            set
+            {
+                if (value != _currentTileSize)
+                {
+                    _currentTileSize = value;
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(TileWidth));
+                    OnPropertyChanged(nameof(TileHeight));
+                    OnPropertyChanged(nameof(VodTileHeight));
+                }
+            }
+        }
+
+        // Computed properties for UI binding
+        public bool IsChannelsGridView => ChannelsViewMode == ViewMode.Grid;
+        public bool IsChannelsListView => ChannelsViewMode == ViewMode.List;
+        public bool IsVodGridView => VodViewMode == ViewMode.Grid;
+        public bool IsVodListView => VodViewMode == ViewMode.List;
+
+        public double TileWidth => GetResponsiveTileWidth();
+
+        private double GetResponsiveTileWidth()
+        {
+            var baseWidth = CurrentTileSize switch
+            {
+                TileSize.Small => 150,
+                TileSize.Medium => 200,
+                TileSize.Large => 250,
+                _ => 200
+            };
+
+            // Adjust based on window width for responsiveness
+            var windowWidth = ActualWidth > 0 ? ActualWidth : Width;
+            var scaleFactor = windowWidth switch
+            {
+                < 1200 => 0.8,  // Smaller tiles on smaller screens
+                < 1600 => 1.0,  // Normal size
+                _ => 1.2        // Larger tiles on bigger screens
+            };
+
+            return baseWidth * scaleFactor;
+        }
+
+        public double TileHeight => GetResponsiveTileHeight();
+
+        private double GetResponsiveTileHeight()
+        {
+            var baseHeight = CurrentTileSize switch
+            {
+                TileSize.Small => 120,
+                TileSize.Medium => 160,
+                TileSize.Large => 200,
+                _ => 160
+            };
+
+            var windowWidth = ActualWidth > 0 ? ActualWidth : Width;
+            var scaleFactor = windowWidth switch
+            {
+                < 1200 => 0.8,
+                < 1600 => 1.0,
+                _ => 1.2
+            };
+
+            return baseHeight * scaleFactor;
+        }
+
+        public double VodTileHeight => GetResponsiveVodTileHeight();
+
+        private double GetResponsiveVodTileHeight()
+        {
+            var baseHeight = CurrentTileSize switch
+            {
+                TileSize.Small => 180,  // Taller for VOD posters
+                TileSize.Medium => 240,
+                TileSize.Large => 300,
+                _ => 240
+            };
+
+            var windowWidth = ActualWidth > 0 ? ActualWidth : Width;
+            var scaleFactor = windowWidth switch
+            {
+                < 1200 => 0.8,
+                < 1600 => 1.0,
+                _ => 1.2
+            };
+
+            return baseHeight * scaleFactor;
+        }
 
         // View selection
         private string _currentViewKey = "categories";
@@ -369,12 +524,14 @@ namespace DesktopApp.Views
         {
             InitializeComponent();
             DataContext = this;
-            UserNameText.Text = Session.Username;
+            // User name display removed in new layout
 
             CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
             ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
             VodContentCollectionView = CollectionViewSource.GetDefaultView(_vodContent);
+            VodCategoriesCollectionView = CollectionViewSource.GetDefaultView(_vodCategories);
             SeriesContentCollectionView = CollectionViewSource.GetDefaultView(_seriesContent);
+            SeriesCategoriesCollectionView = CollectionViewSource.GetDefaultView(_seriesCategories);
             CategoriesCollectionView.Filter = CategoriesFilter;
             ChannelsCollectionView.Filter = ChannelsFilter;
             VodContentCollectionView.Filter = VodContentFilter;
@@ -389,6 +546,12 @@ namespace DesktopApp.Views
             if (Session.Mode == SessionMode.M3u)
                 Session.M3uEpgUpdated += OnM3uEpgUpdated;
 
+            // Subscribe to window size changes for responsive design
+            SizeChanged += DashboardWindow_SizeChanged;
+
+            // Initialize tile size ComboBoxes with default selection
+            SetTileSizeSelection(CurrentTileSize);
+
             Loaded += async (_, __) =>
             {
                 Session.EpgRefreshRequested += OnEpgRefreshRequested;
@@ -398,8 +561,7 @@ namespace DesktopApp.Views
                     _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
                     _ = RunEpgSchedulerLoopAsync();
                     await LoadCategoriesAsync();
-                    await LoadVodCategoriesAsync();
-                    await LoadSeriesCategoriesAsync();
+                    // VOD and Series categories will be loaded on-demand when user navigates to those sections
                 }
                 else
                 {
@@ -641,7 +803,9 @@ namespace DesktopApp.Views
             if (_allChannelsIndexLoading || _allChannelsIndexLoaded || Session.Mode != SessionMode.Xtream) return;
             try
             {
-                _allChannelsIndexLoading = true; SetGuideLoading(true);
+                _allChannelsIndexLoading = true;
+                OnPropertyChanged(nameof(IsSearchLoading));
+                SetGuideLoading(true);
                 var url = Session.BuildApi("get_live_streams"); Log($"GET {url} (index all channels)\n");
                 var json = await _http.GetStringAsync(url, _cts.Token); Log("(length=" + json.Length + ")\n\n");
                 var list = new List<Channel>();
@@ -667,7 +831,11 @@ namespace DesktopApp.Views
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading all channels index: " + ex.Message + "\n"); }
-            finally { _allChannelsIndexLoading = false; SetGuideLoading(false); }
+            finally {
+                _allChannelsIndexLoading = false;
+                OnPropertyChanged(nameof(IsSearchLoading));
+                SetGuideLoading(false);
+            }
         }
 
         // ===================== M3U XMLTV EPG =====================
@@ -710,64 +878,30 @@ namespace DesktopApp.Views
         // ===================== Navigation / UI =====================
         private void UpdateNavButtons()
         {
-            void StyleBtn(Button? b, bool active, bool enabled = true)
+            try
             {
-                if (b == null) return;
-                b.IsEnabled = enabled;
-                if (!enabled)
+                // Navigation buttons are now handled by the new layout system
+                // VOD access check - enable for Xtream mode, disable for M3U
+                if (FindName("VodNavButton") is Button vodBtn)
                 {
-                    b.Background = System.Windows.Media.Brushes.Transparent;
-                    b.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x19, 0x28));
-                    b.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x66, 0x73, 0x85));
-                }
-                else
-                {
-                    b.Background = active ? (System.Windows.Media.Brush)new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x34, 0x7D, 0xFF)) : System.Windows.Media.Brushes.Transparent;
-                    b.BorderBrush = active ? b.Background : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x22, 0x32, 0x47));
-                    b.Foreground = active ? System.Windows.Media.Brushes.White : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDD, 0xE6, 0xF2));
+                    bool vodAvailable = Session.Mode == SessionMode.Xtream;
+                    vodBtn.IsEnabled = vodAvailable;
+                    vodBtn.Opacity = vodAvailable ? 1.0 : 0.5;
                 }
             }
-            StyleBtn(NavCategoriesBtn, CurrentViewKey == "categories");
-            StyleBtn(NavGuideBtn, CurrentViewKey == "guide", IsGuideReady);
-            StyleBtn(NavVodBtn, CurrentViewKey == "vod");
-            NavVodBtn.IsEnabled = HasVodAccess;
-            NavVodBtn.Opacity = HasVodAccess ? 1.0 : 0.5;
-            StyleBtn(NavProfileBtn, CurrentViewKey == "profile");
-            StyleBtn(NavOutputBtn, CurrentViewKey == "output");
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error updating nav buttons: {ex.Message}");
+            }
         }
 
         private void UpdateViewVisibility()
         {
-            if (CategoriesGrid == null) return;
-            CategoriesGrid.Visibility = CurrentViewKey == "categories" ? Visibility.Visible : Visibility.Collapsed;
-            GuideView.Visibility = CurrentViewKey == "guide" ? Visibility.Visible : Visibility.Collapsed;
-            // VOD view no longer used inside dashboard; keep collapsed always
-            VodView.Visibility = Visibility.Collapsed;
-            ProfileView.Visibility = CurrentViewKey == "profile" ? Visibility.Visible : Visibility.Collapsed;
-            OutputView.Visibility = CurrentViewKey == "output" ? Visibility.Visible : Visibility.Collapsed;
+            // View visibility is now handled by the new navigation system
+            // ShowPage method handles page switching
         }
         private void NavCategories_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "categories"; if (!IsGlobalSearchActive) { /* restore category view list remains as-is */ } }
         private void NavGuide_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "guide"; ApplySearch(); }
-        private void NavVod_Click(object sender, RoutedEventArgs e)
-        {
-            if (!HasVodAccess)
-            {
-                MessageBox.Show("VOD is not available for this account or connection type.", "VOD Not Available", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            // Open dedicated VOD window (single instance)
-            if (_vodWindow == null || !_vodWindow.IsVisible)
-            {
-                _vodWindow = new VodWindow(this) { Owner = this };
-                _vodWindow.Closed += (_, __) => _vodWindow = null;
-                _vodWindow.Show();
-            }
-            else
-            {
-                _vodWindow.Activate();
-            }
-        }
         private void NavProfile_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "profile";
         private void NavOutput_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "output";
 
@@ -847,6 +981,7 @@ namespace DesktopApp.Views
         private async Task LoadCategoriesAsync()
         {
             if (Session.Mode != SessionMode.Xtream) return;
+            ShowLoadingOverlay("CategoriesLoadingOverlay");
             try
             {
                 var url = Session.BuildApi("get_live_categories"); Log($"GET {url}\n"); var json = await _http.GetStringAsync(url, _cts.Token); Log(json + "\n\n");
@@ -870,12 +1005,12 @@ namespace DesktopApp.Views
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR: " + ex.Message + "\n"); }
+            finally { HideLoadingOverlay("CategoriesLoadingOverlay"); }
         }
         private void SetGuideLoading(bool loading)
         {
-            if (GuideLoadingPanel == null || GuideScroll == null) return;
-            GuideLoadingPanel.Visibility = loading ? Visibility.Visible : Visibility.Collapsed;
-            GuideScroll.Visibility = loading ? Visibility.Collapsed : Visibility.Visible;
+            // Guide loading indicators removed in new layout
+            // TODO: Add loading indicators to new Live TV page if needed
         }
         private async Task LoadChannelsForCategoryAsync(Category cat)
         {
@@ -887,6 +1022,8 @@ namespace DesktopApp.Views
 
             if (IsGlobalSearchActive)
                 return; // avoid overriding global results
+
+            ShowLoadingOverlay("ChannelsLoadingOverlay");
             if (Session.Mode == SessionMode.M3u)
             {
                 SetGuideLoading(true);
@@ -936,19 +1073,26 @@ namespace DesktopApp.Views
                 {
                     try
                     {
-                        var tasks = _channels.Select(ch => Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch)).Task).ToList();
-                        await Task.WhenAll(tasks);
+                        await LoadEpgDataBatchedAsync(_channels.ToList());
                         if (Session.LastEpgUpdateUtc == null)
                         {
-                            Session.LastEpgUpdateUtc = DateTime.UtcNow; Dispatcher.Invoke(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
+                            Session.LastEpgUpdateUtc = DateTime.UtcNow;
+                            Dispatcher.Invoke(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        Log($"ERROR in EPG batch loading: {ex.Message}\n");
+                    }
                 }, _cts.Token);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading channels: " + ex.Message + "\n"); }
-            finally { SetGuideLoading(false); }
+            finally
+            {
+                SetGuideLoading(false);
+                HideLoadingOverlay("ChannelsLoadingOverlay");
+            }
             ApplySearch();
         }
 
@@ -998,6 +1142,73 @@ namespace DesktopApp.Views
         }
 
         // ===================== Xtream EPG loading =====================
+        private async Task LoadEpgDataBatchedAsync(List<Channel> channels)
+        {
+            if (Session.Mode != SessionMode.Xtream || _cts.IsCancellationRequested) return;
+
+            const int batchSize = 3; // Limit concurrent API calls to avoid overwhelming server
+            const int maxRetries = 3;
+            const int retryDelayMs = 2000;
+
+            Log($"Starting batched EPG loading for {channels.Count} channels (batch size: {batchSize})\n");
+
+            for (int i = 0; i < channels.Count; i += batchSize)
+            {
+                if (_cts.IsCancellationRequested) break;
+
+                var batch = channels.Skip(i).Take(batchSize).ToList();
+                var tasks = batch.Select(async ch =>
+                {
+                    for (int retry = 0; retry < maxRetries; retry++)
+                    {
+                        if (_cts.IsCancellationRequested) break;
+                        if (ch.EpgLoaded && !string.IsNullOrEmpty(ch.NowTitle)) break;
+
+                        try
+                        {
+                            await Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch, force: retry > 0));
+                            // Small delay to check if loading succeeded
+                            await Task.Delay(500, _cts.Token);
+
+                            if (ch.EpgLoaded && !string.IsNullOrEmpty(ch.NowTitle))
+                            {
+                                Log($"EPG loaded successfully for channel {ch.Name} (attempt {retry + 1})\n");
+                                break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"EPG loading failed for channel {ch.Name} (attempt {retry + 1}): {ex.Message}\n");
+                        }
+
+                        if (retry < maxRetries - 1)
+                        {
+                            Log($"Retrying EPG load for channel {ch.Name} in {retryDelayMs}ms...\n");
+                            await Task.Delay(retryDelayMs, _cts.Token);
+                        }
+                    }
+                }).ToList();
+
+                try
+                {
+                    await Task.WhenAll(tasks);
+                }
+                catch (Exception ex)
+                {
+                    Log($"ERROR in EPG batch processing: {ex.Message}\n");
+                }
+
+                // Small delay between batches to be respectful to the server
+                if (i + batchSize < channels.Count && !_cts.IsCancellationRequested)
+                {
+                    await Task.Delay(1000, _cts.Token);
+                }
+            }
+
+            var successCount = channels.Count(ch => ch.EpgLoaded && !string.IsNullOrEmpty(ch.NowTitle));
+            Log($"EPG batch loading completed: {successCount}/{channels.Count} channels loaded successfully\n");
+        }
+
         private async Task EnsureEpgLoadedAsync(Channel ch, bool force = false)
         {
             if (Session.Mode != SessionMode.Xtream) return; if (_cts.IsCancellationRequested) return; if (!force && (ch.EpgLoaded || ch.EpgLoading)) return; if (!force && ch.EpgAttempts >= 3 && !string.IsNullOrEmpty(ch.NowTitle)) return; await LoadEpgCurrentOnlyAsync(ch, force);
@@ -1029,7 +1240,7 @@ namespace DesktopApp.Views
                 }
                 catch (Exception ex) { Log("PARSE ERROR (current epg): " + ex.Message + "\n"); }
                 if (!found && fallbackFirstFuture != null) { ApplyNow(ch, fallbackFirstFuture.Title, fallbackFirstFuture.Description ?? string.Empty, fallbackFirstFuture.StartUtc, fallbackFirstFuture.EndUtc); found = true; }
-                if (!found) { ch.EpgLoaded = false; if (ch.EpgAttempts < 3 && !force) _ = Task.Delay(1500, _cts.Token).ContinueWith(t => { if (!t.IsCanceled) _ = Dispatcher.InvokeAsync(() => EnsureEpgLoadedAsync(ch)); }); }
+                if (!found) { ch.EpgLoaded = false; Log($"No current EPG data found for channel {ch.Name} (attempt {ch.EpgAttempts})\n"); }
                 else ch.EpgLoaded = true;
             }
             catch (OperationCanceledException) { ch.EpgLoaded = true; }
@@ -1102,15 +1313,103 @@ namespace DesktopApp.Views
         }
 
         // ===================== Misc UI actions =====================
-        private void OpenSettings_Click(object sender, RoutedEventArgs e) { var settings = new SettingsWindow { Owner = this }; if (settings.ShowDialog() == true) _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval; }
+        private void OpenSettings_Click(object sender, RoutedEventArgs e)
+        {
+            var settings = new SettingsWindow { Owner = this };
+            if (settings.ShowDialog() == true)
+            {
+                _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
+                UpdateRecordingPageDisplay(); // Update recording page to reflect any changed settings
+            }
+        }
         private void Log(string text)
         {
             try
             {
-                if (_isClosing || OutputText == null)
+                if (_isClosing)
                     return;
 
-                OutputText.AppendText(text);
+                // Quick check if logging is enabled to avoid UI work
+                bool loggingEnabled = true; // Default to enabled during startup
+                try
+                {
+                    if (FindName("SettingsEnableLoggingCheckBox") is CheckBox enableLoggingCheckBox)
+                        loggingEnabled = enableLoggingCheckBox.IsChecked == true;
+                    // If checkbox doesn't exist yet (during startup), assume enabled
+                }
+                catch
+                {
+                    // If checkbox not found, assume logging is enabled for startup
+                    loggingEnabled = true;
+                }
+
+                if (!loggingEnabled)
+                {
+                    // Still write to debug output for development
+                    System.Diagnostics.Debug.Write(text);
+                    return;
+                }
+
+                // Use low priority async update to avoid blocking UI
+                var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+                var logEntry = $"[{timestamp}] {text}";
+
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+                {
+                    try
+                    {
+                        if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+                        {
+                            // If this is the first time we're accessing the log, replay buffered messages
+                            if (logTextBlock.Text == "Raw output log will appear here when logging is enabled..." && _startupLogBuffer.Any())
+                            {
+                                var bufferedMessages = string.Join("", _startupLogBuffer);
+                                logTextBlock.Text = bufferedMessages + logEntry;
+                                _startupLogBuffer.Clear();
+                            }
+                            else if (logTextBlock.Text == "Raw output log will appear here when logging is enabled...")
+                            {
+                                logTextBlock.Text = logEntry;
+                            }
+                            else
+                            {
+                                logTextBlock.Text += logEntry;
+                            }
+
+                            // Auto-scroll to bottom (only if user is at bottom)
+                            if (FindName("LogScrollViewer") is ScrollViewer scrollViewer)
+                            {
+                                var isAtBottom = scrollViewer.VerticalOffset >= scrollViewer.ScrollableHeight - 10;
+                                if (isAtBottom)
+                                {
+                                    scrollViewer.ScrollToEnd();
+                                }
+                            }
+
+                            // Limit log size periodically to prevent memory issues
+                            var lines = logTextBlock.Text.Split('\n');
+                            if (lines.Length > 8000) // Reduced threshold for better performance
+                            {
+                                var recentLines = lines.Skip(lines.Length - 4000).ToArray();
+                                logTextBlock.Text = string.Join("\n", recentLines);
+                            }
+                        }
+                        else
+                        {
+                            // UI not ready yet, buffer the message
+                            _startupLogBuffer.Add(logEntry);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // UI not ready yet, buffer the message
+                        _startupLogBuffer.Add(logEntry);
+                        System.Diagnostics.Debug.WriteLine($"UI Log failed, buffered message: {ex.Message}");
+                    }
+                });
+
+                // Also write to debug output for debugging
+                System.Diagnostics.Debug.Write(text);
             }
             catch (Exception ex)
             {
@@ -1132,6 +1431,21 @@ namespace DesktopApp.Views
             if (e.PropertyName == nameof(RecordingManager.RecordingChannelId))
             {
                 UpdateChannelRecordingStatus();
+            }
+
+            // Update recording page display for relevant property changes
+            if (e.PropertyName == nameof(RecordingManager.IsRecording) ||
+                e.PropertyName == nameof(RecordingManager.State) ||
+                e.PropertyName == nameof(RecordingManager.StatusDisplay) ||
+                e.PropertyName == nameof(RecordingManager.DurationDisplay) ||
+                e.PropertyName == nameof(RecordingManager.SizeDisplay) ||
+                e.PropertyName == nameof(RecordingManager.BitrateDisplay) ||
+                e.PropertyName == nameof(RecordingManager.ChannelName) ||
+                e.PropertyName == nameof(RecordingManager.StartedDisplay) ||
+                e.PropertyName == nameof(RecordingManager.FileName) ||
+                e.PropertyName == nameof(RecordingManager.FilePath))
+            {
+                UpdateRecordingPageDisplay();
             }
         }
 
@@ -1155,16 +1469,6 @@ namespace DesktopApp.Views
             }
         }
 
-        private async void CategoryTile_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is Category cat)
-            {
-                SelectedCategoryName = cat.Name;
-                await LoadChannelsForCategoryAsync(cat);
-                IsGuideReady = true;
-                CurrentViewKey = "guide";
-            }
-        }
 
         private async void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
@@ -1173,6 +1477,48 @@ namespace DesktopApp.Views
         }
 
         private void ChannelTile_Click(object sender, RoutedEventArgs e) { }
+
+        private void ChannelRecordButton_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true; // Prevent the channel tile click event from firing
+
+            if (sender is Button button && button.DataContext is Channel channel)
+            {
+                // Set the selected channel (this ensures the recording tab shows the correct channel)
+                SelectedChannel = channel;
+
+                // Check if this channel is currently being recorded
+                bool isCurrentlyRecording = RecordingManager.Instance.IsRecording &&
+                                          RecordingManager.Instance.RecordingChannelId == channel.Id;
+
+                if (isCurrentlyRecording)
+                {
+                    // Stop recording
+                    if (RecordingManager.Instance.IsManualRecording)
+                    {
+                        StopRecording();
+                    }
+                    else
+                    {
+                        MessageBox.Show(this, "Cannot stop scheduled recording manually. Use the Recording Scheduler to cancel scheduled recordings.",
+                            "Scheduled Recording Active", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                else
+                {
+                    // Check if another recording is active
+                    if (_recordProcess != null)
+                    {
+                        MessageBox.Show(this, "Another recording is already in progress. Stop the current recording before starting a new one.",
+                            "Recording Active", MessageBoxButton.OK, MessageBoxImage.Information);
+                        return;
+                    }
+
+                    // Start recording this channel
+                    StartRecording();
+                }
+            }
+        }
 
         private DateTime _lastChannelClickTime;
         private FrameworkElement? _lastChannelClickedElement;
@@ -1189,12 +1535,14 @@ namespace DesktopApp.Views
                 SelectedChannel = ch;
                 TryLaunchChannelInPlayer(ch);
                 _lastChannelClickedElement = null;
+                UpdateRecordingPageDisplay();
             }
             else
             {
                 SelectedChannel = ch;
                 _lastChannelClickedElement = fe;
                 _lastChannelClickTime = now;
+                UpdateRecordingPageDisplay();
             }
         }
         private void TryLaunchChannelInPlayer(Channel ch)
@@ -1278,8 +1626,12 @@ namespace DesktopApp.Views
                 }
                 catch (Exception ex) { Log("PARSE ERROR VOD categories: " + ex.Message + "\n"); }
 
+                // Populate local collection for UI binding
                 _vodCategories.Clear();
-                foreach (var c in parsed) _vodCategories.Add(c);
+                foreach (var cat in parsed)
+                    _vodCategories.Add(cat);
+
+                // Also populate session collection
                 Session.VodCategories.Clear();
                 Session.VodCategories.AddRange(parsed);
 
@@ -1345,6 +1697,16 @@ namespace DesktopApp.Views
         private async Task LoadVodContentAsync(string categoryId)
         {
             if (Session.Mode != SessionMode.Xtream || string.IsNullOrEmpty(categoryId)) return;
+
+            // Show appropriate loading overlay based on current view
+            if (FindName("MoviesViewBtn") is Button moviesBtn && moviesBtn.Background.ToString().Contains("223247"))
+            {
+                ShowLoadingOverlay("MoviesLoadingOverlay");
+            }
+            else if (FindName("SeriesViewBtn") is Button seriesBtn && seriesBtn.Background.ToString().Contains("223247"))
+            {
+                ShowLoadingOverlay("SeriesLoadingOverlay");
+            }
             try
             {
                 var url = Session.BuildApi("get_vod_streams") + "&category_id=" + Uri.EscapeDataString(categoryId);
@@ -1427,6 +1789,11 @@ namespace DesktopApp.Views
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading VOD content: " + ex.Message + "\n"); }
+            finally
+            {
+                HideLoadingOverlay("MoviesLoadingOverlay");
+                HideLoadingOverlay("SeriesLoadingOverlay");
+            }
         }
 
         private async Task LoadVodPosterAsync(VodContent vod)
@@ -1670,10 +2037,14 @@ namespace DesktopApp.Views
             {
                 SelectedVodContent = vod;
                 _lastVodClickTime = now;
+
+                // Update details panel
+                ShowVodDetailsPanel(vod);
             }
         }
 
         private DateTime _lastVodClickTime;
+        private DateTime _lastSeriesClickTime;
 
         private void VodPlay_Click(object sender, RoutedEventArgs e)
         {
@@ -1844,10 +2215,68 @@ namespace DesktopApp.Views
             }
         }
 
+
+        private void TryLaunchSeriesInPlayer(SeriesContent series)
+        {
+            // For series, we typically want to show episodes rather than launch directly
+            // This could open a series episodes window or launch first episode
+            try
+            {
+                Log($"Opening series: {series.Name}\n");
+
+                // For now, this could open a separate series episodes window
+                // or we could implement inline episode browsing
+                var seriesWindow = new VodWindow(series) { Owner = this };
+                seriesWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                Log("Failed to open series: " + ex.Message + "\n");
+                MessageBox.Show(this, "Unable to open series details.",
+                    "Series Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         // API test output (disabled in M3U mode)
         private async void LoadStreams_Click(object sender, RoutedEventArgs e) => await RunApiCall("get_live_streams");
         private async Task RunApiCall(string action)
         { if (Session.Mode != SessionMode.Xtream) { Log("API calls disabled in M3U mode.\n"); return; } try { var url = Session.BuildApi(action); Log($"GET {url}\n"); var json = await _http.GetStringAsync(url, _cts.Token); if (json.Length > 50_000) json = json[..50_000] + "...<truncated>"; Log(json + "\n\n"); } catch (OperationCanceledException) { } catch (Exception ex) { Log("ERROR: " + ex.Message + "\n"); } }
+
+        private void OpenRecordingFolder_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var recordingDir = Session.RecordingDirectory;
+                if (string.IsNullOrEmpty(recordingDir))
+                {
+                    recordingDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos));
+                }
+
+                // Create directory if it doesn't exist
+                if (!Directory.Exists(recordingDir))
+                {
+                    Directory.CreateDirectory(recordingDir);
+                }
+
+                // Open the folder in Windows Explorer
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"\"{recordingDir}\"",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to open recording folder: {ex.Message}\n");
+                try
+                {
+                    MessageBox.Show(this, "Unable to open recording folder. Check settings.",
+                        "Folder Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                catch { }
+            }
+        }
 
         private void OpenRecordingStatus_Click(object sender, RoutedEventArgs e)
         {
@@ -1881,9 +2310,23 @@ namespace DesktopApp.Views
 
         private void StartRecording()
         {
-            if (_recordProcess != null) return; if (SelectedChannel == null) { Log("No channel selected to record.\n"); return; }
+            if (_recordProcess != null) return;
+
+            if (SelectedChannel == null)
+            {
+                Log("No channel selected to record.\n");
+                MessageBox.Show(this, "Please select a channel from the Live TV tab first before recording.",
+                    "No Channel Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
             string streamUrl = Session.Mode == SessionMode.M3u ? Session.PlaylistChannels.FirstOrDefault(p => p.Id == SelectedChannel.Id)?.StreamUrl ?? string.Empty : Session.BuildStreamUrl(SelectedChannel.Id, "ts");
-            if (string.IsNullOrWhiteSpace(streamUrl)) { Log("Stream URL not found for recording.\n"); return; }
+            if (string.IsNullOrWhiteSpace(streamUrl))
+            {
+                Log("Stream URL not found for recording.\n");
+                MessageBox.Show(this, "Unable to get stream URL for the selected channel. Please try selecting the channel again.",
+                    "Stream Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             if (string.IsNullOrWhiteSpace(Session.FfmpegPath) || !File.Exists(Session.FfmpegPath)) { Log("FFmpeg path not set (Settings).\n"); MessageBox.Show(this, "Set FFmpeg path in Settings.", "Recording", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             string baseDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
             try
@@ -1923,7 +2366,19 @@ namespace DesktopApp.Views
             _recordProcess = new Process { StartInfo = psi, EnableRaisingEvents = false }; // we handle cleanup directly
             _recordProcess.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
             _recordProcess.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
-            if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name, SelectedChannel.Id, true); if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
+            if (_recordProcess.Start())
+            {
+                try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { }
+                RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name, SelectedChannel.Id, true);
+
+                // Update button to show Stop state
+                if (FindName("RecordBtnText") is TextBlock btnText) btnText.Text = "Stop Recording";
+                if (FindName("RecordBtnIcon") is TextBlock btnIcon) btnIcon.Text = "⏹️";
+                if (FindName("RecordButton") is Button btn) btn.Background = new SolidColorBrush(Color.FromRgb(0xDC, 0x35, 0x45)); // Red color
+
+                // Update recording page visual feedback
+                UpdateRecordingPageDisplay();
+            }
             else { Log("Failed to start FFmpeg.\n"); _recordProcess.Dispose(); _recordProcess = null; }
         }
         private void StopRecording()
@@ -1936,9 +2391,15 @@ namespace DesktopApp.Views
             _currentRecordingFile = null;
 
             // Update UI state immediately
-            if (FindName("RecordBtnText") is TextBlock btnText) btnText.Text = "Record";
+            if (FindName("RecordBtnText") is TextBlock btnText) btnText.Text = "Start Recording";
+            if (FindName("RecordBtnIcon") is TextBlock btnIcon) btnIcon.Text = "⏺️";
+            if (FindName("RecordButton") is Button btn) btn.Background = new SolidColorBrush(Color.FromRgb(0x28, 0xA7, 0x45)); // Green color
+
             RecordingManager.Instance.Stop();
             Log("Stopping recording...\n");
+
+            // Update recording page visual feedback
+            UpdateRecordingPageDisplay();
 
             // Terminate process on background thread so UI never blocks
             _ = Task.Run(() =>
@@ -1991,6 +2452,2179 @@ namespace DesktopApp.Views
                 }
             }
         }
+        // Navigation Methods for New Layout
+        private void NavigateToLiveTv(object sender, RoutedEventArgs e)
+        {
+            ShowPage("LiveTv");
+            SetSelectedNavButton(sender as Button);
+        }
+
+        private async void NavigateToVod(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Vod");
+            SetSelectedNavButton(sender as Button);
+
+            // Load VOD categories if not already loaded
+            if (_vodCategories.Count == 0 && Session.Mode == SessionMode.Xtream)
+            {
+                await LoadVodCategoriesAsync();
+                await LoadSeriesCategoriesAsync();
+            }
+        }
+
+        private void NavigateToRecording(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Recording");
+            SetSelectedNavButton(sender as Button);
+            UpdateRecordingPageDisplay();
+        }
+
+        private void NavigateToScheduler(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Scheduler");
+
+            // Always highlight the correct nav button regardless of which button triggered this
+            if (FindName("SchedulerNavButton") is Button schedulerNavBtn)
+            {
+                SetSelectedNavButton(schedulerNavBtn);
+            }
+
+            // Initialize the scheduler when navigating to it
+            InitializeScheduler();
+        }
+
+        private void NavigateToProfile(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Profile");
+            SetSelectedNavButton(sender as Button);
+            LoadProfileData();
+        }
+
+        private void NavigateToSettings(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Settings");
+
+            // Always highlight the correct nav button regardless of which button triggered this
+            if (FindName("SettingsNavButton") is Button settingsNavBtn)
+            {
+                SetSelectedNavButton(settingsNavBtn);
+            }
+
+            LoadSettingsPage();
+        }
+
+        private void ShowPage(string pageName)
+        {
+            // Hide all pages
+            if (FindName("LiveTvPage") is Grid liveTvPage) liveTvPage.Visibility = Visibility.Collapsed;
+            if (FindName("VodPage") is Grid vodPage) vodPage.Visibility = Visibility.Collapsed;
+            if (FindName("RecordingPage") is Grid recordingPage) recordingPage.Visibility = Visibility.Collapsed;
+            if (FindName("SchedulerPage") is Grid schedulerPage) schedulerPage.Visibility = Visibility.Collapsed;
+            if (FindName("ProfilePage") is Grid profilePage) profilePage.Visibility = Visibility.Collapsed;
+            if (FindName("SettingsPage") is Grid settingsPage) settingsPage.Visibility = Visibility.Collapsed;
+
+            // Show selected page
+            if (FindName($"{pageName}Page") is Grid targetPage)
+                targetPage.Visibility = Visibility.Visible;
+        }
+
+        private void SetSelectedNavButton(Button? selectedButton)
+        {
+            // Clear all nav button selections
+            if (FindName("LiveTvNavButton") is Button liveTvBtn) liveTvBtn.Tag = null;
+            if (FindName("VodNavButton") is Button vodBtn) vodBtn.Tag = null;
+            if (FindName("RecordingNavButton") is Button recordingBtn) recordingBtn.Tag = null;
+            if (FindName("SchedulerNavButton") is Button schedulerBtn) schedulerBtn.Tag = null;
+            if (FindName("ProfileNavButton") is Button profileBtn) profileBtn.Tag = null;
+            if (FindName("SettingsNavButton") is Button settingsBtn) settingsBtn.Tag = null;
+
+            // Set selected button
+            if (selectedButton != null)
+                selectedButton.Tag = "Selected";
+        }
+
+        private void UpdateRecordingPageDisplay()
+        {
+            if (FindName("SelectedChannelText") is TextBlock channelText)
+            {
+                channelText.Text = SelectedChannel?.Name ?? "None selected";
+            }
+
+            // Update recording status indicators
+            bool isRecording = _recordProcess != null;
+
+            if (FindName("RecordingPageStatusIndicator") is System.Windows.Shapes.Ellipse statusIndicator)
+            {
+                statusIndicator.Fill = isRecording
+                    ? new SolidColorBrush(Color.FromRgb(0xDC, 0x35, 0x45)) // Red for recording
+                    : new SolidColorBrush(Color.FromRgb(0x6C, 0x75, 0x7D)); // Gray for idle
+            }
+
+            if (FindName("RecordingStatusDisplay") is TextBlock statusText)
+            {
+                if (isRecording)
+                {
+                    statusText.Text = $"Recording: {SelectedChannel?.Name ?? "Unknown"}";
+                }
+                else
+                {
+                    statusText.Text = RecordingManager.Instance.StatusDisplay ?? "Idle";
+                }
+            }
+
+            // Update new recording status section
+            var recordingManager = RecordingManager.Instance;
+
+            // Update status badge
+            if (FindName("RecordingStatusBadge") is Border statusBadge && FindName("RecordingStatusBadgeText") is TextBlock badgeText)
+            {
+                badgeText.Text = recordingManager.StatusDisplay;
+
+                statusBadge.Background = recordingManager.State switch
+                {
+                    RecordingState.Recording => new SolidColorBrush(Color.FromRgb(0x25, 0x6D, 0x1B)), // Green
+                    RecordingState.Stopped => new SolidColorBrush(Color.FromRgb(0x5A, 0x3C, 0x05)), // Yellow/Orange
+                    _ => new SolidColorBrush(Color.FromRgb(0x39, 0x41, 0x50)) // Gray
+                };
+            }
+
+            // Show/hide recording details based on recording state
+            if (FindName("RecordingDetailsPanel") is StackPanel detailsPanel && FindName("RecordingIdlePanel") is StackPanel idlePanel)
+            {
+                if (recordingManager.IsRecording)
+                {
+                    detailsPanel.Visibility = Visibility.Visible;
+                    idlePanel.Visibility = Visibility.Collapsed;
+
+                    // Update recording details
+                    if (FindName("RecordingChannelText") is TextBlock channelTextBlock)
+                        channelTextBlock.Text = recordingManager.ChannelName ?? "Unknown";
+
+                    if (FindName("RecordingStartedText") is TextBlock startedTextBlock)
+                        startedTextBlock.Text = recordingManager.StartedDisplay;
+
+                    if (FindName("RecordingFileText") is TextBlock fileTextBlock)
+                        fileTextBlock.Text = recordingManager.FileName ?? "--";
+
+                    if (FindName("RecordingPathText") is TextBlock pathTextBlock)
+                        pathTextBlock.Text = recordingManager.FilePath ?? "--";
+
+                    if (FindName("RecordingDurationText") is TextBlock durationTextBlock)
+                        durationTextBlock.Text = recordingManager.DurationDisplay;
+
+                    if (FindName("RecordingSizeText") is TextBlock sizeTextBlock)
+                        sizeTextBlock.Text = recordingManager.SizeDisplay;
+
+                    if (FindName("RecordingBitrateText") is TextBlock bitrateTextBlock)
+                        bitrateTextBlock.Text = recordingManager.BitrateDisplay;
+                }
+                else
+                {
+                    detailsPanel.Visibility = Visibility.Collapsed;
+                    idlePanel.Visibility = Visibility.Visible;
+                }
+            }
+
+            // Update output directory display
+            if (FindName("RecordingOutputDirectoryText") is TextBlock outputDirText)
+            {
+                string actualDirectory = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+                outputDirText.Text = actualDirectory;
+            }
+        }
+
+        private async void CategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox combo && combo.SelectedItem is Category category)
+            {
+                await LoadChannelsForCategoryAsync(category);
+            }
+        }
+
+
+        private async void VodCategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox combo && combo.SelectedValue is string categoryId)
+            {
+                // Load content based on current view (Movies or Series)
+                bool isMoviesVisible = (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridViewer && moviesGridViewer.Visibility == Visibility.Visible) ||
+                                     (FindName("MoviesListScrollViewer") is ScrollViewer moviesListViewer && moviesListViewer.Visibility == Visibility.Visible);
+                bool isSeriesVisible = (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridViewer && seriesGridViewer.Visibility == Visibility.Visible) ||
+                                     (FindName("SeriesListScrollViewer") is ScrollViewer seriesListViewer && seriesListViewer.Visibility == Visibility.Visible);
+
+                if (isMoviesVisible)
+                {
+                    await LoadVodContentAsync(categoryId);
+                }
+                else if (isSeriesVisible)
+                {
+                    await LoadSeriesContentAsync(categoryId);
+                }
+            }
+        }
+
+        private void ShowMoviesView_Click(object sender, RoutedEventArgs e)
+        {
+            // Show movies and hide series based on current view mode
+            if (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridViewer)
+                moviesGridViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("MoviesListScrollViewer") is ScrollViewer moviesListViewer)
+                moviesListViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridViewer)
+                seriesGridViewer.Visibility = Visibility.Collapsed;
+            if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListViewer)
+                seriesListViewer.Visibility = Visibility.Collapsed;
+
+            // Update button states
+            if (FindName("MoviesViewBtn") is Button moviesBtn)
+            {
+                moviesBtn.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47));
+                moviesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xDD, 0xE6));
+            }
+            if (FindName("SeriesViewBtn") is Button seriesBtn)
+            {
+                seriesBtn.Background = Brushes.Transparent;
+                seriesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7));
+            }
+
+            // Update category combo to show VOD categories
+            if (FindName("VodCategoryCombo") is ComboBox combo)
+            {
+                combo.ItemsSource = VodCategoriesCollectionView;
+                combo.DisplayMemberPath = "CategoryName";
+                combo.SelectedValuePath = "CategoryId";
+            }
+
+            // Clear VOD details panel
+            ClearVodDetailsPanel();
+        }
+
+        private void ShowSeriesView_Click(object sender, RoutedEventArgs e)
+        {
+            // Show series and hide movies based on current view mode
+            if (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridViewer)
+                moviesGridViewer.Visibility = Visibility.Collapsed;
+            if (FindName("MoviesListScrollViewer") is ScrollViewer moviesListViewer)
+                moviesListViewer.Visibility = Visibility.Collapsed;
+            if (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridViewer)
+                seriesGridViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListViewer)
+                seriesListViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
+
+            // Update button states
+            if (FindName("MoviesViewBtn") is Button moviesBtn)
+            {
+                moviesBtn.Background = Brushes.Transparent;
+                moviesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7));
+            }
+            if (FindName("SeriesViewBtn") is Button seriesBtn)
+            {
+                seriesBtn.Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47));
+                seriesBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xDD, 0xE6));
+            }
+
+            // Update category combo to show series categories
+            if (FindName("VodCategoryCombo") is ComboBox combo)
+            {
+                combo.ItemsSource = SeriesCategoriesCollectionView;
+                combo.DisplayMemberPath = "CategoryName";
+                combo.SelectedValuePath = "CategoryId";
+            }
+
+            // Clear VOD details panel
+            ClearVodDetailsPanel();
+        }
+
+        private void SeriesContent_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement fe || fe.DataContext is not SeriesContent series)
+                return;
+
+            // Check for double-click to launch player or open episodes
+            var now = DateTime.UtcNow;
+            const int doubleClickMs = 400;
+
+            if (SelectedSeriesContent == series && (now - _lastSeriesClickTime).TotalMilliseconds <= doubleClickMs)
+            {
+                // Open series episodes or launch player
+                TryLaunchSeriesInPlayer(series);
+                _lastSeriesClickTime = DateTime.MinValue;
+            }
+            else
+            {
+                SelectedSeriesContent = series;
+                _lastSeriesClickTime = now;
+
+                // Update details panel
+                ShowSeriesDetailsPanel(series);
+            }
+        }
+
+
+        // Recording Scheduler Properties and Methods
+        private readonly RecordingScheduler _scheduler = RecordingScheduler.Instance;
+        private Channel? _schedulerSelectedChannel;
+        private EpgEntry? _schedulerSelectedProgram;
+
+        private void RecordingType_Changed(object sender, RoutedEventArgs e)
+        {
+            if (FindName("EpgPanel") is Panel epgPanel && FindName("CustomPanel") is Panel customPanel)
+            {
+                if (FindName("EpgRadio") is RadioButton epgRadio && epgRadio.IsChecked == true)
+                {
+                    epgPanel.IsEnabled = true;
+                    customPanel.IsEnabled = false;
+                }
+                else
+                {
+                    epgPanel.IsEnabled = false;
+                    customPanel.IsEnabled = true;
+                }
+
+                UpdateOutputFilePath();
+            }
+        }
+        private void ChannelCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (FindName("ChannelCombo") is ComboBox channelCombo && channelCombo.SelectedItem is Channel channel)
+            {
+                _schedulerSelectedChannel = channel;
+                LoadProgramsForChannel(channel);
+                UpdateOutputFilePath();
+            }
+        }
+        private void ProgramCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (FindName("ProgramCombo") is ComboBox programCombo && programCombo.SelectedItem is EpgEntry program)
+            {
+                _schedulerSelectedProgram = program;
+                if (FindName("TitleBox") is TextBox titleBox)
+                {
+                    // Remove the LIVE NOW indicator for the title box
+                    var cleanTitle = program.Title.Replace("🔴 ", "").Replace(" (LIVE NOW)", "");
+                    titleBox.Text = cleanTitle;
+                }
+                if (FindName("ProgramTimeText") is TextBlock programTimeText)
+                    programTimeText.Text = program.TimeRangeLocal;
+                UpdateOutputFilePath();
+            }
+        }
+        private void CustomChannelCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            UpdateOutputFilePath();
+        }
+        private void CustomTime_Changed(object sender, EventArgs e)
+        {
+            UpdateOutputFilePath();
+        }
+        private void BrowseOutput_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Filter = "Transport Stream|*.ts|MP4 Video|*.mp4|All Files|*.*",
+                DefaultExt = ".ts"
+            };
+
+            if (FindName("OutputFileBox") is TextBox outputFileBox && !string.IsNullOrEmpty(outputFileBox.Text))
+            {
+                dialog.FileName = Path.GetFileName(outputFileBox.Text);
+                dialog.InitialDirectory = Path.GetDirectoryName(outputFileBox.Text);
+            }
+
+            if (dialog.ShowDialog() == true)
+            {
+                if (FindName("OutputFileBox") is TextBox box)
+                    box.Text = dialog.FileName;
+            }
+        }
+        private void ScheduleRecording_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ScheduledRecording recording;
+
+                if (FindName("EpgRadio") is RadioButton epgRadio && epgRadio.IsChecked == true)
+                {
+                    // EPG-based recording
+                    if (_schedulerSelectedChannel == null || _schedulerSelectedProgram == null)
+                    {
+                        MessageBox.Show("Please select a channel and program.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    // For currently airing shows, start recording now instead of at the original start time
+                    var now = DateTime.UtcNow;
+                    var isCurrentlyAiring = _schedulerSelectedProgram.StartUtc <= now && _schedulerSelectedProgram.EndUtc > now;
+                    var effectiveStartTime = isCurrentlyAiring ? now : _schedulerSelectedProgram.StartUtc;
+
+                    recording = new ScheduledRecording
+                    {
+                        Title = _schedulerSelectedProgram.Title.Replace("🔴 ", "").Replace(" (LIVE NOW)", ""),
+                        Description = _schedulerSelectedProgram.Description ?? "",
+                        ChannelId = _schedulerSelectedChannel.Id,
+                        ChannelName = _schedulerSelectedChannel.Name,
+                        StreamUrl = GetStreamUrlForChannel(_schedulerSelectedChannel),
+                        StartTime = effectiveStartTime,
+                        EndTime = _schedulerSelectedProgram.EndUtc,
+                        IsEpgBased = true,
+                        EpgProgramId = _schedulerSelectedProgram.GetHashCode().ToString()
+                    };
+                }
+                else
+                {
+                    // Custom time recording
+                    if (FindName("CustomChannelCombo") is not ComboBox customChannelCombo || customChannelCombo.SelectedItem is not Channel customChannel)
+                    {
+                        MessageBox.Show("Please select a channel.", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    var startTimeBox = FindName("StartTimeBox") as TextBox;
+                    var endTimeBox = FindName("EndTimeBox") as TextBox;
+
+                    if (!DateTime.TryParse(startTimeBox?.Text, out var startTime) ||
+                        !DateTime.TryParse(endTimeBox?.Text, out var endTime))
+                    {
+                        MessageBox.Show("Please enter valid start and end times (HH:mm format).", "Validation Error",
+                            MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return;
+                    }
+
+                    var startDatePicker = FindName("StartDatePicker") as DatePicker;
+                    var startDate = startDatePicker?.SelectedDate ?? DateTime.Today;
+                    var startDateTime = startDate.Date.Add(startTime.TimeOfDay);
+                    var endDateTime = startDate.Date.Add(endTime.TimeOfDay);
+
+                    // If end time is before start time, assume it's the next day
+                    if (endDateTime <= startDateTime)
+                    {
+                        endDateTime = endDateTime.AddDays(1);
+                    }
+
+                    var titleBox = FindName("TitleBox") as TextBox;
+                    recording = new ScheduledRecording
+                    {
+                        Title = string.IsNullOrWhiteSpace(titleBox?.Text) ? "Custom Recording" : titleBox.Text,
+                        ChannelId = customChannel.Id,
+                        ChannelName = customChannel.Name,
+                        StreamUrl = GetStreamUrlForChannel(customChannel),
+                        StartTime = startDateTime.ToUniversalTime(),
+                        EndTime = endDateTime.ToUniversalTime(),
+                        IsEpgBased = false
+                    };
+                }
+
+                // Set buffer times
+                if (FindName("PreBufferBox") is TextBox preBufferBox && int.TryParse(preBufferBox.Text, out var preBuffer))
+                    recording.PreBufferMinutes = preBuffer;
+                if (FindName("PostBufferBox") is TextBox postBufferBox && int.TryParse(postBufferBox.Text, out var postBuffer))
+                    recording.PostBufferMinutes = postBuffer;
+
+                // Set output file path
+                if (FindName("OutputFileBox") is TextBox outputFileBox && !string.IsNullOrWhiteSpace(outputFileBox.Text))
+                    recording.OutputFilePath = outputFileBox.Text;
+
+                // Check for conflicts
+                if (_scheduler.HasConflictingRecording(recording.StartTime, recording.EndTime))
+                {
+                    var result = MessageBox.Show(
+                        "This recording conflicts with an existing scheduled recording. Do you want to schedule it anyway?",
+                        "Recording Conflict", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+
+                    if (result != MessageBoxResult.Yes)
+                        return;
+                }
+
+                // Schedule the recording
+                _scheduler.ScheduleRecording(recording);
+
+                MessageBox.Show($"Recording scheduled successfully!\n\nTitle: {recording.Title}\nTime: {recording.TimeRangeText}",
+                    "Recording Scheduled", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // Reset form
+                ResetSchedulerForm();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error scheduling recording: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ResetSchedulerForm()
+        {
+            if (FindName("TitleBox") is TextBox titleBox)
+                titleBox.Text = "";
+            if (FindName("ChannelCombo") is ComboBox channelCombo)
+                channelCombo.SelectedIndex = -1;
+            if (FindName("ProgramCombo") is ComboBox programCombo)
+                programCombo.ItemsSource = null;
+            if (FindName("ProgramTimeText") is TextBlock programTimeText)
+                programTimeText.Text = "";
+            if (FindName("CustomChannelCombo") is ComboBox customChannelCombo)
+                customChannelCombo.SelectedIndex = -1;
+            if (FindName("StartDatePicker") is DatePicker startDatePicker)
+                startDatePicker.SelectedDate = DateTime.Today;
+            if (FindName("StartTimeBox") is TextBox startTimeBox)
+                startTimeBox.Text = "20:00";
+            if (FindName("EndTimeBox") is TextBox endTimeBox)
+                endTimeBox.Text = "21:00";
+            if (FindName("PreBufferBox") is TextBox preBufferBox)
+                preBufferBox.Text = "2";
+            if (FindName("PostBufferBox") is TextBox postBufferBox)
+                postBufferBox.Text = "5";
+            if (FindName("OutputFileBox") is TextBox outputFileBox)
+                outputFileBox.Text = "";
+
+            _schedulerSelectedChannel = null;
+            _schedulerSelectedProgram = null;
+        }
+        private void RefreshScheduled_Click(object sender, RoutedEventArgs e)
+        {
+            LoadScheduledRecordings();
+        }
+        private void DeleteCompleted_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "This will delete all completed, failed, and cancelled recordings from the list. Continue?",
+                "Delete Completed Recordings", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _scheduler.DeleteCompletedRecordings();
+            }
+        }
+        private void PropertiesRecording_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
+                return;
+
+            var properties = $"Recording Properties\n\n" +
+                            $"Title: {recording.Title}\n" +
+                            $"Channel: {recording.ChannelName}\n" +
+                            $"Status: {recording.StatusText}\n" +
+                            $"Start Time: {recording.StartTimeLocal}\n" +
+                            $"End Time: {recording.EndTimeLocal}\n" +
+                            $"Duration: {recording.DurationText}\n" +
+                            $"Pre-buffer: {recording.PreBufferMinutes} minutes\n" +
+                            $"Post-buffer: {recording.PostBufferMinutes} minutes\n" +
+                            $"EPG-based: {(recording.IsEpgBased ? "Yes" : "No")}\n" +
+                            $"Output File: {recording.OutputFilePath}\n" +
+                            $"Stream URL: {recording.StreamUrl}\n";
+
+            if (!string.IsNullOrEmpty(recording.Description))
+            {
+                properties += $"Description: {recording.Description}\n";
+            }
+
+            MessageBox.Show(properties, "Recording Properties", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        private void EditRecording_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
+                return;
+
+            // Simple edit dialog using message boxes for now
+            var editMessage = $"Current recording details:\n\n" +
+                             $"Title: {recording.Title}\n" +
+                             $"Pre-buffer: {recording.PreBufferMinutes} minutes\n" +
+                             $"Post-buffer: {recording.PostBufferMinutes} minutes\n\n" +
+                             $"This is a basic edit confirmation. Would you like to add 1 minute to both pre and post buffer?";
+
+            var result = MessageBox.Show(editMessage, "Edit Recording",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            // Update the recording with increased buffer times
+            var updatedRecording = new ScheduledRecording
+            {
+                Id = recording.Id,
+                Title = recording.Title,
+                Description = recording.Description,
+                ChannelId = recording.ChannelId,
+                ChannelName = recording.ChannelName,
+                StreamUrl = recording.StreamUrl,
+                StartTime = recording.StartTime,
+                EndTime = recording.EndTime,
+                Status = recording.Status,
+                OutputFilePath = recording.OutputFilePath,
+                IsEpgBased = recording.IsEpgBased,
+                EpgProgramId = recording.EpgProgramId,
+                PreBufferMinutes = recording.PreBufferMinutes + 1,
+                PostBufferMinutes = recording.PostBufferMinutes + 1,
+                CreatedAt = recording.CreatedAt
+            };
+
+            _scheduler.UpdateRecording(updatedRecording);
+
+            MessageBox.Show("Recording updated successfully!", "Edit Recording",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        private void CancelRecording_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
+                return;
+
+            var result = MessageBox.Show($"Cancel recording '{recording.Title}'?", "Cancel Recording",
+                MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                _scheduler.CancelRecording(recording.Id);
+            }
+        }
+
+        // Initialize scheduler when navigating to Scheduler tab
+        private void InitializeScheduler()
+        {
+            InitializeSchedulerWindow();
+            LoadSchedulerChannels();
+            LoadScheduledRecordings();
+        }
+
+        private void InitializeSchedulerWindow()
+        {
+            if (FindName("StartDatePicker") is DatePicker startDatePicker)
+                startDatePicker.SelectedDate = DateTime.Today;
+            if (FindName("StartTimeBox") is TextBox startTimeBox)
+                startTimeBox.Text = "20:00";
+            if (FindName("EndTimeBox") is TextBox endTimeBox)
+                endTimeBox.Text = "21:00";
+            UpdateOutputFilePath();
+        }
+
+        private void LoadSchedulerChannels()
+        {
+            var channels = Channels.OrderBy(c => c.Name).ToList();
+            if (FindName("ChannelCombo") is ComboBox channelCombo)
+                channelCombo.ItemsSource = channels;
+            if (FindName("CustomChannelCombo") is ComboBox customChannelCombo)
+                customChannelCombo.ItemsSource = channels;
+        }
+
+        private void LoadScheduledRecordings()
+        {
+            if (FindName("ScheduledGrid") is DataGrid scheduledGrid)
+                scheduledGrid.ItemsSource = _scheduler.ScheduledRecordings;
+        }
+
+        private async void LoadProgramsForChannel(Channel channel)
+        {
+            var now = DateTime.UtcNow;
+            var programs = new List<EpgEntry>();
+
+            if (Session.Mode == SessionMode.M3u)
+            {
+                // For M3U mode, use cached EPG data
+                if (!string.IsNullOrWhiteSpace(channel.EpgChannelId) &&
+                    Session.M3uEpgByChannel.TryGetValue(channel.EpgChannelId, out var entries))
+                {
+                    programs = entries
+                        .Where(epg => epg.EndUtc > now) // Include currently airing shows (end time must be in future)
+                        .Select(epg =>
+                        {
+                            var isCurrentlyAiring = epg.StartUtc <= now && epg.EndUtc > now;
+                            var displayTitle = isCurrentlyAiring
+                                ? $"🔴 {epg.Title} (LIVE NOW)"
+                                : epg.Title;
+
+                            return new EpgEntry
+                            {
+                                StartUtc = epg.StartUtc,
+                                EndUtc = epg.EndUtc,
+                                Title = displayTitle,
+                                Description = epg.Description
+                            };
+                        })
+                        .OrderBy(epg => epg.StartUtc)
+                        .Take(50) // Limit to next 50 programs
+                        .ToList();
+                }
+            }
+            else if (Session.Mode == SessionMode.Xtream)
+            {
+                // For Xtream mode, fetch EPG data via API
+                try
+                {
+                    using var http = new System.Net.Http.HttpClient();
+                    var url = Session.BuildApi("get_simple_data_table") + "&stream_id=" + channel.Id;
+
+                    System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Fetching EPG for channel {channel.Name}: {url}");
+
+                    using var resp = await http.GetAsync(url);
+                    var json = await resp.Content.ReadAsStringAsync();
+
+                    if (!string.IsNullOrWhiteSpace(json))
+                    {
+                        var trimmed = json.AsSpan().TrimStart();
+                        if (trimmed.Length > 0 && (trimmed[0] == '{' || trimmed[0] == '['))
+                        {
+                            using var doc = System.Text.Json.JsonDocument.Parse(json);
+                            if (doc.RootElement.TryGetProperty("epg_listings", out var listings) &&
+                                listings.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            {
+                                foreach (var el in listings.EnumerateArray())
+                                {
+                                    var start = GetUnixTimestamp(el, "start_timestamp");
+                                    var end = GetUnixTimestamp(el, "stop_timestamp");
+
+                                    if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
+                                    if (end <= now) continue; // Skip programs that have already ended (but include currently airing)
+
+                                    var title = GetStringValue(el, "title", "name", "programme", "program");
+                                    var desc = GetStringValue(el, "description", "desc", "info", "plot", "short_description");
+
+                                    if (!string.IsNullOrWhiteSpace(title))
+                                    {
+                                        var isCurrentlyAiring = start <= now && end > now;
+                                        var displayTitle = isCurrentlyAiring
+                                            ? $"🔴 {DecodeMaybeBase64(title)} (LIVE NOW)"
+                                            : DecodeMaybeBase64(title);
+
+                                        programs.Add(new EpgEntry
+                                        {
+                                            StartUtc = start,
+                                            EndUtc = end,
+                                            Title = displayTitle,
+                                            Description = DecodeMaybeBase64(desc ?? "")
+                                        });
+                                    }
+                                }
+
+                                programs = programs
+                                    .OrderBy(epg => epg.StartUtc)
+                                    .Take(50)
+                                    .ToList();
+                            }
+                        }
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Loaded {programs.Count} programs for channel {channel.Name}");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Error loading EPG for channel {channel.Name}: {ex.Message}");
+                }
+            }
+
+            if (FindName("ProgramCombo") is ComboBox programCombo)
+            {
+                programCombo.ItemsSource = programs;
+
+                if (programs.Any())
+                {
+                    programCombo.SelectedIndex = 0;
+                }
+            }
+        }
+
+        private void UpdateOutputFilePath()
+        {
+            if (FindName("OutputFileBox") is not TextBox outputFileBox) return;
+
+            if (FindName("EpgRadio") is RadioButton epgRadio && epgRadio.IsChecked == true && _schedulerSelectedChannel != null && _schedulerSelectedProgram != null)
+            {
+                // Clean the title by removing emoji and LIVE NOW indicator
+                var cleanTitle = _schedulerSelectedProgram.Title.Replace("🔴 ", "").Replace(" (LIVE NOW)", "");
+                var sanitizedTitle = SanitizeFileName(cleanTitle);
+                var sanitizedChannel = SanitizeFileName(_schedulerSelectedChannel.Name);
+                var timestamp = _schedulerSelectedProgram.StartUtc.ToLocalTime().ToString("yyyy-MM-dd_HH-mm");
+                var fileName = $"{sanitizedChannel}_{sanitizedTitle}_{timestamp}.ts";
+                var recordingDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+                outputFileBox.Text = Path.Combine(recordingDir, fileName);
+            }
+            else if (FindName("CustomRadio") is RadioButton customRadio && customRadio.IsChecked == true && FindName("CustomChannelCombo") is ComboBox customChannelCombo && customChannelCombo.SelectedItem is Channel customChannel)
+            {
+                var titleBox = FindName("TitleBox") as TextBox;
+                var title = string.IsNullOrWhiteSpace(titleBox?.Text) ? "Custom_Recording" : titleBox.Text;
+                var sanitizedTitle = SanitizeFileName(title);
+                var sanitizedChannel = SanitizeFileName(customChannel.Name);
+                var startDatePicker = FindName("StartDatePicker") as DatePicker;
+                var startDate = startDatePicker?.SelectedDate ?? DateTime.Today;
+                var timestamp = startDate.ToString("yyyy-MM-dd_HH-mm");
+                var fileName = $"{sanitizedChannel}_{sanitizedTitle}_{timestamp}.ts";
+                var recordingDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+                outputFileBox.Text = Path.Combine(recordingDir, fileName);
+            }
+        }
+
+        private static string SanitizeFileName(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName)) return "Unknown";
+
+            // First remove emoji and LIVE NOW indicators
+            var cleaned = fileName.Replace("🔴 ", "").Replace(" (LIVE NOW)", "");
+
+            // Remove other emoji characters (basic cleanup)
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"[\uD800-\uDBFF\uDC00-\uDFFF]", "");
+
+            // Remove invalid file name characters
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var result = string.Join("_", cleaned.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+
+            // Trim and ensure we have something
+            result = result.Trim('_', ' ');
+            return string.IsNullOrWhiteSpace(result) ? "Recording" : result;
+        }
+
+        private string GetStreamUrlForChannel(Channel channel)
+        {
+            if (Session.Mode == SessionMode.M3u)
+            {
+                // For M3U mode, find the corresponding playlist entry
+                var playlistEntry = Session.PlaylistChannels.FirstOrDefault(p => p.Id == channel.Id);
+                return playlistEntry?.StreamUrl ?? "";
+            }
+            else
+            {
+                // For Xtream mode, build the stream URL
+                return Session.BuildStreamUrl(channel.Id, "ts");
+            }
+        }
+
+        // Helper methods for recording scheduler EPG parsing
+        private static DateTime GetUnixTimestamp(System.Text.Json.JsonElement el, params string[] props)
+        {
+            foreach (var prop in props)
+            {
+                if (el.TryGetProperty(prop, out var val))
+                {
+                    if (val.ValueKind == System.Text.Json.JsonValueKind.String && long.TryParse(val.GetString(), out var ts))
+                        return DateTimeOffset.FromUnixTimeSeconds(ts).UtcDateTime;
+                    if (val.ValueKind == System.Text.Json.JsonValueKind.Number && val.TryGetInt64(out var tsNum))
+                        return DateTimeOffset.FromUnixTimeSeconds(tsNum).UtcDateTime;
+                }
+            }
+            return DateTime.MinValue;
+        }
+
+        private static string GetStringValue(System.Text.Json.JsonElement el, params string[] props)
+        {
+            foreach (var prop in props)
+            {
+                if (el.TryGetProperty(prop, out var val) && val.ValueKind == System.Text.Json.JsonValueKind.String)
+                {
+                    var str = val.GetString();
+                    if (!string.IsNullOrWhiteSpace(str)) return str;
+                }
+            }
+            return "";
+        }
+
+        // VOD Details Panel Methods
+        private VodContent? _currentSubscribedVod;
+
+        private void ClearVodDetailsPanel()
+        {
+            // Clear selections
+            SelectedVodContent = null;
+            SelectedSeriesContent = null;
+
+            // Unsubscribe from property changes
+            if (_currentSubscribedVod != null)
+            {
+                _currentSubscribedVod.PropertyChanged -= VodContent_PropertyChanged;
+                _currentSubscribedVod = null;
+            }
+            if (_currentSubscribedSeries != null)
+            {
+                _currentSubscribedSeries.PropertyChanged -= SeriesContent_PropertyChanged;
+                _currentSubscribedSeries = null;
+            }
+
+            // Reset UI to show placeholder
+            if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+            {
+                placeholder.Text = "Select a movie or series to view details";
+                placeholder.Visibility = Visibility.Visible;
+            }
+
+            if (FindName("VodDetailsContent") is StackPanel content)
+            {
+                content.Visibility = Visibility.Collapsed;
+            }
+
+            // Hide episodes section when clearing
+            HideEpisodesUI();
+
+            // Hide actions panel when clearing
+            if (FindName("VodActionsPanel") is StackPanel actionsPanel)
+                actionsPanel.Visibility = Visibility.Collapsed;
+        }
+
+        private void ShowVodDetailsPanel(VodContent vod)
+        {
+            try
+            {
+                // Unsubscribe from previous VOD property changes
+                if (_currentSubscribedVod != null)
+                {
+                    _currentSubscribedVod.PropertyChanged -= VodContent_PropertyChanged;
+                }
+
+                // Subscribe to this VOD's property changes
+                _currentSubscribedVod = vod;
+                vod.PropertyChanged += VodContent_PropertyChanged;
+
+                // If details are already loaded, show them immediately
+                if (vod.DetailsLoaded)
+                {
+                    DisplayVodDetailsPanel(vod);
+                    return;
+                }
+
+                // Show loading state
+                if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                {
+                    placeholder.Text = "Loading details...";
+                    placeholder.Visibility = Visibility.Visible;
+                }
+
+                if (FindName("VodDetailsContent") is StackPanel content)
+                    content.Visibility = Visibility.Collapsed;
+
+                // Start loading details in background (fire and forget)
+                _ = LoadVodDetailsAsync(vod);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error showing VOD details: {ex.Message}");
+                // Show error state
+                if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                {
+                    placeholder.Text = "Failed to load details";
+                    placeholder.Visibility = Visibility.Visible;
+                }
+                if (FindName("VodDetailsContent") is StackPanel content)
+                    content.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void VodContent_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == "DetailsLoaded" &&
+                sender is VodContent vod && vod.DetailsLoaded && ReferenceEquals(vod, this.SelectedVodContent))
+            {
+                // Details have been loaded for the currently selected VOD, update UI
+                Dispatcher.Invoke(() => DisplayVodDetailsPanel(vod));
+            }
+        }
+
+        private void DisplayVodDetailsPanel(VodContent vod)
+        {
+            // Hide placeholder, show content
+            if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                placeholder.Visibility = Visibility.Collapsed;
+
+            if (FindName("VodDetailsContent") is StackPanel content)
+                content.Visibility = Visibility.Visible;
+
+            // Set title
+            if (FindName("VodDetailsTitle") is TextBlock title)
+                title.Text = vod.Name ?? "Unknown";
+
+            // Update all detail fields
+            UpdateVodDetailsDisplay(vod);
+        }
+
+        private void UpdateVodDetailsDisplay(VodContent vod)
+        {
+            // Only update if details are actually loaded
+            if (!vod.DetailsLoaded)
+            {
+                // Keep showing loading state
+                return;
+            }
+
+            // Update all fields with loaded data
+            if (FindName("VodDetailsYear") is TextBlock year)
+                year.Text = !string.IsNullOrWhiteSpace(vod.ReleaseDate) ? vod.DisplayYear : "";
+
+            if (FindName("VodDetailsDuration") is TextBlock duration)
+                duration.Text = !string.IsNullOrWhiteSpace(vod.Duration) ? vod.DisplayDuration : "";
+
+            if (FindName("VodDetailsRating") is TextBlock rating)
+                rating.Text = !string.IsNullOrWhiteSpace(vod.Rating) ? vod.Rating : "";
+
+            if (FindName("VodDetailsGenre") is TextBlock genre)
+                genre.Text = !string.IsNullOrWhiteSpace(vod.Genre) ? vod.Genre : "";
+
+            if (FindName("VodDetailsCast") is TextBlock cast)
+                cast.Text = !string.IsNullOrWhiteSpace(vod.Cast) ? vod.Cast : "";
+
+            if (FindName("VodDetailsDirector") is TextBlock director)
+                director.Text = !string.IsNullOrWhiteSpace(vod.Director) ? vod.Director : "";
+
+            if (FindName("VodDetailsPlot") is TextBlock plot)
+                plot.Text = !string.IsNullOrWhiteSpace(vod.Plot) ? vod.Plot : "No plot available";
+
+            // Hide episodes section for movies
+            HideEpisodesUI();
+
+            // Show play button for movies only
+            if (FindName("VodActionsPanel") is StackPanel actionsPanel)
+                actionsPanel.Visibility = Visibility.Visible;
+        }
+
+        private SeriesContent? _currentSubscribedSeries;
+
+        private void ShowSeriesDetailsPanel(SeriesContent series)
+        {
+            try
+            {
+                // Unsubscribe from previous series property changes
+                if (_currentSubscribedSeries != null)
+                {
+                    _currentSubscribedSeries.PropertyChanged -= SeriesContent_PropertyChanged;
+                }
+
+                // Subscribe to this series' property changes
+                _currentSubscribedSeries = series;
+                series.PropertyChanged += SeriesContent_PropertyChanged;
+
+                // If details are already loaded, show them immediately
+                if (series.DetailsLoaded)
+                {
+                    DisplaySeriesDetailsPanel(series);
+                    return;
+                }
+
+                // Show loading state
+                if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                {
+                    placeholder.Text = "Loading details...";
+                    placeholder.Visibility = Visibility.Visible;
+                }
+
+                if (FindName("VodDetailsContent") is StackPanel content)
+                    content.Visibility = Visibility.Collapsed;
+
+                // Start loading details in background (fire and forget)
+                _ = LoadSeriesDetailsAsync(series);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error showing series details: {ex.Message}");
+                // Show error state
+                if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                {
+                    placeholder.Text = "Failed to load details";
+                    placeholder.Visibility = Visibility.Visible;
+                }
+                if (FindName("VodDetailsContent") is StackPanel content)
+                    content.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void SeriesContent_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == "DetailsLoaded" &&
+                sender is SeriesContent series && series.DetailsLoaded && ReferenceEquals(series, this.SelectedSeriesContent))
+            {
+                // Details have been loaded for the currently selected series, update UI
+                Dispatcher.Invoke(() => DisplaySeriesDetailsPanel(series));
+            }
+        }
+
+        private void DisplaySeriesDetailsPanel(SeriesContent series)
+        {
+            // Hide placeholder, show content
+            if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
+                placeholder.Visibility = Visibility.Collapsed;
+
+            if (FindName("VodDetailsContent") is StackPanel content)
+                content.Visibility = Visibility.Visible;
+
+            // Set title
+            if (FindName("VodDetailsTitle") is TextBlock title)
+                title.Text = series.Name ?? "Unknown";
+
+            // Update all detail fields
+            UpdateSeriesDetailsDisplay(series);
+        }
+
+        private void UpdateSeriesDetailsDisplay(SeriesContent series)
+        {
+            // Only update if details are actually loaded
+            if (!series.DetailsLoaded)
+            {
+                // Keep showing loading state
+                return;
+            }
+
+            // Update all fields with loaded data
+            if (FindName("VodDetailsYear") is TextBlock year)
+                year.Text = !string.IsNullOrWhiteSpace(series.ReleaseDate) ? series.DisplayYear : "";
+
+            if (FindName("VodDetailsDuration") is TextBlock duration)
+                duration.Text = series.SeasonCount > 0 ? series.DisplayDuration : "";
+
+            if (FindName("VodDetailsRating") is TextBlock rating)
+                rating.Text = !string.IsNullOrWhiteSpace(series.Rating) ? series.Rating : "";
+
+            if (FindName("VodDetailsGenre") is TextBlock genre)
+                genre.Text = !string.IsNullOrWhiteSpace(series.Genre) ? series.Genre : "";
+
+            if (FindName("VodDetailsCast") is TextBlock cast)
+                cast.Text = !string.IsNullOrWhiteSpace(series.Cast) ? series.Cast : "";
+
+            if (FindName("VodDetailsDirector") is TextBlock director)
+                director.Text = !string.IsNullOrWhiteSpace(series.Director) ? series.Director : "";
+
+            if (FindName("VodDetailsPlot") is TextBlock plot)
+                plot.Text = !string.IsNullOrWhiteSpace(series.Plot) ? series.Plot : "No plot available";
+
+            // Hide play button for TV shows (use episodes instead)
+            if (FindName("VodActionsPanel") is StackPanel actionsPanel)
+                actionsPanel.Visibility = Visibility.Collapsed;
+
+            // Show episodes section for series and populate it
+            PopulateEpisodesUI(series);
+        }
+
+        private void PopulateEpisodesUI(SeriesContent series)
+        {
+            // Show episodes section
+            if (FindName("EpisodesSection") is Border episodesSection)
+                episodesSection.Visibility = Visibility.Visible;
+
+            // Clear existing episodes
+            if (FindName("SeasonsPanel") is StackPanel seasonsPanel)
+            {
+                seasonsPanel.Children.Clear();
+
+                foreach (var season in series.Seasons)
+                {
+                    // Create season header
+                    var seasonHeader = new Border
+                    {
+                        Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47)),
+                        CornerRadius = new CornerRadius(4),
+                        Margin = new Thickness(0, 4, 0, 2),
+                        Padding = new Thickness(8, 4, 8, 4)
+                    };
+
+                    var seasonHeaderText = new TextBlock
+                    {
+                        Text = $"{season.DisplayName} ({season.Episodes.Count} episodes)",
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0xDD, 0xE6, 0xF2)),
+                        FontSize = 12
+                    };
+
+                    seasonHeader.Child = seasonHeaderText;
+                    seasonsPanel.Children.Add(seasonHeader);
+
+                    // Create episodes list
+                    foreach (var episode in season.Episodes)
+                    {
+                        var episodeButton = new Button
+                        {
+                            Content = episode.DisplayTitle,
+                            Margin = new Thickness(8, 1, 0, 1),
+                            Padding = new Thickness(8, 4, 8, 4),
+                            Background = Brushes.Transparent,
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7)),
+                            BorderBrush = Brushes.Transparent,
+                            BorderThickness = new Thickness(0),
+                            HorizontalAlignment = HorizontalAlignment.Stretch,
+                            HorizontalContentAlignment = HorizontalAlignment.Left,
+                            FontSize = 11,
+                            Cursor = System.Windows.Input.Cursors.Hand
+                        };
+
+                        episodeButton.Click += (s, e) => TryLaunchEpisodeInPlayer(episode);
+                        seasonsPanel.Children.Add(episodeButton);
+                    }
+                }
+            }
+        }
+
+        private void HideEpisodesUI()
+        {
+            // Hide episodes section
+            if (FindName("EpisodesSection") is Border episodesSection)
+                episodesSection.Visibility = Visibility.Collapsed;
+
+            // Clear episodes
+            if (FindName("SeasonsPanel") is StackPanel seasonsPanel)
+                seasonsPanel.Children.Clear();
+        }
+
+        private void VodPlayButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (SelectedVodContent != null)
+            {
+                TryLaunchVodInPlayer(SelectedVodContent);
+            }
+            else if (SelectedSeriesContent != null)
+            {
+                TryLaunchSeriesInPlayer(SelectedSeriesContent);
+            }
+        }
+
+
+        // Profile page methods
+        private void LoadProfileData()
+        {
+            try
+            {
+                // Update account information
+                if (FindName("UsernameText") is TextBlock usernameText)
+                    usernameText.Text = Session.Username ?? "Unknown";
+
+                if (FindName("StatusText") is TextBlock statusText)
+                    statusText.Text = Session.UserInfo?.status ?? "Unknown";
+
+                if (FindName("IsTrialText") is TextBlock isTrialText)
+                    isTrialText.Text = Session.UserInfo?.is_trial ?? "Unknown";
+
+                if (FindName("ExpiryDateText") is TextBlock expiryText)
+                {
+                    if (Session.UserInfo?.exp_date != null && long.TryParse(Session.UserInfo.exp_date, out var expTimestamp))
+                    {
+                        var expiry = DateTimeOffset.FromUnixTimeSeconds(expTimestamp).DateTime;
+                        expiryText.Text = expiry.ToString("MM/dd/yyyy hh:mm tt");
+                    }
+                    else
+                        expiryText.Text = "Never";
+                }
+
+                if (FindName("MaxConnectionsText") is TextBlock maxConnText)
+                    maxConnText.Text = Session.UserInfo?.max_connections ?? "Unknown";
+
+                if (FindName("ActiveConnectionsText") is TextBlock activeConnText)
+                    activeConnText.Text = Session.UserInfo?.active_cons ?? "0";
+
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error loading profile data: {ex.Message}");
+            }
+        }
+
+        private async void RefreshProfile_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Re-fetch user info if in Xtream mode
+                if (Session.Mode == SessionMode.Xtream)
+                {
+                    var url = Session.BuildApi("get_account_info");
+                    var response = await _http.GetStringAsync(url);
+                    var userInfo = JsonSerializer.Deserialize<UserInfo>(response);
+
+                    if (userInfo != null)
+                    {
+                        Session.UserInfo = userInfo;
+                    }
+                }
+
+                LoadProfileData();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error refreshing profile: {ex.Message}");
+            }
+        }
+
+
+        // Settings page methods
+        private void LoadSettingsPage()
+        {
+            try
+            {
+                if (FindName("SettingsPlayerKindCombo") is ComboBox playerCombo)
+                {
+                    playerCombo.SelectedIndex = Session.PreferredPlayer switch
+                    {
+                        PlayerKind.VLC => 0,
+                        PlayerKind.MPCHC => 1,
+                        PlayerKind.MPV => 2,
+                        PlayerKind.Custom => 3,
+                        _ => 0
+                    };
+                }
+
+                if (FindName("SettingsPlayerExeTextBox") is TextBox playerExe)
+                    playerExe.Text = Session.PlayerExePath ?? string.Empty;
+
+                if (FindName("SettingsArgsTemplateTextBox") is TextBox argsTemplate)
+                    argsTemplate.Text = Session.PlayerArgsTemplate ?? string.Empty;
+
+                if (FindName("SettingsFfmpegPathTextBox") is TextBox ffmpegPath)
+                    ffmpegPath.Text = Session.FfmpegPath ?? string.Empty;
+
+                if (FindName("SettingsRecordingDirTextBox") is TextBox recordingDir)
+                    recordingDir.Text = Session.RecordingDirectory ?? string.Empty;
+
+                if (FindName("SettingsFfmpegArgsTextBox") is TextBox ffmpegArgs)
+                    ffmpegArgs.Text = Session.FfmpegArgsTemplate ?? string.Empty;
+
+                if (FindName("SettingsLastEpgUpdateTextBox") is TextBox lastEpg)
+                {
+                    lastEpg.Text = Session.LastEpgUpdateUtc.HasValue
+                        ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g")
+                        : "(never)";
+                }
+
+                if (FindName("SettingsEpgIntervalTextBox") is TextBox epgInterval)
+                    epgInterval.Text = ((int)Session.EpgRefreshInterval.TotalMinutes).ToString();
+
+                ValidateAllSettingsFields();
+
+                // Initialize logging display
+                Log("Settings page loaded. Raw output logging is active.\n");
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error loading settings: {ex.Message}", true);
+            }
+        }
+
+        private void SetSettingsStatusMessage(string message, bool isError = false)
+        {
+            if (FindName("SettingsStatusText") is TextBlock statusText)
+            {
+                statusText.Text = message;
+                statusText.Foreground = new SolidColorBrush(isError ? Color.FromRgb(0xF8, 0x81, 0x66) : Color.FromRgb(0x8B, 0xA1, 0xB9));
+            }
+        }
+
+        private void ValidateAllSettingsFields()
+        {
+            ValidateSettingsPlayerPath();
+            ValidateSettingsFfmpegPath();
+            ValidateSettingsRecordingDirectory();
+            ValidateSettingsEpgInterval();
+        }
+
+        private void ValidateSettingsPlayerPath()
+        {
+            if (FindName("SettingsPlayerExeTextBox") is not TextBox pathBox || FindName("SettingsPlayerPathStatus") is not TextBlock status)
+                return;
+
+            var path = pathBox.Text.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                status.Text = "Path is required for custom players";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+            else if (!File.Exists(path))
+            {
+                status.Text = "File not found";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+            else
+            {
+                status.Text = "✓ Valid executable";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+            }
+        }
+
+        private void ValidateSettingsFfmpegPath()
+        {
+            if (FindName("SettingsFfmpegPathTextBox") is not TextBox pathBox || FindName("SettingsFfmpegPathStatus") is not TextBlock status)
+                return;
+
+            var path = pathBox.Text.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                status.Text = "FFmpeg path not set (recording disabled)";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0xA1, 0xB9));
+            }
+            else if (!File.Exists(path))
+            {
+                status.Text = "FFmpeg executable not found";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+            else
+            {
+                status.Text = "✓ FFmpeg ready for recording";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+            }
+        }
+
+        private void ValidateSettingsRecordingDirectory()
+        {
+            if (FindName("SettingsRecordingDirTextBox") is not TextBox pathBox || FindName("SettingsRecordingDirStatus") is not TextBlock status)
+                return;
+
+            var path = pathBox.Text.Trim();
+            if (string.IsNullOrEmpty(path))
+            {
+                status.Text = "Using default: My Videos folder";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0xA1, 0xB9));
+            }
+            else if (!Directory.Exists(path))
+            {
+                status.Text = "Directory will be created when recording";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0xC5, 0x55));
+            }
+            else
+            {
+                status.Text = "✓ Directory exists";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+            }
+        }
+
+        private void ValidateSettingsEpgInterval()
+        {
+            if (FindName("SettingsEpgIntervalTextBox") is not TextBox textBox || FindName("SettingsEpgIntervalStatus") is not TextBlock status)
+                return;
+
+            var text = textBox.Text.Trim();
+            if (int.TryParse(text, out var minutes) && minutes >= 5 && minutes <= 720)
+            {
+                status.Text = $"✓ EPG will refresh every {minutes} minutes";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+            }
+            else
+            {
+                status.Text = "Invalid interval (5-720 minutes allowed)";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+        }
+
+        private void SettingsAutoDetectPlayer_Click(object sender, RoutedEventArgs e)
+        {
+            var kind = GetSettingsSelectedPlayerKind();
+            var detectedPath = DetectSettingsPlayerPath(kind);
+
+            if (!string.IsNullOrEmpty(detectedPath))
+            {
+                if (FindName("SettingsPlayerExeTextBox") is TextBox textBox)
+                    textBox.Text = detectedPath;
+                SetSettingsStatusMessage($"Auto-detected {kind} player");
+                ValidateSettingsPlayerPath();
+            }
+            else
+            {
+                SetSettingsStatusMessage($"Could not auto-detect {kind} player", true);
+            }
+        }
+
+        private void SettingsAutoDetectFfmpeg_Click(object sender, RoutedEventArgs e)
+        {
+            var detectedPath = DetectSettingsFfmpegPath();
+
+            if (!string.IsNullOrEmpty(detectedPath))
+            {
+                if (FindName("SettingsFfmpegPathTextBox") is TextBox textBox)
+                    textBox.Text = detectedPath;
+                SetSettingsStatusMessage("Auto-detected FFmpeg");
+                ValidateSettingsFfmpegPath();
+            }
+            else
+            {
+                SetSettingsStatusMessage("Could not auto-detect FFmpeg", true);
+            }
+        }
+
+        private string DetectSettingsPlayerPath(PlayerKind kind)
+        {
+            var commonPaths = kind switch
+            {
+                PlayerKind.VLC => new[]
+                {
+                    @"C:\Program Files\VideoLAN\VLC\vlc.exe",
+                    @"C:\Program Files (x86)\VideoLAN\VLC\vlc.exe",
+                    Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\VideoLAN\VLC\vlc.exe"),
+                    Environment.ExpandEnvironmentVariables(@"%ProgramFiles(x86)%\VideoLAN\VLC\vlc.exe")
+                },
+                PlayerKind.MPCHC => new[]
+                {
+                    @"C:\Program Files\MPC-HC\mpc-hc64.exe",
+                    @"C:\Program Files (x86)\MPC-HC\mpc-hc.exe",
+                    @"C:\Program Files\K-Lite Codec Pack\MPC-HC64\mpc-hc64.exe",
+                    @"C:\Program Files (x86)\K-Lite Codec Pack\MPC-HC\mpc-hc.exe"
+                },
+                PlayerKind.MPV => new[]
+                {
+                    @"C:\Program Files\mpv\mpv.exe",
+                    @"C:\Program Files (x86)\mpv\mpv.exe"
+                },
+                _ => Array.Empty<string>()
+            };
+
+            return commonPaths.FirstOrDefault(File.Exists) ?? string.Empty;
+        }
+
+        private string DetectSettingsFfmpegPath()
+        {
+            var commonPaths = new[]
+            {
+                @"C:\ffmpeg\bin\ffmpeg.exe",
+                @"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
+                @"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
+                Environment.ExpandEnvironmentVariables(@"%ProgramFiles%\ffmpeg\bin\ffmpeg.exe"),
+                "ffmpeg.exe"
+            };
+
+            foreach (var path in commonPaths)
+            {
+                try
+                {
+                    if (Path.GetFileName(path) == "ffmpeg.exe" && path == "ffmpeg.exe")
+                    {
+                        var process = Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "where",
+                            Arguments = "ffmpeg",
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                            CreateNoWindow = true
+                        });
+
+                        if (process != null)
+                        {
+                            var output = process.StandardOutput.ReadToEnd();
+                            process.WaitForExit();
+                            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+                            {
+                                return output.Split('\n')[0].Trim();
+                            }
+                        }
+                    }
+                    else if (File.Exists(path))
+                    {
+                        return path;
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return string.Empty;
+        }
+
+        // Settings event handlers
+        private void SettingsPlayerExeTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            ValidateSettingsPlayerPath();
+        }
+
+        private void SettingsFfmpegPathTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            ValidateSettingsFfmpegPath();
+        }
+
+        private void SettingsRecordingDirTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            ValidateSettingsRecordingDirectory();
+        }
+
+        private void SettingsEpgIntervalTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            ValidateSettingsEpgInterval();
+        }
+
+        private void SettingsArgsTemplateTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (FindName("SettingsArgsTemplateTextBox") is not TextBox textBox) return;
+
+            var template = textBox.Text.Trim();
+            if (string.IsNullOrEmpty(template))
+            {
+                SetSettingsStatusMessage("Using default arguments for selected player");
+            }
+            else if (template.Contains("{url}"))
+            {
+                SetSettingsStatusMessage("Arguments template looks valid");
+            }
+            else
+            {
+                SetSettingsStatusMessage("Warning: Template should contain {url} token", true);
+            }
+        }
+
+        private void SettingsTestPlayer_Click(object sender, RoutedEventArgs e)
+        {
+            if (FindName("SettingsTestPlayerStatus") is not TextBlock status || FindName("SettingsPlayerExeTextBox") is not TextBox pathBox)
+                return;
+
+            status.Text = "Testing...";
+            status.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0xA1, 0xB9));
+
+            var path = pathBox.Text.Trim();
+            if (string.IsNullOrEmpty(path) || !File.Exists(path))
+            {
+                status.Text = "❌ Invalid player path";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+                return;
+            }
+
+            try
+            {
+                var testUrl = "https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4";
+                var args = string.Empty;
+
+                if (FindName("SettingsArgsTemplateTextBox") is TextBox argsBox)
+                {
+                    args = string.IsNullOrEmpty(argsBox.Text)
+                        ? GetSettingsDefaultArgsForPlayer()
+                        : argsBox.Text;
+                }
+
+                args = args.Replace("{url}", $"\"{testUrl}\"")
+                          .Replace("{title}", "Test Video");
+
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = path,
+                    Arguments = args,
+                    UseShellExecute = false
+                };
+
+                using var process = Process.Start(startInfo);
+                if (process != null)
+                {
+                    status.Text = "✅ Player launched successfully";
+                    status.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0x86, 0x3A));
+                }
+                else
+                {
+                    status.Text = "❌ Failed to start player";
+                    status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+                }
+            }
+            catch (Exception ex)
+            {
+                status.Text = $"❌ Error: {ex.Message}";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(0xF8, 0x81, 0x66));
+            }
+        }
+
+        private string GetSettingsDefaultArgsForPlayer()
+        {
+            return GetSettingsSelectedPlayerKind() switch
+            {
+                PlayerKind.VLC => "\"{url}\" --meta-title=\"{title}\"",
+                PlayerKind.MPCHC => "\"{url}\" /play",
+                PlayerKind.MPV => "--force-media-title=\"{title}\" \"{url}\"",
+                _ => "{url}"
+            };
+        }
+
+        private void SettingsBrowsePlayer_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Select player executable",
+                    Filter = "Executables (*.exe)|*.exe|All files (*.*)|*.*",
+                    CheckFileExists = true
+                };
+
+                if (dlg.ShowDialog() == true)
+                {
+                    if (FindName("SettingsPlayerExeTextBox") is TextBox textBox)
+                        textBox.Text = dlg.FileName;
+                    SetSettingsStatusMessage("Player executable selected");
+                }
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error selecting player: {ex.Message}", true);
+            }
+        }
+
+        private void SettingsBrowseFfmpeg_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Select ffmpeg executable",
+                    Filter = "ffmpeg (ffmpeg.exe)|ffmpeg.exe|Executables (*.exe)|*.exe|All files (*.*)|*.*",
+                    CheckFileExists = true
+                };
+
+                if (dlg.ShowDialog() == true)
+                {
+                    if (FindName("SettingsFfmpegPathTextBox") is TextBox textBox)
+                        textBox.Text = dlg.FileName;
+                    SetSettingsStatusMessage("FFmpeg executable selected");
+                }
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error selecting FFmpeg: {ex.Message}", true);
+            }
+        }
+
+        private void SettingsBrowseRecordingDir_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dialog = new Microsoft.Win32.OpenFolderDialog
+                {
+                    Title = "Select recording directory"
+                };
+
+                if (FindName("SettingsRecordingDirTextBox") is TextBox textBox)
+                {
+                    var currentPath = textBox.Text.Trim();
+                    if (!string.IsNullOrEmpty(currentPath) && Directory.Exists(currentPath))
+                    {
+                        dialog.InitialDirectory = currentPath;
+                    }
+
+                    if (dialog.ShowDialog() == true)
+                    {
+                        textBox.Text = dialog.FolderName;
+                        SetSettingsStatusMessage("Recording directory selected");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error selecting directory: {ex.Message}", true);
+            }
+        }
+
+        private void SettingsPlayerKindCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!IsInitialized) return;
+
+            var kind = GetSettingsSelectedPlayerKind();
+
+            if (FindName("SettingsArgsTemplateTextBox") is TextBox argsBox)
+            {
+                var currentArgs = argsBox.Text.Trim();
+                if (string.IsNullOrWhiteSpace(currentArgs) ||
+                    currentArgs == "{url}" ||
+                    currentArgs.Contains("meta-title") ||
+                    currentArgs.Contains("force-media-title") ||
+                    currentArgs.Contains("/play"))
+                {
+                    argsBox.Text = GetSettingsDefaultArgsForPlayer();
+                }
+            }
+
+            if (FindName("SettingsPlayerExeTextBox") is TextBox playerBox && string.IsNullOrEmpty(playerBox.Text.Trim()))
+            {
+                var detectedPath = DetectSettingsPlayerPath(kind);
+                if (!string.IsNullOrEmpty(detectedPath))
+                {
+                    playerBox.Text = detectedPath;
+                    SetSettingsStatusMessage($"Auto-detected {kind} player");
+                }
+            }
+
+            ValidateAllSettingsFields();
+        }
+
+        private PlayerKind GetSettingsSelectedPlayerKind()
+        {
+            if (FindName("SettingsPlayerKindCombo") is ComboBox combo &&
+                combo.SelectedItem is ComboBoxItem cbi &&
+                cbi.Tag is string tag &&
+                Enum.TryParse<PlayerKind>(tag, out var val))
+                return val;
+            return PlayerKind.VLC;
+        }
+
+        private void SettingsSave_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var isValid = true;
+                var errorMessages = new List<string>();
+
+                if (FindName("SettingsEpgIntervalTextBox") is TextBox epgBox)
+                {
+                    if (!int.TryParse(epgBox.Text.Trim(), out var minutes) || minutes < 5 || minutes > 720)
+                    {
+                        errorMessages.Add("EPG refresh interval must be between 5 and 720 minutes");
+                        isValid = false;
+                    }
+                    else
+                    {
+                        Session.EpgRefreshInterval = TimeSpan.FromMinutes(minutes);
+                    }
+                }
+
+                if (FindName("SettingsPlayerExeTextBox") is TextBox playerBox)
+                {
+                    var playerPath = playerBox.Text.Trim();
+                    if (!string.IsNullOrEmpty(playerPath) && !File.Exists(playerPath))
+                    {
+                        errorMessages.Add("Player executable path is invalid");
+                        isValid = false;
+                    }
+                    else
+                    {
+                        Session.PlayerExePath = string.IsNullOrWhiteSpace(playerPath) ? null : playerPath;
+                    }
+                }
+
+                if (FindName("SettingsFfmpegPathTextBox") is TextBox ffmpegBox)
+                {
+                    var ffmpegPath = ffmpegBox.Text.Trim();
+                    if (!string.IsNullOrEmpty(ffmpegPath) && !File.Exists(ffmpegPath))
+                    {
+                        errorMessages.Add("FFmpeg executable path is invalid");
+                        isValid = false;
+                    }
+                    else
+                    {
+                        Session.FfmpegPath = string.IsNullOrWhiteSpace(ffmpegPath) ? null : ffmpegPath;
+                    }
+                }
+
+                if (!isValid)
+                {
+                    var message = "Please fix the following issues:\n\n" + string.Join("\n", errorMessages);
+                    MessageBox.Show(message, "Validation Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                Session.PreferredPlayer = GetSettingsSelectedPlayerKind();
+
+                if (FindName("SettingsArgsTemplateTextBox") is TextBox argsBox)
+                {
+                    Session.PlayerArgsTemplate = string.IsNullOrWhiteSpace(argsBox.Text)
+                        ? string.Empty
+                        : argsBox.Text.Trim();
+                }
+
+                if (FindName("SettingsRecordingDirTextBox") is TextBox recordingBox)
+                {
+                    Session.RecordingDirectory = string.IsNullOrWhiteSpace(recordingBox.Text)
+                        ? null
+                        : recordingBox.Text.Trim();
+                }
+
+                if (FindName("SettingsFfmpegArgsTextBox") is TextBox ffmpegArgsBox)
+                {
+                    Session.FfmpegArgsTemplate = string.IsNullOrWhiteSpace(ffmpegArgsBox.Text)
+                        ? Session.FfmpegArgsTemplate
+                        : ffmpegArgsBox.Text.Trim();
+                }
+
+                SettingsStore.SaveFromSession();
+                SetSettingsStatusMessage("Settings saved successfully!");
+                MessageBox.Show("Settings saved successfully!", "Settings", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error saving settings: {ex.Message}", true);
+                MessageBox.Show($"Failed to save settings: {ex.Message}", "Save Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SettingsUpdateEpgNow_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Session.RaiseEpgRefreshRequested();
+                if (FindName("SettingsLastEpgUpdateTextBox") is TextBox lastEpgBox)
+                {
+                    lastEpgBox.Text = Session.LastEpgUpdateUtc.HasValue
+                        ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g")
+                        : "(never)";
+                }
+                SetSettingsStatusMessage("EPG refresh requested");
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error requesting EPG refresh: {ex.Message}", true);
+            }
+        }
+
+        private void SettingsRestoreDefaults_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show("This will reset all settings to their default values. Continue?",
+                "Restore Defaults", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            if (result != MessageBoxResult.Yes)
+                return;
+
+            try
+            {
+                if (FindName("SettingsPlayerKindCombo") is ComboBox playerCombo)
+                    playerCombo.SelectedIndex = 0;
+
+                if (FindName("SettingsPlayerExeTextBox") is TextBox playerBox)
+                    playerBox.Text = string.Empty;
+
+                if (FindName("SettingsArgsTemplateTextBox") is TextBox argsBox)
+                    argsBox.Text = "\"{url}\" --meta-title=\"{title}\"";
+
+                if (FindName("SettingsFfmpegPathTextBox") is TextBox ffmpegBox)
+                    ffmpegBox.Text = string.Empty;
+
+                if (FindName("SettingsRecordingDirTextBox") is TextBox recordingBox)
+                    recordingBox.Text = string.Empty;
+
+                if (FindName("SettingsFfmpegArgsTextBox") is TextBox ffmpegArgsBox)
+                    ffmpegArgsBox.Text = "-i \"{url}\" -c copy -f mpegts \"{output}\"";
+
+                if (FindName("SettingsEpgIntervalTextBox") is TextBox epgBox)
+                    epgBox.Text = "30";
+
+                ValidateAllSettingsFields();
+                SetSettingsStatusMessage("Settings restored to defaults (not saved yet)");
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error restoring defaults: {ex.Message}", true);
+            }
+        }
+
+        // Log control event handlers
+        private void SettingsEnableLogging_Changed(object sender, RoutedEventArgs e)
+        {
+            if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+            {
+                if (FindName("SettingsEnableLoggingCheckBox") is CheckBox checkBox && checkBox.IsChecked == true)
+                {
+                    if (logTextBlock.Text == "Raw output log will appear here when logging is enabled...")
+                    {
+                        logTextBlock.Text = $"[{DateTime.Now:HH:mm:ss.fff}] Logging enabled.\n";
+                    }
+                    else
+                    {
+                        Log("Logging enabled.\n");
+                    }
+                }
+                else
+                {
+                    Log("Logging disabled.\n");
+                }
+            }
+        }
+
+        private void SettingsClearLog_Click(object sender, RoutedEventArgs e)
+        {
+            if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+            {
+                logTextBlock.Text = $"[{DateTime.Now:HH:mm:ss.fff}] Log cleared.\n";
+            }
+        }
+
+        private void SettingsCopyLog_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+                {
+                    Clipboard.SetText(logTextBlock.Text);
+                    Log("Log copied to clipboard.\n");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to copy log to clipboard: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SettingsSaveLog_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+                {
+                    var saveDialog = new Microsoft.Win32.SaveFileDialog
+                    {
+                        Filter = "Text files (*.txt)|*.txt|Log files (*.log)|*.log|All files (*.*)|*.*",
+                        DefaultExt = ".txt",
+                        FileName = $"iptv-log-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.txt"
+                    };
+
+                    if (saveDialog.ShowDialog() == true)
+                    {
+                        System.IO.File.WriteAllText(saveDialog.FileName, logTextBlock.Text);
+                        Log($"Log saved to: {saveDialog.FileName}\n");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save log: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ShowLoadingOverlay(string overlayName)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (FindName(overlayName) is Grid overlay)
+                {
+                    overlay.Visibility = Visibility.Visible;
+                }
+            });
+        }
+
+        private void HideLoadingOverlay(string overlayName)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (FindName(overlayName) is Grid overlay)
+                {
+                    overlay.Visibility = Visibility.Collapsed;
+                }
+            });
+        }
+
+
+        // View mode event handlers
+        private void ChannelsGridView_Click(object sender, RoutedEventArgs e)
+        {
+            ChannelsViewMode = ViewMode.Grid;
+            UpdateChannelsViewButtons();
+            UpdateChannelsViewVisibility();
+        }
+
+        private void ChannelsListView_Click(object sender, RoutedEventArgs e)
+        {
+            ChannelsViewMode = ViewMode.List;
+            UpdateChannelsViewButtons();
+            UpdateChannelsViewVisibility();
+        }
+
+        private void VodGridView_Click(object sender, RoutedEventArgs e)
+        {
+            VodViewMode = ViewMode.Grid;
+            UpdateVodViewButtons();
+            UpdateVodViewVisibility();
+        }
+
+        private void VodListView_Click(object sender, RoutedEventArgs e)
+        {
+            VodViewMode = ViewMode.List;
+            UpdateVodViewButtons();
+            UpdateVodViewVisibility();
+        }
+
+
+        private void UpdateChannelsViewButtons()
+        {
+            if (FindName("ChannelsGridViewBtn") is Button gridBtn)
+                gridBtn.Background = IsChannelsGridView ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#223247")) : Brushes.Transparent;
+            if (FindName("ChannelsListViewBtn") is Button listBtn)
+                listBtn.Background = IsChannelsListView ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#223247")) : Brushes.Transparent;
+        }
+
+        private void UpdateVodViewButtons()
+        {
+            if (FindName("VodGridViewBtn") is Button gridBtn)
+                gridBtn.Background = IsVodGridView ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#223247")) : Brushes.Transparent;
+            if (FindName("VodListViewBtn") is Button listBtn)
+                listBtn.Background = IsVodListView ? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#223247")) : Brushes.Transparent;
+        }
+
+        private void UpdateChannelsViewVisibility()
+        {
+            if (FindName("ChannelsGridScrollViewer") is ScrollViewer gridScrollViewer)
+                gridScrollViewer.Visibility = IsChannelsGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("ChannelsListScrollViewer") is ScrollViewer listScrollViewer)
+                listScrollViewer.Visibility = IsChannelsListView ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void UpdateVodViewVisibility()
+        {
+            // Update Movies view visibility
+            if (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridScrollViewer)
+                moviesGridScrollViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("MoviesListScrollViewer") is ScrollViewer moviesListScrollViewer)
+                moviesListScrollViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
+
+            // Update Series view visibility
+            if (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridScrollViewer)
+                seriesGridScrollViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+            if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListScrollViewer)
+                seriesListScrollViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+
+        private void TileSize_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_updatingTileSize) return;
+
+            if (sender is ComboBox combo && combo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            {
+                CurrentTileSize = tag switch
+                {
+                    "Small" => TileSize.Small,
+                    "Large" => TileSize.Large,
+                    _ => TileSize.Medium
+                };
+
+                // Keep both ComboBoxes in sync
+                SetTileSizeSelection(CurrentTileSize);
+            }
+        }
+
+        private void SetTileSizeSelection(TileSize tileSize)
+        {
+            _updatingTileSize = true;
+
+            string targetTag = tileSize switch
+            {
+                TileSize.Small => "Small",
+                TileSize.Large => "Large",
+                _ => "Medium"
+            };
+
+            // Update both ComboBoxes
+            if (FindName("TileSizeCombo") is ComboBox tileSizeCombo)
+            {
+                foreach (ComboBoxItem item in tileSizeCombo.Items)
+                {
+                    if (item.Tag?.ToString() == targetTag)
+                    {
+                        tileSizeCombo.SelectedItem = item;
+                        break;
+                    }
+                }
+            }
+
+            if (FindName("VodTileSizeCombo") is ComboBox vodTileSizeCombo)
+            {
+                foreach (ComboBoxItem item in vodTileSizeCombo.Items)
+                {
+                    if (item.Tag?.ToString() == targetTag)
+                    {
+                        vodTileSizeCombo.SelectedItem = item;
+                        break;
+                    }
+                }
+            }
+
+            _updatingTileSize = false;
+        }
+
+
+        private void DefaultViewMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ComboBox combo && combo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            {
+                var newMode = tag == "List" ? ViewMode.List : ViewMode.Grid;
+                ChannelsViewMode = newMode;
+                VodViewMode = newMode;
+                UpdateChannelsViewButtons();
+                UpdateVodViewButtons();
+            }
+        }
+
+        private void DashboardWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            // Update tile sizes when window size changes for responsive design
+            OnPropertyChanged(nameof(TileWidth));
+            OnPropertyChanged(nameof(TileHeight));
+            OnPropertyChanged(nameof(VodTileHeight));
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged; private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 }

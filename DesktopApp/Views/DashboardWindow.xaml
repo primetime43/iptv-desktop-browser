@@ -1,317 +1,1856 @@
 <Window x:Class="DesktopApp.Views.DashboardWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="IPTV Dashboard" Height="600" Width="1200" Background="#0D1117" WindowStartupLocation="CenterScreen">
+        Title="IPTV Dashboard" Height="700" Width="1400" MinHeight="600" MinWidth="1000"
+        Background="#0D1117" WindowStartupLocation="CenterScreen">
+
     <Window.Resources>
-        <!-- Base header button style -->
-        <Style x:Key="HeaderButtonBaseStyle" TargetType="Button">
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Padding" Value="12 4"/>
-            <Setter Property="Margin" Value="0 0 8 0"/>
+        <!-- Converters -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+
+        <!-- Boolean to Color Converter for View Mode Buttons -->
+        <Style x:Key="ViewModeButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderBrush" Value="#223247"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="#DDE6F2"/>
+            <Setter Property="Foreground" Value="#FFDDE6F2"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsPressed, RelativeSource={RelativeSource Self}}" Value="True">
+                    <Setter Property="Background" Value="#223247"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Navigation Button Style -->
+        <Style x:Key="NavButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="#9DB2C7"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="16,12"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="FontSize" Value="14"/>
             <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="SnapsToDevicePixels" Value="True"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        <Border x:Name="Border" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                            VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#223247"/>
+                                <Setter TargetName="Border" Property="Background" Value="#1C2329"/>
                             </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#2E425A"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" TargetName="Bd" Value="0.4"/>
+                            <Trigger Property="Tag" Value="Selected">
+                                <Setter TargetName="Border" Property="Background" Value="#223247"/>
+                                <Setter Property="Foreground" Value="#FFDDE6F2"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- Primary accent header button -->
-        <Style x:Key="PrimaryHeaderButtonStyle" TargetType="Button" BasedOn="{StaticResource HeaderButtonBaseStyle}">
-            <Setter Property="Background" Value="#347DFF"/>
-            <Setter Property="BorderBrush" Value="#347DFF"/>
-            <Setter Property="Foreground" Value="White"/>
+
+        <!-- Content Panel Style -->
+        <Style x:Key="ContentPanelStyle" TargetType="Grid">
+            <Setter Property="Background" Value="#161B22"/>
+            <Setter Property="Margin" Value="8"/>
+        </Style>
+
+        <!-- Header Style -->
+        <Style x:Key="HeaderTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="24"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#FFDDE6F2"/>
+            <Setter Property="Margin" Value="0,0,0,16"/>
+        </Style>
+
+        <!-- Card Style -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="#21262D"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="8"/>
+        </Style>
+
+        <!-- Recording Scheduler TabControl Style -->
+        <Style x:Key="SchedulerTabControlStyle" TargetType="TabControl">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Tab Headers -->
+                            <Border Grid.Row="0" Background="#161B22" CornerRadius="6,6,0,0"
+                                    BorderBrush="#30363D" BorderThickness="1,1,1,0" Margin="0,0,0,0">
+                                <TabPanel x:Name="HeaderPanel" IsItemsHost="True"
+                                         Background="Transparent" Margin="4,4,4,0"/>
+                            </Border>
+
+                            <!-- Tab Content -->
+                            <Border Grid.Row="1" Background="#21262D" CornerRadius="0,0,6,6"
+                                    BorderBrush="#30363D" BorderThickness="1,0,1,1">
+                                <ContentPresenter x:Name="PART_SelectedContentHost"
+                                                ContentSource="SelectedContent"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Recording Scheduler TabItem Style -->
+        <Style x:Key="SchedulerTabItemStyle" TargetType="TabItem">
+            <Setter Property="Foreground" Value="#9DB2C7"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="20,12"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="HorizontalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="Border" Background="{TemplateBinding Background}"
+                                BorderThickness="0" CornerRadius="4,4,0,0" Margin="2,0,2,0"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter x:Name="ContentSite"
+                                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                            ContentSource="Header"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#4C8FFF"/>
+                                <Setter TargetName="Border" Property="Background" Value="#2C333D"/>
+                                <Setter Property="Foreground" Value="#DDE6F2"/>
                             </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#1F66E8"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" TargetName="Bd" Value="0.4"/>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Border" Property="Background" Value="#347DFF"/>
+                                <Setter Property="Foreground" Value="White"/>
+                                <Setter TargetName="Border" Property="Margin" Value="2,0,2,-1"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- Destructive / logout style -->
-        <Style x:Key="DangerHeaderButtonStyle" TargetType="Button" BasedOn="{StaticResource HeaderButtonBaseStyle}">
-            <Setter Property="Foreground" Value="#F8D7DA"/>
-            <Setter Property="BorderBrush" Value="#5A1F28"/>
-            <Setter Property="Background" Value="#3B1A20"/>
+
+        <!-- ComboBox Style -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#DDE6F2"/>
+            <Setter Property="Background" Value="#21262D"/>
+            <Setter Property="BorderBrush" Value="#30363D"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
             <Setter Property="Template">
                 <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="4" Padding="{TemplateBinding Padding}">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                        </Border>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="ToggleButton"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        Grid.Column="2"
+                                        Focusable="false"
+                                        IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                        ClickMode="Press">
+                                <ToggleButton.Style>
+                                    <Style TargetType="ToggleButton">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ToggleButton">
+                                                    <Border x:Name="Border"
+                                                          Background="{TemplateBinding Background}"
+                                                          BorderBrush="{TemplateBinding BorderBrush}"
+                                                          BorderThickness="{TemplateBinding BorderThickness}"
+                                                          CornerRadius="2">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition />
+                                                                <ColumnDefinition Width="20" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Path x:Name="Arrow" Grid.Column="1"
+                                                                Fill="#9DB2C7" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                Data="M 0 0 L 4 4 L 8 0 Z"/>
+                                                        </Grid>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ToggleButton.Style>
+                            </ToggleButton>
+                            <ContentPresenter x:Name="ContentSite" IsHitTestVisible="False"
+                                            Content="{TemplateBinding SelectionBoxItem}"
+                                            ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                            ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
+                                            Margin="8,3,23,3"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Left"/>
+                            <TextBlock x:Name="PlaceholderText" Text="{TemplateBinding Tag}"
+                                     IsHitTestVisible="False" Margin="8,3,23,3"
+                                     VerticalAlignment="Center" HorizontalAlignment="Left"
+                                     Foreground="#667788" Visibility="Collapsed"/>
+                            <TextBox x:Name="PART_EditableTextBox" Style="{x:Null}"
+                                   HorizontalAlignment="Left" VerticalAlignment="Center"
+                                   Margin="3,3,23,3" Focusable="True"
+                                   Background="Transparent" Foreground="{TemplateBinding Foreground}"
+                                   Visibility="Hidden" IsReadOnly="{TemplateBinding IsReadOnly}"/>
+                            <Popup x:Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}"
+                                 AllowsTransparency="True" Focusable="False" PopupAnimation="Slide">
+                                <Grid x:Name="DropDown" SnapsToDevicePixels="True"
+                                    MinWidth="{TemplateBinding ActualWidth}" MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border x:Name="DropDownBorder" Background="#21262D" BorderThickness="1"
+                                          BorderBrush="#30363D" CornerRadius="2" Margin="0,1,0,0">
+                                        <ScrollViewer Margin="4,6,4,6" SnapsToDevicePixels="True">
+                                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#742C38"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#742C38"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#5A1F28"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" TargetName="Bd" Value="0.4"/>
+                            <Trigger Property="SelectedItem" Value="{x:Null}">
+                                <Setter TargetName="PlaceholderText" Property="Visibility" Value="Visible"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Resources>
+                <Style TargetType="ComboBoxItem">
+                    <Setter Property="Foreground" Value="#DDE6F2"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Padding" Value="8,4"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ComboBoxItem">
+                                <Border x:Name="Border" Background="{TemplateBinding Background}"
+                                      BorderThickness="0" Padding="{TemplateBinding Padding}">
+                                    <ContentPresenter />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="#347DFF"/>
+                                        <Setter Property="Foreground" Value="White"/>
+                                    </Trigger>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="#223247"/>
+                                        <Setter Property="Foreground" Value="#DDE6F2"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </Style.Resources>
+        </Style>
+
+        <!-- Loading Spinner Style -->
+        <Style x:Key="LoadingSpinnerStyle" TargetType="Grid">
+            <Setter Property="Background" Value="#80000000"/>
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Style.Resources>
+                <Storyboard x:Key="SpinAnimation" RepeatBehavior="Forever">
+                    <DoubleAnimation Storyboard.TargetName="SpinnerEllipse"
+                                   Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                   From="0" To="360" Duration="0:0:1"/>
+                </Storyboard>
+            </Style.Resources>
+            <Style.Triggers>
+                <Trigger Property="Visibility" Value="Visible">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard Storyboard="{StaticResource SpinAnimation}"/>
+                    </Trigger.EnterActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Loading Progress Bar Style -->
+        <Style x:Key="LoadingProgressBarStyle" TargetType="ProgressBar">
+            <Setter Property="Background" Value="#30363D"/>
+            <Setter Property="Foreground" Value="#347DFF"/>
+            <Setter Property="Height" Value="4"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="IsIndeterminate" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="2">
+                            <Grid>
+                                <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="2"/>
+                                <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}"
+                                      HorizontalAlignment="Left" CornerRadius="2"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Loading Overlay Style -->
+        <Style x:Key="LoadingOverlayStyle" TargetType="Grid">
+            <Setter Property="Background" Value="#80161B22"/>
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Setter Property="Panel.ZIndex" Value="999"/>
+        </Style>
+
+        <!-- Loading Text Style -->
+        <Style x:Key="LoadingTextStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#DDE6F2"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,8,0,0"/>
         </Style>
     </Window.Resources>
+
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="50"/>
-            <RowDefinition/>
-        </Grid.RowDefinitions>
-        <Border Background="#131C27" Grid.Row="0" Padding="14 0" >
-            <DockPanel>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="IPTV Dashboard" FontSize="18" FontWeight="Bold" Foreground="#F0F6FC"/>
-                    <TextBlock Text="  -  Last EPG:" Foreground="#8BA1B9" Margin="14 0 4 0"/>
-                    <TextBlock Text="{Binding LastEpgUpdateText}" Foreground="#DDE6F2"/>
-                    <!-- Top navigation buttons -->
-                    <StackPanel Orientation="Horizontal" Margin="40 0 0 0" VerticalAlignment="Center">
-                        <Button x:Name="NavCategoriesBtn" Content="Categories" Click="NavCategories_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
-                        <Button x:Name="NavGuideBtn" Content="Guide" Click="NavGuide_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
-                        <Button x:Name="NavVodBtn" Content="VOD" Click="NavVod_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
-                        <Button x:Name="NavProfileBtn" Content="Profile" Click="NavProfile_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
-                        <Button x:Name="NavOutputBtn" Content="Raw Output" Click="NavOutput_Click" Margin="0 0 8 0" Padding="12 4" Background="Transparent" Foreground="#DDE6F2" BorderBrush="#223247" BorderThickness="1"/>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="250"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Left Navigation Panel -->
+        <Border Grid.Column="0" Background="#161B22" BorderBrush="#21262D" BorderThickness="0,0,1,0">
+            <StackPanel>
+                <!-- App Header -->
+                <Border Background="#0D1117" Padding="16,12">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📺" FontSize="20" Margin="0,0,8,0"/>
+                        <TextBlock Text="IPTV Dashboard" FontSize="16" FontWeight="Bold"
+                                 Foreground="#FFDDE6F2" VerticalAlignment="Center"/>
                     </StackPanel>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Button x:Name="RecordStatusBtn" Style="{StaticResource HeaderButtonBaseStyle}" Margin="0 0 8 0" ToolTip="Show Recording Status" Click="OpenRecordingStatus_Click">
+                </Border>
+
+                <!-- Navigation Menu -->
+                <StackPanel Margin="0,16,0,0">
+                    <Button x:Name="LiveTvNavButton" Style="{StaticResource NavButtonStyle}"
+                            Tag="Selected" Click="NavigateToLiveTv">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE768;" Margin="0 0 6 0"/>
-                            <TextBlock Text="Status"/>
+                            <TextBlock Text="📺" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Live TV"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="ScheduleBtn" Style="{StaticResource HeaderButtonBaseStyle}" Margin="0 0 8 0" ToolTip="Schedule Recordings" Click="OpenScheduler_Click">
+
+                    <Button x:Name="VodNavButton" Style="{StaticResource NavButtonStyle}"
+                            Click="NavigateToVod">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE823;" Margin="0 0 6 0"/>
-                            <TextBlock Text="Schedule"/>
+                            <TextBlock Text="🎬" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Video on Demand"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="RecordBtn" Style="{StaticResource PrimaryHeaderButtonStyle}" Margin="0 0 12 0" ToolTip="Start/Stop Recording" Click="RecordBtn_Click">
+
+                    <Button x:Name="RecordingNavButton" Style="{StaticResource NavButtonStyle}"
+                            Click="NavigateToRecording">
                         <StackPanel Orientation="Horizontal">
-                            <Ellipse Width="10" Height="10" Fill="#FF4136" VerticalAlignment="Center" Margin="0 0 6 0"/>
-                            <TextBlock x:Name="RecordBtnText" Text="Record"/>
+                            <TextBlock Text="⏺️" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Recording"/>
                         </StackPanel>
                     </Button>
-                    <TextBlock Text="User:" Foreground="#8BA1B9" Margin="0 0 10 0"/>
-                    <TextBlock x:Name="UserNameText" Foreground="#DDE6F2" FontWeight="SemiBold" Margin="0 0 20 0"/>
-                    <Button Style="{StaticResource PrimaryHeaderButtonStyle}" Click="OpenSettings_Click" ToolTip="Open settings" Margin="0 0 8 0">
+
+                    <Button x:Name="SchedulerNavButton" Style="{StaticResource NavButtonStyle}"
+                            Click="NavigateToScheduler">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE713;" Margin="0 0 6 0"/>
+                            <TextBlock Text="📅" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Scheduler"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="ProfileNavButton" Style="{StaticResource NavButtonStyle}"
+                            Click="NavigateToProfile">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="👤" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Profile"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="SettingsNavButton" Style="{StaticResource NavButtonStyle}"
+                            Click="NavigateToSettings">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="⚙️" FontSize="16" Margin="0,0,12,0"/>
                             <TextBlock Text="Settings"/>
                         </StackPanel>
                     </Button>
-                    <Button Style="{StaticResource DangerHeaderButtonStyle}" Click="Logout_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock FontFamily="Segoe MDL2 Assets" Text="&#xE8AC;" Margin="0 0 6 0"/>
-                            <TextBlock Text="Logout"/>
-                        </StackPanel>
-                    </Button>
                 </StackPanel>
-            </DockPanel>
+
+                <!-- Bottom Section -->
+                <StackPanel Margin="16" VerticalAlignment="Bottom">
+                    <Separator Background="#21262D" Margin="0,0,0,16"/>
+
+                    <!-- Logout Button -->
+                    <Button Content="Logout" Style="{StaticResource NavButtonStyle}"
+                            Foreground="#DC3545" Click="Logout_Click" Margin="0,8,0,0"/>
+                </StackPanel>
+            </StackPanel>
         </Border>
-        <Grid Grid.Row="1" Margin="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="260"/>
-                <ColumnDefinition/>
-            </Grid.ColumnDefinitions>
-            <Border Background="#131C27" CornerRadius="10" Padding="14" Margin="0 0 12 0">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <!-- Moved Search Area with added spacing -->
-                        <TextBlock Text="Search" FontWeight="Bold" Foreground="#F0F6FC" Margin="0 0 8 0"/>
-                        <Border Background="#182433" CornerRadius="6" BorderBrush="#223247" BorderThickness="1" Padding="8" Margin="0 0 16 12">
-                            <StackPanel>
-                                <TextBox x:Name="SearchTextBox" Margin="0 6 0 4" BorderThickness="0" Background="#0E1620" Foreground="#DDE6F2" Padding="6 4" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search categories or channels"/>
-                                <TextBlock Text="Type to search..." Foreground="#5A6B7F" Margin="6 -30 0 0" IsHitTestVisible="False" VerticalAlignment="Center" Visibility="{Binding Text, ElementName=SearchTextBox, Converter={StaticResource NullToVisibilityConverter}}"/>
-                                <CheckBox Content="Search All Channels" Margin="0 8 0 0" VerticalAlignment="Center" Foreground="#DDE6F2" IsChecked="{Binding SearchAllChannels}" ToolTip="Search across all channels"/>
+
+        <!-- Main Content Area -->
+        <Grid Grid.Column="1" Style="{StaticResource ContentPanelStyle}">
+            <!-- Live TV Page -->
+            <Grid x:Name="LiveTvPage" Visibility="Visible">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Page Header -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,16,16,0">
+                    <TextBlock Text="Live TV" Style="{StaticResource HeaderTextStyle}"/>
+                    <ComboBox x:Name="CategoryCombo" Width="200" Height="32" Margin="32,0,16,0"
+                              DisplayMemberPath="Name" SelectedValuePath="Id"
+                              ItemsSource="{Binding CategoriesCollectionView}"
+                              Tag="Select category..."
+                              SelectionChanged="CategoryCombo_SelectionChanged"
+                              Background="#21262D" BorderBrush="#30363D"/>
+
+                    <!-- View Mode Toggle Buttons -->
+                    <StackPanel Orientation="Horizontal" Margin="16,0,0,0">
+                        <Border Background="#161B22" CornerRadius="4" Padding="2">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="ChannelsGridViewBtn" Content="⊞" Width="32" Height="32" Margin="0,0,2,0"
+                                        ToolTip="Grid View" Click="ChannelsGridView_Click"
+                                        Background="Transparent" Foreground="#FFDDE6F2" BorderThickness="0" FontSize="14"/>
+                                <Button x:Name="ChannelsListViewBtn" Content="☰" Width="32" Height="32"
+                                        ToolTip="List View" Click="ChannelsListView_Click"
+                                        Background="Transparent" Foreground="#FFDDE6F2" BorderThickness="0" FontSize="14"/>
                             </StackPanel>
                         </Border>
-                        <Separator Margin="0 0 0 12"/>
-                        <TextBlock Text="Status" FontWeight="Bold" Foreground="#F0F6FC" Margin="0 0 8 0"/>
-                        <TextBlock Text="Selected Category:" Foreground="#8BA1B9"/>
-                        <TextBlock Text="{Binding SelectedCategoryName}" FontWeight="Bold" Foreground="#F0F6FC" TextWrapping="Wrap"/>
-                        <Separator Margin="0 10 0 10"/>
-                        <TextBlock Text="Selected Channel:" Foreground="#8BA1B9"/>
-                        <TextBlock Text="{Binding SelectedChannelName}" FontWeight="Bold" Foreground="#F0F6FC" TextWrapping="Wrap"/>
-                        <TextBlock Text="{Binding NowProgramText}" Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap"/>
-                        <TextBlock Text="{Binding SelectedChannel.NowTitle}" Foreground="#DDE6F2" FontWeight="Bold" Margin="0 10 0 2" TextWrapping="Wrap"/>
-                        <TextBlock Text="Description:" Margin="0 8 0 2" Foreground="#8BA1B9"/>
-                        <TextBlock Text="{Binding SelectedChannel.NowDescription}" Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap" />
-                        <Separator Margin="0 10 0 8"/>
-                        <TextBlock Text="Upcoming:" FontWeight="Bold" Foreground="#F0F6FC"/>
-                        <ItemsControl ItemsSource="{Binding UpcomingEntries}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <StackPanel Margin="0 6 0 6">
-                                        <TextBlock Text="{Binding Title}" Foreground="#DDE6F2" FontSize="12" TextWrapping="Wrap"/>
-                                        <TextBlock Text="{Binding TimeRangeLocal}" Foreground="#8BA1B9" FontSize="10"/>
-                                        <TextBlock Text="{Binding Description}" Foreground="#647A90" FontSize="10" TextWrapping="Wrap" Visibility="{Binding Description, Converter={StaticResource NullToVisibilityConverter}}"/>
-                                    </StackPanel>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+
+                        <!-- Tile Size Selector -->
+                        <ComboBox x:Name="TileSizeCombo" Width="80" Height="32" Margin="8,0,0,0"
+                                 SelectionChanged="TileSize_SelectionChanged"
+                                 Background="#21262D" BorderBrush="#30363D" Foreground="#FFDDE6F2">
+                            <ComboBoxItem Content="S" Tag="Small"/>
+                            <ComboBoxItem Content="M" Tag="Medium"/>
+                            <ComboBoxItem Content="L" Tag="Large"/>
+                        </ComboBox>
                     </StackPanel>
-                </ScrollViewer>
-            </Border>
-            <Border Grid.Column="1" Background="#131C27" CornerRadius="10" >
-                <!-- Overlaid views; full width since nav moved to header -->
-                <Grid>
-                    <!-- Categories View -->
-                    <Grid x:Name="CategoriesGrid" Visibility="Visible">
-                        <Grid Margin="12">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition/>
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="Categories" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14"/>
-                                <TextBlock Margin="12 0 0 0" Foreground="#8BA1B9" Text="{Binding CategoriesCountText}"/>
+                </StackPanel>
+
+                <!-- Content Area -->
+                <Grid Grid.Row="1" Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="320"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Main Content Area -->
+                    <Grid Grid.Column="0" Margin="0,0,16,0">
+                        <!-- Channels Grid View -->
+                        <ScrollViewer x:Name="ChannelsGridScrollViewer" Visibility="Visible">
+                            <ItemsControl x:Name="ChannelsGridItemsControl" ItemsSource="{Binding ChannelsCollectionView}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}"
+                                                Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                Height="{Binding TileHeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                PreviewMouseLeftButtonDown="ChannelTile_PreviewMouseLeftButtonDown"
+                                                MouseEnter="ChannelTile_MouseEnter" Cursor="Hand">
+                                            <Border.Triggers>
+                                                <EventTrigger RoutedEvent="MouseEnter">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="RecordingButton"
+                                                                           Storyboard.TargetProperty="Opacity"
+                                                                           To="1" Duration="0:0:0.2"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                                <EventTrigger RoutedEvent="MouseLeave">
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetName="RecordingButton"
+                                                                           Storyboard.TargetProperty="Opacity"
+                                                                           To="0" Duration="0:0:0.2"/>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </EventTrigger>
+                                            </Border.Triggers>
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="*"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Channel Logo/Name -->
+                                                <StackPanel Grid.Row="0" VerticalAlignment="Center">
+                                                    <Image Source="{Binding LogoImage}" Width="48" Height="48"
+                                                           Margin="0,0,0,8" Stretch="Uniform"/>
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"
+                                                             Foreground="#FFDDE6F2" TextAlignment="Center"
+                                                             TextWrapping="Wrap" MaxHeight="32"/>
+                                                </StackPanel>
+
+                                                <!-- Now Playing -->
+                                                <TextBlock Grid.Row="1" Text="{Binding NowTitle}" FontSize="11"
+                                                         Foreground="#9DB2C7" TextAlignment="Center"
+                                                         TextTrimming="CharacterEllipsis" Margin="0,8,0,0"/>
+
+                                                <!-- Recording Indicator -->
+                                                <Border x:Name="RecordingIndicator" Grid.Row="0"
+                                                        Background="#DC3545" CornerRadius="12" Width="24" Height="24"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                        Visibility="{Binding IsRecording, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <Ellipse Width="8" Height="8" Fill="White"/>
+                                                </Border>
+
+                                                <!-- Recording Button (appears on hover) -->
+                                                <Button x:Name="RecordingButton" Grid.Row="0"
+                                                        Background="#28A745" Width="32" Height="32"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                                        Margin="0,0,8,8" BorderThickness="0"
+                                                        Click="ChannelRecordButton_Click"
+                                                        Opacity="0" Cursor="Hand"
+                                                        ToolTip="Start/Stop Recording">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock x:Name="RecordingButtonIcon" Text="⏺️" FontSize="14" Foreground="White">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Text" Value="⏺️"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                                                                            <Setter Property="Text" Value="⏹️"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <Button.Style>
+                                                        <Style TargetType="Button">
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="Button">
+                                                                        <Border Background="{TemplateBinding Background}"
+                                                                                CornerRadius="16"
+                                                                                Width="32" Height="32">
+                                                                            <ContentPresenter HorizontalAlignment="Center"
+                                                                                            VerticalAlignment="Center"/>
+                                                                        </Border>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                                                                    <Setter Property="Background" Value="#DC3545"/>
+                                                                    <Setter Property="ToolTip" Value="Stop Recording"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsRecording}" Value="False">
+                                                                    <Setter Property="Background" Value="#28A745"/>
+                                                                    <Setter Property="ToolTip" Value="Start Recording"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Channels List View -->
+                        <ScrollViewer x:Name="ChannelsListScrollViewer" Visibility="Collapsed">
+                            <ItemsControl x:Name="ChannelsListItemsControl" ItemsSource="{Binding ChannelsCollectionView}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Vertical"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8" Padding="12"
+                                                PreviewMouseLeftButtonDown="ChannelTile_PreviewMouseLeftButtonDown"
+                                                MouseEnter="ChannelTile_MouseEnter" Cursor="Hand">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Channel Logo -->
+                                                <Border Grid.Column="0" Width="48" Height="32" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding LogoImage}" Stretch="Uniform"
+                                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="📺" FontSize="16" Foreground="#4B5E71"
+                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Channel Info -->
+                                                <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"
+                                                              Foreground="#FFDDE6F2" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding NowTitle}" FontSize="12"
+                                                              Foreground="#8BA1B9" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding NowTimeRange}" FontSize="11"
+                                                              Foreground="#6F7882"/>
+                                                </StackPanel>
+
+                                                <!-- Recording Status -->
+                                                <Border Grid.Column="2" Background="#DC3545" CornerRadius="12" Padding="8,2" Margin="0,0,8,0"
+                                                        Visibility="{Binding IsRecording, Converter={StaticResource BoolToVisibilityConverter}}">
+                                                    <TextBlock Text="REC" FontSize="10" FontWeight="Bold" Foreground="White"/>
+                                                </Border>
+
+                                                <!-- Recording Button -->
+                                                <Button Grid.Column="3" Width="32" Height="24" Content="●" FontSize="12"
+                                                        Click="ChannelRecordButton_Click" Opacity="0.7"
+                                                        Background="#28A745"
+                                                        Foreground="White" BorderThickness="0">
+                                                    <Button.Style>
+                                                        <Style TargetType="Button">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsRecording}" Value="True">
+                                                                    <Setter Property="Background" Value="#DC3545"/>
+                                                                    <Setter Property="ToolTip" Value="Stop Recording"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsRecording}" Value="False">
+                                                                    <Setter Property="Background" Value="#28A745"/>
+                                                                    <Setter Property="ToolTip" Value="Start Recording"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Button.Style>
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Channels Loading Overlay -->
+                        <Grid x:Name="ChannelsLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="40" Height="40">
+                                    <Ellipse Width="32" Height="32"
+                                           Stroke="#347DFF" StrokeThickness="3"
+                                           StrokeDashArray="50.26"
+                                           RenderTransformOrigin="0.5,0.5">
+                                        <Ellipse.RenderTransform>
+                                            <RotateTransform/>
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                                <TextBlock Text="Loading channels..." Style="{StaticResource LoadingTextStyle}"/>
                             </StackPanel>
-                            <ScrollViewer Grid.Row="1" Margin="0 10 0 0" VerticalScrollBarVisibility="Auto">
-                                <ItemsControl ItemsSource="{Binding CategoriesCollectionView}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <WrapPanel IsItemsHost="True" />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Channel Info Panel -->
+                    <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel>
+                                <!-- Search Controls -->
+                                <TextBlock Text="Search" FontWeight="Bold" Foreground="#F0F6FC" Margin="0,0,0,8"/>
+                                <Border Background="#182433" CornerRadius="6" BorderBrush="#223247" BorderThickness="1" Padding="8" Margin="0,0,0,16">
+                                    <StackPanel>
+                                        <Grid>
+                                            <TextBox x:Name="ChannelSearchBox" Height="32" Margin="0,0,0,4" BorderThickness="0"
+                                                    Background="#0E1620" Foreground="#DDE6F2" Padding="6,4"
+                                                    VerticalContentAlignment="Center"
+                                                    Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                                    ToolTip="Search categories or channels"/>
+                                            <TextBlock Text="Search channels..." IsHitTestVisible="False"
+                                                      Foreground="#667788" Margin="6,4,0,4"
+                                                      VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Text, ElementName=ChannelSearchBox}" Value="">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <!-- Search Loading Indicator -->
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                                       VerticalAlignment="Center" Margin="0,0,8,4">
+                                                <StackPanel.Style>
+                                                    <Style TargetType="StackPanel">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSearchLoading}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </StackPanel.Style>
+                                                <Ellipse Width="16" Height="16" Stroke="#347DFF" StrokeThickness="2"
+                                                        StrokeDashArray="25.13" RenderTransformOrigin="0.5,0.5">
+                                                    <Ellipse.RenderTransform>
+                                                        <RotateTransform/>
+                                                    </Ellipse.RenderTransform>
+                                                    <Ellipse.Triggers>
+                                                        <EventTrigger RoutedEvent="Loaded">
+                                                            <BeginStoryboard>
+                                                                <Storyboard RepeatBehavior="Forever">
+                                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                                   From="0" To="360" Duration="0:0:1"/>
+                                                                </Storyboard>
+                                                            </BeginStoryboard>
+                                                        </EventTrigger>
+                                                    </Ellipse.Triggers>
+                                                </Ellipse>
+                                                <TextBlock Text="Searching..." FontSize="10" Foreground="#347DFF"
+                                                          Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        <CheckBox Content="Search All Channels" Margin="0,8,0,0" VerticalAlignment="Center"
+                                                 Foreground="#DDE6F2" IsChecked="{Binding SearchAllChannels}"
+                                                 ToolTip="Search across all channels"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Separator Background="#21262D" Margin="0,0,0,12"/>
+
+                                <!-- Channel Info -->
+                                <TextBlock Text="Selected Channel:" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                <TextBlock Text="{Binding SelectedChannelName}" FontWeight="Bold" Foreground="#F0F6FC"
+                                          TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                                <TextBlock Text="{Binding NowProgramText}" Foreground="#9DB2C7" FontSize="12"
+                                          TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                                <TextBlock Text="{Binding SelectedChannel.NowTitle}" Foreground="#DDE6F2" FontWeight="Bold"
+                                          Margin="0,0,0,8" TextWrapping="Wrap"/>
+
+                                <TextBlock Text="Description:" Margin="0,0,0,4" Foreground="#8BA1B9"/>
+                                <TextBlock Text="{Binding SelectedChannel.NowDescription}" Foreground="#9DB2C7"
+                                          FontSize="12" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                                <Separator Background="#21262D" Margin="0,0,0,12"/>
+
+                                <!-- Upcoming Programs -->
+                                <TextBlock Text="Upcoming:" FontWeight="Bold" Foreground="#F0F6FC" Margin="0,0,0,8"/>
+                                <ItemsControl ItemsSource="{Binding UpcomingEntries}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Button Click="CategoryTile_Click" Padding="0" Margin="6" Cursor="Hand" ToolTip="{Binding Name}">
-                                                <Border Width="150" Height="110" Background="#182433" CornerRadius="8" Padding="8" BorderBrush="#223247" BorderThickness="1">
-                                                    <StackPanel>
-                                                        <Border Height="50" Background="#223247" CornerRadius="4">
-                                                            <Grid>
-                                                                <Image Source="{Binding ImageUrl}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                                <TextBlock Text="No Image" Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding ImageUrl, Converter={StaticResource NullToVisibilityConverter}}"/>
-                                                            </Grid>
-                                                        </Border>
-                                                        <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 6 0 0"/>
-                                                    </StackPanel>
-                                                </Border>
-                                            </Button>
+                                            <Border Background="#182433" CornerRadius="4" Padding="8" Margin="0,0,0,4">
+                                                <StackPanel>
+                                                    <TextBlock Text="{Binding TimeRangeLocal}"
+                                                              FontSize="11" Foreground="#8BA1B9" FontWeight="Bold"/>
+                                                    <TextBlock Text="{Binding Title}" FontSize="12" Foreground="#DDE6F2"
+                                                              TextWrapping="Wrap" FontWeight="Bold" Margin="0,2,0,0"/>
+                                                    <TextBlock Text="{Binding Description}" FontSize="11" Foreground="#9DB2C7"
+                                                              TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="40" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Border>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                            </ScrollViewer>
-                        </Grid>
-                    </Grid>
-                    <!-- Guide View -->
-                    <Grid x:Name="GuideView" Visibility="Collapsed">
-                        <Grid Margin="12">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition/>
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="Channels" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14"/>
-                                <TextBlock Margin="12 0 0 0" Foreground="#8BA1B9" Text="{Binding ChannelsCountText}"/>
                             </StackPanel>
-                            <Grid Grid.Row="1" Margin="0 10 0 0">
-                                <Grid x:Name="GuideLoadingPanel" Background="#131C27">
-                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Width="180">
-                                        <ProgressBar IsIndeterminate="True" Height="10" Margin="0 0 0 12" />
-                                        <TextBlock Text="Loading channels..." Foreground="#8BA1B9" FontStyle="Italic" HorizontalAlignment="Center"/>
-                                    </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- VOD Page (Hidden by default) -->
+            <Grid x:Name="VodPage" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Page Header -->
+                <Grid Grid.Row="0" Margin="16,16,16,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="200"/>
+                        <ColumnDefinition Width="250"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="Video on Demand" Style="{StaticResource HeaderTextStyle}"/>
+                    <Button Grid.Column="1" x:Name="MoviesViewBtn" Content="Movies" Margin="32,0,8,0" Padding="12,6"
+                            Background="#223247" Foreground="#FFDDE6F2" BorderThickness="0"
+                            Click="ShowMoviesView_Click"/>
+                    <Button Grid.Column="2" x:Name="SeriesViewBtn" Content="TV Series" Margin="0,0,16,0" Padding="12,6"
+                            Background="Transparent" Foreground="#9DB2C7" BorderThickness="0"
+                            Click="ShowSeriesView_Click"/>
+                    <ComboBox Grid.Column="3" x:Name="VodCategoryCombo" Height="32" Margin="16,0,16,0"
+                              DisplayMemberPath="CategoryName" SelectedValuePath="CategoryId"
+                              ItemsSource="{Binding VodCategoriesCollectionView}"
+                              Tag="Select category..."
+                              SelectionChanged="VodCategoryCombo_SelectionChanged"/>
+                    <Grid Grid.Column="4" Margin="0,0,16,0">
+                        <TextBox x:Name="VodSearchBox" Height="32" Margin="0,0,0,0"
+                                 Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                 Padding="8,6" VerticalContentAlignment="Center"
+                                 Text="{Binding VodSearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                 Tag="Search movies and series..."/>
+                        <TextBlock Text="Search movies and series..." IsHitTestVisible="False"
+                                  Foreground="#667788" Margin="8,0,0,0"
+                                  VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=VodSearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+
+                    <!-- VOD View Mode Toggle Buttons -->
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Border Background="#161B22" CornerRadius="4" Padding="2">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="VodGridViewBtn" Content="⊞" Width="32" Height="32" Margin="0,0,2,0"
+                                        ToolTip="Grid View" Click="VodGridView_Click"
+                                        Background="Transparent" Foreground="#FFDDE6F2" BorderThickness="0" FontSize="14"/>
+                                <Button x:Name="VodListViewBtn" Content="☰" Width="32" Height="32"
+                                        ToolTip="List View" Click="VodListView_Click"
+                                        Background="Transparent" Foreground="#FFDDE6F2" BorderThickness="0" FontSize="14"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- VOD Tile Size Selector -->
+                        <ComboBox x:Name="VodTileSizeCombo" Width="80" Height="32" Margin="8,0,0,0"
+                                 SelectionChanged="TileSize_SelectionChanged"
+                                 Background="#21262D" BorderBrush="#30363D" Foreground="#FFDDE6F2">
+                            <ComboBoxItem Content="S" Tag="Small"/>
+                            <ComboBoxItem Content="M" Tag="Medium"/>
+                            <ComboBoxItem Content="L" Tag="Large"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Content Area with Right Panel -->
+                <Grid Grid.Row="1" Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="320"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left: VOD Grid -->
+                    <Grid Grid.Column="0">
+                        <!-- Movies Grid View -->
+                        <ScrollViewer x:Name="MoviesGridScrollViewer" Visibility="Visible">
+                            <ItemsControl ItemsSource="{Binding VodContentCollectionView}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}"
+                                                Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                Height="{Binding VodTileHeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                MouseLeftButtonDown="VodContent_Click" Cursor="Hand" Margin="8">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="140"/>
+                                                    <RowDefinition Height="*"/>
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Movie Poster -->
+                                                <Border Grid.Row="0" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform"
+                                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="🎬" FontSize="28" Foreground="#4B5E71"
+                                                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                 Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Movie Info (Title only) -->
+                                                <StackPanel Grid.Row="1" Margin="8" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Bold"
+                                                             Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="60"
+                                                             TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                                                             TextAlignment="Center"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Movies List View -->
+                        <ScrollViewer x:Name="MoviesListScrollViewer" Visibility="Collapsed">
+                            <ItemsControl ItemsSource="{Binding VodContentCollectionView}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Vertical"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8" Padding="12"
+                                                MouseLeftButtonDown="VodContent_Click" Cursor="Hand">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="80"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Movie Poster -->
+                                                <Border Grid.Column="0" Width="60" Height="80" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform"/>
+                                                        <TextBlock Text="🎬" FontSize="20" Foreground="#4B5E71"
+                                                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                 Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Movie Info -->
+                                                <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"
+                                                             Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="40"
+                                                             TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Plot}" FontSize="12" Foreground="#9DB2C7"
+                                                             TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis"
+                                                             Margin="0,4,0,0"/>
+                                                </StackPanel>
+
+                                                <!-- Movie Metadata -->
+                                                <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                                    <TextBlock Text="{Binding ReleaseDate}" FontSize="11" Foreground="#667788" HorizontalAlignment="Right"/>
+                                                    <TextBlock Text="{Binding Duration}" FontSize="11" Foreground="#667788" HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Movies Loading Overlay -->
+                        <Grid x:Name="MoviesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="40" Height="40">
+                                    <Ellipse Width="32" Height="32"
+                                           Stroke="#347DFF" StrokeThickness="3"
+                                           StrokeDashArray="50.26"
+                                           RenderTransformOrigin="0.5,0.5">
+                                        <Ellipse.RenderTransform>
+                                            <RotateTransform/>
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
                                 </Grid>
-                                <ScrollViewer x:Name="GuideScroll" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
-                                    <ItemsControl ItemsSource="{Binding ChannelsCollectionView}">
-                                        <ItemsControl.ItemsPanel>
-                                            <ItemsPanelTemplate>
-                                                <WrapPanel IsItemsHost="True" />
-                                            </ItemsPanelTemplate>
-                                        </ItemsControl.ItemsPanel>
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Button Padding="0" Margin="6" Cursor="Hand" PreviewMouseLeftButtonDown="ChannelTile_PreviewMouseLeftButtonDown" MouseEnter="ChannelTile_MouseEnter" ToolTipService.ShowDuration="30000" ToolTip="{Binding TooltipText}">
-                                                    <Border Width="160" Height="130" Background="#182433" CornerRadius="8" Padding="8" BorderBrush="#223247" BorderThickness="1">
-                                                        <Grid>
-                                                            <StackPanel>
-                                                                <Border Height="55" Background="#223247" CornerRadius="4">
-                                                                    <Grid>
-                                                                        <Image x:Name="LogoImg" Source="{Binding LogoImage}" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Visible"/>
-                                                                        <TextBlock x:Name="LogoPlaceholder" Text="Loading..." Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed"/>
-                                                                    </Grid>
-                                                                </Border>
-                                                                <TextBlock Text="{Binding Name}" FontSize="12" Foreground="#DDE6F2" TextWrapping="Wrap" Margin="0 6 0 2"/>
-                                                                <TextBlock Text="{Binding NowTitle}" FontSize="11" Foreground="#9DB2C7" TextWrapping="Wrap"/>
-                                                                <TextBlock Text="{Binding NowTimeRange}" FontSize="10" Foreground="#8BA1B9"/>
-                                                            </StackPanel>
-                                                            <!-- Recording Indicator -->
-                                                            <Border x:Name="RecordingIndicator"
-                                                                    Background="#FFDC3545"
-                                                                    CornerRadius="12"
-                                                                    Width="24" Height="24"
-                                                                    HorizontalAlignment="Right"
-                                                                    VerticalAlignment="Top"
-                                                                    Margin="0,-4,-4,0"
-                                                                    Visibility="Collapsed">
-                                                                <Ellipse Width="8" Height="8"
-                                                                         Fill="White"
-                                                                         HorizontalAlignment="Center"
-                                                                         VerticalAlignment="Center"/>
-                                                            </Border>
-                                                        </Grid>
-                                                    </Border>
-                                                </Button>
-                                                <DataTemplate.Triggers>
-                                                    <DataTrigger Binding="{Binding LogoImage}" Value="{x:Null}">
-                                                        <Setter TargetName="LogoImg" Property="Visibility" Value="Collapsed" />
-                                                        <Setter TargetName="LogoPlaceholder" Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                    <DataTrigger Binding="{Binding IsRecording}" Value="True">
-                                                        <Setter TargetName="RecordingIndicator" Property="Visibility" Value="Visible" />
-                                                    </DataTrigger>
-                                                </DataTemplate.Triggers>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </ScrollViewer>
-                            </Grid>
+                                <TextBlock Text="Loading movies..." Style="{StaticResource LoadingTextStyle}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Series Grid View -->
+                        <ScrollViewer x:Name="SeriesGridScrollViewer" Visibility="Collapsed">
+                            <ItemsControl ItemsSource="{Binding SeriesContentCollectionView}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}"
+                                                Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                Height="{Binding VodTileHeight, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                MouseLeftButtonDown="SeriesContent_Click" Cursor="Hand" Margin="8">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="140"/>
+                                                    <RowDefinition Height="*"/>
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Series Poster -->
+                                                <Border Grid.Row="0" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform"
+                                                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="📺" FontSize="28" Foreground="#4B5E71"
+                                                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                 Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Series Info (Title only) -->
+                                                <StackPanel Grid.Row="1" Margin="8" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Bold"
+                                                             Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="60"
+                                                             TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"
+                                                             TextAlignment="Center"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Series List View -->
+                        <ScrollViewer x:Name="SeriesListScrollViewer" Visibility="Collapsed">
+                            <ItemsControl ItemsSource="{Binding SeriesContentCollectionView}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Vertical"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8" Padding="12"
+                                                MouseLeftButtonDown="SeriesContent_Click" Cursor="Hand">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="80"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Series Poster -->
+                                                <Border Grid.Column="0" Width="60" Height="80" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform"/>
+                                                        <TextBlock Text="📺" FontSize="20" Foreground="#4B5E71"
+                                                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                 Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}"/>
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Series Info -->
+                                                <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"
+                                                             Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="40"
+                                                             TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Plot}" FontSize="12" Foreground="#9DB2C7"
+                                                             TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis"
+                                                             Margin="0,4,0,0"/>
+                                                </StackPanel>
+
+                                                <!-- Series Metadata -->
+                                                <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                                    <TextBlock Text="{Binding ReleaseDate}" FontSize="11" Foreground="#667788" HorizontalAlignment="Right"/>
+                                                    <TextBlock Text="{Binding Genre}" FontSize="11" Foreground="#667788" HorizontalAlignment="Right" Margin="0,2,0,0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <!-- Series Loading Overlay -->
+                        <Grid x:Name="SeriesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="40" Height="40">
+                                    <Ellipse Width="32" Height="32"
+                                           Stroke="#347DFF" StrokeThickness="3"
+                                           StrokeDashArray="50.26"
+                                           RenderTransformOrigin="0.5,0.5">
+                                        <Ellipse.RenderTransform>
+                                            <RotateTransform/>
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                                <TextBlock Text="Loading series..." Style="{StaticResource LoadingTextStyle}"/>
+                            </StackPanel>
                         </Grid>
                     </Grid>
-                    <!-- Profile View -->
-                    <Grid x:Name="ProfileView" Visibility="Collapsed">
-                        <ScrollViewer Margin="12" VerticalScrollBarVisibility="Auto">
+
+                    <!-- Right: VOD Details Panel -->
+                    <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="16,0,0,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="VodDetailsPanel" Margin="16">
+                                <!-- Default state -->
+                                <TextBlock x:Name="VodDetailsPlaceholder" Text="Select a movie or series to view details"
+                                         FontSize="14" Foreground="#8BA1B9" TextAlignment="Center"
+                                         VerticalAlignment="Center" Margin="0,50,0,0"/>
+
+                                <!-- VOD Details (Hidden by default) -->
+                                <StackPanel x:Name="VodDetailsContent" Visibility="Collapsed">
+                                    <!-- Title -->
+                                    <TextBlock x:Name="VodDetailsTitle" FontSize="18" FontWeight="Bold"
+                                             Foreground="#FFDDE6F2" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                                    <!-- Basic Info (Year, Runtime, Rating) -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                        <TextBlock x:Name="VodDetailsYear" FontSize="12" Foreground="#9DB2C7" Margin="0,0,16,0"/>
+                                        <TextBlock x:Name="VodDetailsDuration" FontSize="12" Foreground="#9DB2C7" Margin="0,0,16,0"/>
+                                        <TextBlock Text="⭐" FontSize="14" Margin="0,0,4,0" Foreground="#FFD700"/>
+                                        <TextBlock x:Name="VodDetailsRating" FontSize="12" Foreground="#9DB2C7"/>
+                                    </StackPanel>
+
+                                    <!-- Genre -->
+                                    <TextBlock Text="Genre:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="VodDetailsGenre" FontSize="12" Foreground="#FFDDE6F2"
+                                             TextWrapping="Wrap" Margin="0,0,0,16"/>
+
+                                    <!-- Cast (lazy loaded) -->
+                                    <TextBlock Text="Cast:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="VodDetailsCast" FontSize="12" Foreground="#FFDDE6F2"
+                                             TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..."/>
+
+                                    <!-- Director (lazy loaded) -->
+                                    <TextBlock Text="Director:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="VodDetailsDirector" FontSize="12" Foreground="#FFDDE6F2"
+                                             TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..."/>
+
+                                    <!-- Plot (lazy loaded) -->
+                                    <TextBlock Text="Plot:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBlock x:Name="VodDetailsPlot" FontSize="12" Foreground="#FFDDE6F2"
+                                             TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..."/>
+
+                                    <!-- Episodes Section (for TV Shows only) -->
+                                    <Border x:Name="EpisodesSection" Background="#182433" CornerRadius="6"
+                                            BorderBrush="#223247" BorderThickness="1" Padding="12" Margin="0,0,0,16"
+                                            Visibility="Collapsed">
+                                        <StackPanel>
+                                            <TextBlock Text="📺 Episodes" FontSize="14" FontWeight="Bold"
+                                                     Foreground="#F0F6FC" Margin="0,0,0,12"/>
+                                            <StackPanel x:Name="SeasonsPanel">
+                                                <!-- Seasons and Episodes will be populated in code-behind -->
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Actions (Movies only) -->
+                                    <StackPanel x:Name="VodActionsPanel" Margin="0,16,0,0" Visibility="Collapsed">
+                                        <Button x:Name="VodPlayButton" Content="▶ Play" Background="#28A745" Foreground="White"
+                                                Padding="12,8" Click="VodPlayButton_Click"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </Grid>
+
+            <!-- Recording Page (Hidden by default) -->
+            <Grid x:Name="RecordingPage" Visibility="Collapsed">
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <!-- Page Header -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <TextBlock Text="Recording" Style="{StaticResource HeaderTextStyle}"/>
+                            <Border Background="#28A745" CornerRadius="12" Padding="8,4" Margin="24,4,0,0" VerticalAlignment="Top">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="8" Height="8" Fill="White" Margin="0,0,4,0"/>
+                                    <TextBlock Text="Ready" FontSize="12" Foreground="White" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Quick Start Section -->
+                        <Border Background="#161B22" CornerRadius="6" Padding="16" Margin="0,0,0,16"
+                                BorderBrush="#30363D" BorderThickness="1">
                             <StackPanel>
-                                <TextBlock Text="Profile" FontWeight="Bold" Foreground="#F0F6FC" FontSize="14" Margin="0 0 0 8"/>
-                                <TextBlock Text="Below is information returned by the service for your account." Foreground="#8BA1B9" FontSize="12" TextWrapping="Wrap" Margin="0 0 0 12"/>
-                                <Grid Margin="0 0 0 12">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="⚡" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Quick Record" FontSize="16" FontWeight="SemiBold"
+                                               Foreground="#DDE6F2" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Text="Start recording the currently selected channel instantly with one click."
+                                           Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Main Recording Section -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="400"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Manual Recording Controls -->
+                            <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                        <TextBlock Text="⏺️" FontSize="20" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Manual Recording" FontSize="18" FontWeight="Bold"
+                                                 Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <!-- Channel Selection -->
+                                    <Border Background="#182433" CornerRadius="6" Padding="16" Margin="0,0,0,16"
+                                            BorderBrush="#223247" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="📺 Channel Selection" FontSize="14" FontWeight="SemiBold"
+                                                     Foreground="#DDE6F2" Margin="0,0,0,12"/>
+
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <StackPanel Grid.Row="0">
+                                                    <TextBlock Text="Selected Channel:" FontSize="12" Foreground="#9DB2C7" Margin="0,0,0,6"/>
+                                                    <Border Background="#0E1620" CornerRadius="4" Padding="12,8" BorderBrush="#223247" BorderThickness="1">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="📺" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                            <TextBlock x:Name="SelectedChannelText" Text="None selected" FontSize="14"
+                                                                     Foreground="#FFDDE6F2" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Row="1" Text="💡 Tip: Select a channel from the Live TV tab to enable recording"
+                                                         FontSize="11" Foreground="#657A91" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Recording Controls -->
+                                    <Border Background="#182433" CornerRadius="6" Padding="16" Margin="0,0,0,0"
+                                            BorderBrush="#223247" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="🎬 Recording Controls" FontSize="14" FontWeight="SemiBold"
+                                                     Foreground="#DDE6F2" Margin="0,0,0,12"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                    <TextBlock Text="Current Status:" FontSize="12" Foreground="#9DB2C7" Margin="0,0,0,6"/>
+                                                    <Border Background="#0E1620" CornerRadius="4" Padding="12,8" BorderBrush="#223247" BorderThickness="1">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Ellipse x:Name="RecordingPageStatusIndicator" Width="8" Height="8" Fill="#6C757D" Margin="0,0,8,0"/>
+                                                            <TextBlock x:Name="RecordingStatusDisplay" Text="{Binding RecordingManager.StatusDisplay}"
+                                                                     FontSize="14" Foreground="#FFDDE6F2"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <Button x:Name="RecordButton" Background="#28A745" Foreground="White" BorderThickness="0"
+                                                            Padding="32,16" FontSize="16" FontWeight="SemiBold"
+                                                            Click="RecordBtn_Click" Cursor="Hand">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock x:Name="RecordBtnIcon" Text="⏺️" FontSize="16" Margin="0,0,8,0"/>
+                                                            <TextBlock x:Name="RecordBtnText" Text="Start Recording"/>
+                                                        </StackPanel>
+                                                        <Button.Style>
+                                                            <Style TargetType="Button">
+                                                                <Setter Property="Background" Value="#28A745"/>
+                                                                <Setter Property="Template">
+                                                                    <Setter.Value>
+                                                                        <ControlTemplate TargetType="Button">
+                                                                            <Border Background="{TemplateBinding Background}"
+                                                                                    CornerRadius="6"
+                                                                                    Padding="{TemplateBinding Padding}">
+                                                                                <ContentPresenter HorizontalAlignment="Center"
+                                                                                                VerticalAlignment="Center"/>
+                                                                            </Border>
+                                                                        </ControlTemplate>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter Property="Background" Value="#218838"/>
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Recording Information Panel -->
+                            <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                            <TextBlock Text="📊" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Recording Info" FontSize="16" FontWeight="Bold"
+                                                     Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                        </StackPanel>
+
+                                        <!-- Current Recording Status -->
+                                        <Border Background="#182433" CornerRadius="6" Padding="12" Margin="0,0,0,16"
+                                                BorderBrush="#223247" BorderThickness="1">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                    <TextBlock Text="📊" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Current Recording" FontSize="12" FontWeight="SemiBold"
+                                                             Foreground="#DDE6F2" VerticalAlignment="Center"/>
+                                                    <Border x:Name="RecordingStatusBadge" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                            CornerRadius="4" Padding="6,2" Background="#394150">
+                                                        <TextBlock x:Name="RecordingStatusBadgeText" Text="Idle" Foreground="White" FontWeight="SemiBold" FontSize="10"/>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <StackPanel x:Name="RecordingDetailsPanel" Visibility="Collapsed">
+                                                    <TextBlock Text="Channel:" Foreground="#9DB2C7" FontSize="10" Margin="0,0,0,2"/>
+                                                    <TextBlock x:Name="RecordingChannelText" Text="None" Foreground="#DDE6F2" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,6"/>
+
+                                                    <TextBlock Text="Started:" Foreground="#9DB2C7" FontSize="10" Margin="0,0,0,2"/>
+                                                    <TextBlock x:Name="RecordingStartedText" Text="--" Foreground="#DDE6F2" FontSize="11" Margin="0,0,0,6"/>
+
+                                                    <TextBlock Text="File:" Foreground="#9DB2C7" FontSize="10" Margin="0,0,0,2"/>
+                                                    <TextBlock x:Name="RecordingFileText" Text="--" Foreground="#DDE6F2" FontFamily="Consolas" FontSize="9"
+                                                             TextWrapping="Wrap" Margin="0,0,0,2"/>
+                                                    <TextBlock x:Name="RecordingPathText" Text="--" Foreground="#60758C" FontFamily="Consolas" FontSize="8"
+                                                             TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="Duration" Foreground="#9DB2C7" FontSize="9"/>
+                                                            <TextBlock x:Name="RecordingDurationText" Text="00:00:00" Foreground="#DDE6F2" FontWeight="Bold" FontSize="12"/>
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="1">
+                                                            <TextBlock Text="Size" Foreground="#9DB2C7" FontSize="9"/>
+                                                            <TextBlock x:Name="RecordingSizeText" Text="0 MB" Foreground="#DDE6F2" FontWeight="Bold" FontSize="12"/>
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="2">
+                                                            <TextBlock Text="Bitrate" Foreground="#9DB2C7" FontSize="9"/>
+                                                            <TextBlock x:Name="RecordingBitrateText" Text="-- kbps" Foreground="#DDE6F2" FontWeight="Bold" FontSize="12"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </StackPanel>
+
+                                                <StackPanel x:Name="RecordingIdlePanel" Visibility="Visible">
+                                                    <TextBlock Text="No active recording" Foreground="#9DB2C7" FontSize="11"
+                                                             TextAlignment="Center" Margin="0,16,0,16"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Recording Settings Quick Access -->
+                                        <Border Background="#182433" CornerRadius="6" Padding="12" Margin="0,0,0,16"
+                                                BorderBrush="#223247" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="⚙️ Quick Settings" FontSize="12" FontWeight="SemiBold"
+                                                         Foreground="#DDE6F2" Margin="0,0,0,8"/>
+
+                                                <StackPanel>
+                                                    <TextBlock Text="Output Directory:" FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,2"/>
+                                                    <TextBlock x:Name="RecordingOutputDirectoryText" Text="C:\Users\Videos" FontSize="10" Foreground="#DDE6F2"
+                                                             TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
+
+                                                    <TextBlock Text="FFmpeg Status:" FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,2"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                        <Ellipse Width="6" Height="6" Fill="#28A745" Margin="0,0,4,0"/>
+                                                        <TextBlock Text="Ready" FontSize="10" Foreground="#DDE6F2"/>
+                                                    </StackPanel>
+
+                                                    <Button Content="Open Settings" Background="#347DFF" Foreground="White"
+                                                            BorderThickness="0" Padding="8,4" FontSize="10" Margin="0,4,0,0"
+                                                            Click="NavigateToSettings"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Help & Tips -->
+                                        <Border Background="#161B22" CornerRadius="6" Padding="12"
+                                                BorderBrush="#30363D" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="💡 Tips" FontSize="12" FontWeight="SemiBold"
+                                                         Foreground="#DDE6F2" Margin="0,0,0,8"/>
+
+                                                <StackPanel>
+                                                    <TextBlock Text="• Select a channel from Live TV to enable recording"
+                                                             FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,4" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="• Use the Scheduler for advanced recording options"
+                                                             FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,4" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="• Check Settings to configure output directory"
+                                                             FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,4" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="• Recordings are saved in MP4/TS format"
+                                                             FontSize="10" Foreground="#9DB2C7" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+
+                        <!-- Advanced Options -->
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <TextBlock Text="🔧" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Advanced Options" FontSize="16" FontWeight="Bold"
+                                             Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button Grid.Column="0" Background="#347DFF" Foreground="White" BorderThickness="0"
+                                            Padding="16,12" Margin="0,0,8,0" Click="NavigateToScheduler">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="📅" FontSize="14" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Schedule Recording" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="1" Background="#6C757D" Foreground="White" BorderThickness="0"
+                                            Padding="16,12" Margin="8,0,0,0" Click="OpenRecordingFolder_Click">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="📂" FontSize="14" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Open Output Folder" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Scheduler Page (Hidden by default) -->
+            <Grid x:Name="SchedulerPage" Visibility="Collapsed">
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <!-- Header -->
+                        <TextBlock Text="Recording Scheduler" Style="{StaticResource HeaderTextStyle}" Margin="0,0,0,16"/>
+
+                        <!-- Main Content -->
+                        <TabControl Style="{StaticResource SchedulerTabControlStyle}">
+                            <!-- Schedule New Recording Tab -->
+                            <TabItem Style="{StaticResource SchedulerTabItemStyle}">
+                                <TabItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="●" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
+                                        <TextBlock Text="Schedule Recording" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </TabItem.Header>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16">
+                                    <StackPanel>
+                                        <!-- Instructions -->
+                                        <Border Background="#161B22" CornerRadius="6" Padding="16" Margin="0,0,0,16"
+                                                BorderBrush="#30363D" BorderThickness="1">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                    <TextBlock Text="►" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
+                                                    <TextBlock Text="How to Schedule a Recording" FontSize="16" FontWeight="SemiBold"
+                                                               Foreground="#DDE6F2" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Choose how to schedule your recording using the options below. You can either select a program from the TV guide or set custom start/end times."
+                                                           Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Recording Type Selection -->
+                                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                    <TextBlock Text="❶" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
+                                                    <TextBlock Text="Recording Type" FontSize="16" FontWeight="Bold"
+                                                             Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <RadioButton x:Name="EpgRadio" Foreground="#9DB2C7" Margin="0,0,0,12" IsChecked="True"
+                                                             Checked="RecordingType_Changed">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="◆" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#28A745"/>
+                                                        <StackPanel>
+                                                            <TextBlock Text="From TV Guide (EPG)" FontWeight="SemiBold" Foreground="#DDE6F2"/>
+                                                            <TextBlock Text="Select a show from the program guide" FontSize="11" Foreground="#9DB2C7"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </RadioButton>
+                                                <RadioButton x:Name="CustomRadio" Foreground="#9DB2C7"
+                                                             Checked="RecordingType_Changed">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="◇" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#FFC107"/>
+                                                        <StackPanel>
+                                                            <TextBlock Text="Custom Time Range" FontWeight="SemiBold" Foreground="#DDE6F2"/>
+                                                            <TextBlock Text="Set your own start and end times" FontSize="11" Foreground="#9DB2C7"/>
+                                                        </StackPanel>
+                                                    </StackPanel>
+                                                </RadioButton>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Recording Options -->
+                                        <Grid Margin="0,0,0,16">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="16"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- EPG-based Recording Panel -->
+                                            <Border x:Name="EpgPanel" Grid.Column="0" Style="{StaticResource CardStyle}">
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                        <TextBlock Text="❷" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
+                                                        <TextBlock Text="Select from TV Guide" FontSize="16" FontWeight="Bold"
+                                                                 Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+
+                                                    <TextBlock Text="1. Choose a channel:" Foreground="#9DB2C7" Margin="0,0,0,8"/>
+                                                    <ComboBox x:Name="ChannelCombo" Margin="0,0,0,12"
+                                                              DisplayMemberPath="Name" SelectedValuePath="Id"
+                                                              SelectionChanged="ChannelCombo_SelectionChanged"/>
+
+                                                    <TextBlock Text="2. Pick a show to record:" Foreground="#9DB2C7" Margin="0,0,0,8"/>
+                                                    <ComboBox x:Name="ProgramCombo" Margin="0,0,0,8"
+                                                              DisplayMemberPath="Title" SelectedValuePath="Id"
+                                                              SelectionChanged="ProgramCombo_SelectionChanged"/>
+                                                    <TextBlock x:Name="ProgramTimeText" Text="" Foreground="#6C757D"
+                                                               FontSize="11"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- Custom Time Recording Panel -->
+                                            <Border x:Name="CustomPanel" Grid.Column="2" Style="{StaticResource CardStyle}" IsEnabled="False">
+                                                <StackPanel>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                        <TextBlock Text="❷" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
+                                                        <TextBlock Text="Set Custom Times" FontSize="16" FontWeight="Bold"
+                                                                 Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <TextBlock Grid.Row="0" Grid.Column="0" Text="1. Channel:"
+                                                                   Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CustomChannelCombo" Margin="0,0,0,8"
+                                                                  DisplayMemberPath="Name" SelectedValuePath="Id"
+                                                                  SelectionChanged="CustomChannelCombo_SelectionChanged"/>
+
+                                                        <TextBlock Grid.Row="1" Grid.Column="0" Text="2. Date:"
+                                                                   Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                        <DatePicker Grid.Row="1" Grid.Column="1" x:Name="StartDatePicker" Margin="0,0,0,8"
+                                                                    SelectedDateChanged="CustomTime_Changed"/>
+
+                                                        <TextBlock Grid.Row="2" Grid.Column="0" Text="3. Start:"
+                                                                   Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                        <Grid Grid.Row="2" Grid.Column="1" Margin="0,0,0,8">
+                                                            <TextBox x:Name="StartTimeBox"
+                                                                     Text="20:00"
+                                                                     ToolTip="Format: HH:mm (e.g., 20:00 for 8:00 PM)"
+                                                                     TextChanged="CustomTime_Changed"/>
+                                                            <TextBlock Text="Format: HH:mm (20:00)" IsHitTestVisible="False"
+                                                                      Foreground="#667788" Margin="8,0,0,0"
+                                                                      VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Text, ElementName=StartTimeBox}" Value="">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Grid>
+
+                                                        <TextBlock Grid.Row="3" Grid.Column="0" Text="4. End:"
+                                                                   Foreground="#9DB2C7" Margin="0,0,12,0"/>
+                                                        <Grid Grid.Row="3" Grid.Column="1">
+                                                            <TextBox x:Name="EndTimeBox"
+                                                                     Text="21:00"
+                                                                     ToolTip="Format: HH:mm (e.g., 21:00 for 9:00 PM)"
+                                                                     TextChanged="CustomTime_Changed"/>
+                                                            <TextBlock Text="Format: HH:mm (21:00)" IsHitTestVisible="False"
+                                                                      Foreground="#667788" Margin="8,0,0,0"
+                                                                      VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Text, ElementName=EndTimeBox}" Value="">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Grid>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Recording Details -->
+                                        <Border Style="{StaticResource CardStyle}">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                    <TextBlock Text="❸" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#347DFF"/>
+                                                    <TextBlock Text="Recording Settings" FontSize="16" FontWeight="Bold"
+                                                             Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                                </StackPanel>
+
+                                                <Grid>
+                                                    <Grid.RowDefinitions>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                        <RowDefinition Height="Auto"/>
+                                                    </Grid.RowDefinitions>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="100"/>
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Title:"
+                                                               Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                    <Grid Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,0,0,8">
+                                                        <TextBox x:Name="TitleBox"/>
+                                                        <TextBlock Text="Recording title" IsHitTestVisible="False"
+                                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                                  VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Text, ElementName=TitleBox}" Value="">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Grid>
+
+                                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Pre-buffer (min):"
+                                                               Foreground="#9DB2C7" Margin="0,0,12,8"
+                                                               ToolTip="Minutes to start recording before the scheduled time"/>
+                                                    <Grid Grid.Row="1" Grid.Column="1" Margin="0,0,12,8">
+                                                        <TextBox x:Name="PreBufferBox" Text="2"
+                                                                 ToolTip="Start recording this many minutes early"/>
+                                                        <TextBlock Text="2" IsHitTestVisible="False"
+                                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                                  VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Text, ElementName=PreBufferBox}" Value="">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Grid>
+
+                                                    <TextBlock Grid.Row="1" Grid.Column="2" Text="Post-buffer (min):"
+                                                               Foreground="#9DB2C7" Margin="0,0,12,8"
+                                                               ToolTip="Minutes to continue recording after the scheduled end time"/>
+                                                    <Grid Grid.Row="1" Grid.Column="3" Margin="0,0,0,8">
+                                                        <TextBox x:Name="PostBufferBox" Text="5"
+                                                                 ToolTip="Continue recording this many minutes past the end time"/>
+                                                        <TextBlock Text="5" IsHitTestVisible="False"
+                                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                                  VerticalAlignment="Center">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Text, ElementName=PostBufferBox}" Value="">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Grid>
+
+                                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Output File:"
+                                                               Foreground="#9DB2C7" Margin="0,0,12,8"/>
+                                                    <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="OutputFileBox"
+                                                             IsReadOnly="True" Margin="0,0,12,8"/>
+                                                    <Button Grid.Row="2" Grid.Column="3" Content="Browse..."
+                                                            Background="#347DFF" Foreground="White"
+                                                            BorderThickness="0" Margin="0,0,0,8"
+                                                            Click="BrowseOutput_Click"/>
+
+                                                    <Button Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2"
+                                                            Content="Schedule Recording" Background="#28A745"
+                                                            Foreground="White" BorderThickness="0"
+                                                            Padding="24,12" Margin="0,16,0,0" HorizontalAlignment="Center"
+                                                            Click="ScheduleRecording_Click"/>
+                                                </Grid>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+
+                            <!-- Scheduled Recordings Tab -->
+                            <TabItem Style="{StaticResource SchedulerTabItemStyle}">
+                                <TabItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="●" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#DC3545"/>
+                                        <TextBlock Text="Scheduled Recordings" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </TabItem.Header>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16">
+                                    <StackPanel>
+                                        <!-- Info Section -->
+                                        <Border Background="#161B22" CornerRadius="6" Padding="16" Margin="0,0,0,16"
+                                                BorderBrush="#30363D" BorderThickness="1">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                    <TextBlock Text="►" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#17A2B8"/>
+                                                    <TextBlock Text="Recording Management" FontSize="16" FontWeight="SemiBold"
+                                                               Foreground="#DDE6F2" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <TextBlock Text="View and manage your scheduled recordings. The app automatically checks for recordings to start every 30 seconds."
+                                                           Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Toolbar -->
+                                        <Border Background="#223247" CornerRadius="6" Padding="16" Margin="0,0,0,16"
+                                                BorderBrush="#30363D" BorderThickness="1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Button Background="#347DFF" Foreground="White"
+                                                        BorderThickness="0" Padding="16,8" Margin="0,0,12,0"
+                                                        Click="RefreshScheduled_Click">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="↻" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White"/>
+                                                        <TextBlock Text="Refresh List" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Background="#DC3545" Foreground="White"
+                                                        BorderThickness="0" Padding="16,8" Margin="0,0,12,0"
+                                                        Click="DeleteCompleted_Click"
+                                                        ToolTip="Remove all completed, failed, and cancelled recordings from the list">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="✖" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White"/>
+                                                        <TextBlock Text="Delete Completed" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Background="#28A745" Foreground="White"
+                                                        BorderThickness="0" Padding="16,8"
+                                                        Click="OpenRecordingFolder_Click"
+                                                        ToolTip="Open the directory where recordings are saved">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="📂" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White"/>
+                                                        <TextBlock Text="Open Output Folder" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </Button>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Scheduled Recordings List -->
+                                        <Border Style="{StaticResource CardStyle}">
+                                            <DataGrid x:Name="ScheduledGrid" AutoGenerateColumns="False"
+                                                      Background="Transparent" Foreground="#DDE6F2"
+                                                      GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                                      RowBackground="Transparent" AlternatingRowBackground="#182433"
+                                                      BorderThickness="0" CanUserAddRows="False">
+                                                <DataGrid.ColumnHeaderStyle>
+                                                    <Style TargetType="DataGridColumnHeader">
+                                                        <Setter Property="Background" Value="#223247"/>
+                                                        <Setter Property="Foreground" Value="#DDE6F2"/>
+                                                        <Setter Property="BorderBrush" Value="#30363D"/>
+                                                        <Setter Property="Padding" Value="12,8"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </Style>
+                                                </DataGrid.ColumnHeaderStyle>
+
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*"/>
+                                                    <DataGridTextColumn Header="Channel" Binding="{Binding ChannelName}" Width="120"/>
+                                                    <DataGridTextColumn Header="Start Time" Binding="{Binding StartTimeLocal}" Width="140"/>
+                                                    <DataGridTextColumn Header="End Time" Binding="{Binding EndTimeLocal}" Width="140"/>
+                                                    <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="80"/>
+                                                    <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="100"/>
+                                                    <DataGridTemplateColumn Header="Actions" Width="180">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <Button Content="Props" Background="#28A745"
+                                                                            BorderThickness="0" Padding="8,4" Margin="0,0,4,0"
+                                                                            FontSize="9" ToolTip="Show recording properties"
+                                                                            Click="PropertiesRecording_Click"/>
+                                                                    <Button Content="Edit" Background="#6C757D"
+                                                                            BorderThickness="0" Padding="8,4" Margin="0,0,4,0"
+                                                                            IsEnabled="{Binding CanEdit}" FontSize="9"
+                                                                            Click="EditRecording_Click"/>
+                                                                    <Button Content="Cancel" Background="#DC3545"
+                                                                            BorderThickness="0" Padding="8,4" FontSize="9"
+                                                                            IsEnabled="{Binding CanCancel}"
+                                                                            Click="CancelRecording_Click"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
+                        </TabControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Profile Page (Hidden by default) -->
+            <Grid x:Name="ProfilePage" Visibility="Collapsed">
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Profile" Style="{StaticResource HeaderTextStyle}"/>
+
+                        <!-- Account Information -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="Account Information" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="160"/>
                                         <ColumnDefinition/>
@@ -325,41 +1864,313 @@
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
-                                    <TextBlock Text="Username:" Foreground="#8BA1B9" Grid.Row="0"/>
-                                    <TextBlock Text="{Binding ProfileUsername}" Foreground="#DDE6F2" Grid.Row="0" Grid.Column="1"/>
-                                    <TextBlock Text="Status:" Foreground="#8BA1B9" Grid.Row="1"/>
-                                    <TextBlock Text="{Binding ProfileStatus}" Foreground="#DDE6F2" Grid.Row="1" Grid.Column="1"/>
-                                    <TextBlock Text="Trial:" Foreground="#8BA1B9" Grid.Row="2"/>
-                                    <TextBlock Text="{Binding ProfileTrialText}" Foreground="#DDE6F2" Grid.Row="2" Grid.Column="1"/>
-                                    <TextBlock Text="Expires:" Foreground="#8BA1B9" Grid.Row="3"/>
-                                    <TextBlock Text="{Binding ProfileExpiryText}" Foreground="#DDE6F2" Grid.Row="3" Grid.Column="1"/>
-                                    <TextBlock Text="Days Remaining:" Foreground="#8BA1B9" Grid.Row="4"/>
-                                    <TextBlock Text="{Binding ProfileDaysRemaining}" Foreground="#DDE6F2" Grid.Row="4" Grid.Column="1"/>
-                                    <TextBlock Text="Max Connections:" Foreground="#8BA1B9" Grid.Row="5"/>
-                                    <TextBlock Text="{Binding ProfileMaxConnections}" Foreground="#DDE6F2" Grid.Row="5" Grid.Column="1"/>
+
+                                    <TextBlock Text="Username:" Foreground="#8BA1B9" Grid.Row="0" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileUsername}" Foreground="#DDE6F2" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Status:" Foreground="#8BA1B9" Grid.Row="1" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileStatus}" Foreground="#DDE6F2" Grid.Row="1" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Trial Account:" Foreground="#8BA1B9" Grid.Row="2" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileTrialText}" Foreground="#DDE6F2" Grid.Row="2" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Expires:" Foreground="#8BA1B9" Grid.Row="3" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileExpiryText}" Foreground="#DDE6F2" Grid.Row="3" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Days Remaining:" Foreground="#8BA1B9" Grid.Row="4" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileDaysRemaining}" Foreground="#DDE6F2" Grid.Row="4" Grid.Column="1" Margin="0,0,0,8"/>
+
+                                    <TextBlock Text="Max Connections:" Foreground="#8BA1B9" Grid.Row="5" Margin="0,0,0,8"/>
+                                    <TextBlock Text="{Binding ProfileMaxConnections}" Foreground="#DDE6F2" Grid.Row="5" Grid.Column="1" Margin="0,0,0,8"/>
+
                                     <TextBlock Text="Active Connections:" Foreground="#8BA1B9" Grid.Row="6"/>
                                     <TextBlock Text="{Binding ProfileActiveConnections}" Foreground="#DDE6F2" Grid.Row="6" Grid.Column="1"/>
                                 </Grid>
-                                <TextBlock Text="Raw JSON user_info (for debugging):" Foreground="#8BA1B9" Margin="0 0 0 4"/>
-                                <TextBox Text="{Binding ProfileRawJson}" IsReadOnly="True" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" AcceptsReturn="True" Height="160" VerticalScrollBarVisibility="Auto" Background="#0E1620" Foreground="#C8D3E0"/>
                             </StackPanel>
-                        </ScrollViewer>
-                    </Grid>
-                    <!-- VOD View (deprecated in main window, kept collapsed) -->
-                    <Grid x:Name="VodView" Visibility="Collapsed" />
-                    <!-- Raw Output View -->
-                    <Grid x:Name="OutputView" Visibility="Collapsed">
-                        <Grid Margin="12">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="Output" FontWeight="Bold" Foreground="#F0F6FC"/>
-                            <TextBox x:Name="OutputText" Grid.Row="1" Margin="0 8 0 0" FontFamily="Consolas" FontSize="12" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Background="#0E1620" Foreground="#C8D3E0"/>
-                        </Grid>
-                    </Grid>
-                </Grid>
-            </Border>
+                        </Border>
+
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Settings Page -->
+            <Grid x:Name="SettingsPage" Visibility="Collapsed">
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Settings" Style="{StaticResource HeaderTextStyle}"/>
+
+                        <!-- Status bar -->
+                        <Border Background="#1A242F" Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <TextBlock x:Name="SettingsStatusText" Text="Configure your IPTV player and recording settings"
+                                       Foreground="#8BA1B9" FontSize="12"/>
+                        </Border>
+
+                        <!-- Player Settings Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="🎬 Player Settings" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="External Player" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <ComboBox x:Name="SettingsPlayerKindCombo" SelectedIndex="0"
+                                             Background="#21262D" BorderBrush="#30363D" Foreground="#FFDDE6F2"
+                                             SelectionChanged="SettingsPlayerKindCombo_SelectionChanged" Tag="Select player...">
+                                        <ComboBoxItem Tag="VLC" Content="VLC Media Player"/>
+                                        <ComboBoxItem Tag="MPCHC" Content="MPC-HC"/>
+                                        <ComboBoxItem Tag="MPV" Content="mpv"/>
+                                        <ComboBoxItem Tag="Custom" Content="Custom Player"/>
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Player Executable Path" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsPlayerExeTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsPlayerExeTextBox_TextChanged"/>
+                                        <TextBlock Text="C:\Program Files\VideoLAN\VLC\vlc.exe" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsPlayerExeTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                                        <Button Content="Browse" Width="110" Height="32" Margin="0,0,8,0"
+                                                Click="SettingsBrowsePlayer_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                        <Button x:Name="SettingsAutoDetectPlayerBtn" Content="Auto-detect" Width="110" Height="32"
+                                                Click="SettingsAutoDetectPlayer_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="SettingsPlayerPathStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#22863A"/>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Arguments Template" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsArgsTemplateTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsArgsTemplateTextBox_TextChanged"/>
+                                        <TextBlock Text="{}{url} --meta-title {title}" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsArgsTemplateTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <TextBlock Text="Tokens: {url} {title}. Leave blank to use default for selected player."
+                                             Foreground="#657A91" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                        <Button x:Name="SettingsTestPlayerBtn" Content="Test Player" Width="100" Height="28"
+                                                Click="SettingsTestPlayer_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                        <TextBlock x:Name="SettingsTestPlayerStatus" FontSize="11" Margin="8,0,0,0"
+                                                 VerticalAlignment="Center" Foreground="#8BA1B9"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Recording Settings Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="🎥 Recording Settings" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="FFmpeg Path" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsFfmpegPathTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsFfmpegPathTextBox_TextChanged"/>
+                                        <TextBlock Text="ffmpeg.exe or full path" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsFfmpegPathTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                                        <Button Content="Browse" Width="110" Height="32" Margin="0,0,8,0"
+                                                Click="SettingsBrowseFfmpeg_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                        <Button x:Name="SettingsAutoDetectFfmpegBtn" Content="Auto-detect" Width="110" Height="32"
+                                                Click="SettingsAutoDetectFfmpeg_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="SettingsFfmpegPathStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#22863A"/>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Recording Directory" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsRecordingDirTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsRecordingDirTextBox_TextChanged"/>
+                                        <TextBlock Text="C:\Users\Username\Videos" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsRecordingDirTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <Button Content="Browse" Width="110" Height="32" Margin="0,4,0,8"
+                                            Click="SettingsBrowseRecordingDir_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    <TextBlock x:Name="SettingsRecordingDirStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#8BA1B9"/>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="FFmpeg Args Template" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsFfmpegArgsTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8"/>
+                                        <TextBlock Text="{}-i {url} -c copy {output}" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsFfmpegArgsTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <TextBlock Text="Tokens: {url} {output} {title}. Default copies stream without re-encoding."
+                                             Foreground="#657A91" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- EPG Settings Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="📺 EPG Settings" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Last EPG Update" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <TextBox x:Name="SettingsLastEpgUpdateTextBox" Height="34" IsReadOnly="True"
+                                            Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                            Padding="8"/>
+                                </StackPanel>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="EPG Refresh Interval (minutes)" Foreground="#8BA1B9" Margin="0,0,0,4"/>
+                                    <Grid>
+                                        <TextBox x:Name="SettingsEpgIntervalTextBox" Height="34"
+                                                Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D"
+                                                Padding="8" TextChanged="SettingsEpgIntervalTextBox_TextChanged"/>
+                                        <TextBlock Text="60" IsHitTestVisible="False"
+                                                  Foreground="#667788" Margin="8,0,0,0"
+                                                  VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Text, ElementName=SettingsEpgIntervalTextBox}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <Button Content="Update EPG Now" Width="150" Height="32" Margin="0,4,0,8"
+                                            Click="SettingsUpdateEpgNow_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    <TextBlock x:Name="SettingsEpgIntervalStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#8BA1B9"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Raw Output Log Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <TextBlock Text="📝 Raw Output Log" FontSize="18" FontWeight="Bold"
+                                             Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="SettingsEnableLoggingCheckBox" Content="Enable Logging"
+                                              Foreground="#9DB2C7" Margin="16,0,0,0"
+                                              IsChecked="True" Checked="SettingsEnableLogging_Changed"
+                                              Unchecked="SettingsEnableLogging_Changed"/>
+                                </StackPanel>
+
+                                <TextBlock Text="Shows API calls, channel loading, and other diagnostic information in real-time."
+                                           Foreground="#8BA1B9" FontSize="12" Margin="0,0,0,12"/>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <Button Content="Clear Log" Width="100" Height="28" Margin="0,0,8,0"
+                                            Click="SettingsClearLog_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    <Button Content="Copy Log" Width="100" Height="28" Margin="0,0,8,0"
+                                            Click="SettingsCopyLog_Click" Background="#347DFF" Foreground="White" Padding="8,4"/>
+                                    <Button Content="Save Log" Width="100" Height="28"
+                                            Click="SettingsSaveLog_Click" Background="#28A745" Foreground="White" Padding="8,4"/>
+                                </StackPanel>
+
+                                <Border Background="#0D1117" BorderBrush="#30363D" BorderThickness="1"
+                                        CornerRadius="4" Height="300">
+                                    <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Auto" Padding="8">
+                                        <TextBlock x:Name="RawOutputLogTextBlock"
+                                                   Text="Raw output log will appear here when logging is enabled..."
+                                                   Foreground="#8BA1B9" FontFamily="Consolas" FontSize="11"
+                                                   TextWrapping="Wrap"/>
+                                    </ScrollViewer>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Actions -->
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Actions" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Restore Defaults" Width="140" Height="40" Margin="0,0,12,0"
+                                            Click="SettingsRestoreDefaults_Click" Background="#DC3545" Foreground="White" Padding="12,6"/>
+                                    <Button Content="Save Settings" Width="120" Height="40"
+                                            Click="SettingsSave_Click" Background="#28A745" Foreground="White" Padding="12,6"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
         </Grid>
     </Grid>
 </Window>
