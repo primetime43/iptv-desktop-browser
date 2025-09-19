@@ -1200,6 +1200,21 @@ namespace DesktopApp.Views
             {
                 UpdateChannelRecordingStatus();
             }
+
+            // Update recording page display for relevant property changes
+            if (e.PropertyName == nameof(RecordingManager.IsRecording) ||
+                e.PropertyName == nameof(RecordingManager.State) ||
+                e.PropertyName == nameof(RecordingManager.StatusDisplay) ||
+                e.PropertyName == nameof(RecordingManager.DurationDisplay) ||
+                e.PropertyName == nameof(RecordingManager.SizeDisplay) ||
+                e.PropertyName == nameof(RecordingManager.BitrateDisplay) ||
+                e.PropertyName == nameof(RecordingManager.ChannelName) ||
+                e.PropertyName == nameof(RecordingManager.StartedDisplay) ||
+                e.PropertyName == nameof(RecordingManager.FileName) ||
+                e.PropertyName == nameof(RecordingManager.FilePath))
+            {
+                UpdateRecordingPageDisplay();
+            }
         }
 
         private void UpdateChannelRecordingStatus()
@@ -1938,6 +1953,42 @@ namespace DesktopApp.Views
         private async Task RunApiCall(string action)
         { if (Session.Mode != SessionMode.Xtream) { Log("API calls disabled in M3U mode.\n"); return; } try { var url = Session.BuildApi(action); Log($"GET {url}\n"); var json = await _http.GetStringAsync(url, _cts.Token); if (json.Length > 50_000) json = json[..50_000] + "...<truncated>"; Log(json + "\n\n"); } catch (OperationCanceledException) { } catch (Exception ex) { Log("ERROR: " + ex.Message + "\n"); } }
 
+        private void OpenRecordingFolder_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var recordingDir = Session.RecordingDirectory;
+                if (string.IsNullOrEmpty(recordingDir))
+                {
+                    recordingDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos));
+                }
+
+                // Create directory if it doesn't exist
+                if (!Directory.Exists(recordingDir))
+                {
+                    Directory.CreateDirectory(recordingDir);
+                }
+
+                // Open the folder in Windows Explorer
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"\"{recordingDir}\"",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to open recording folder: {ex.Message}\n");
+                try
+                {
+                    MessageBox.Show(this, "Unable to open recording folder. Check settings.",
+                        "Folder Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                catch { }
+            }
+        }
+
         private void OpenRecordingStatus_Click(object sender, RoutedEventArgs e)
         {
             if (_recordingWindow == null || !_recordingWindow.IsVisible)
@@ -1970,9 +2021,23 @@ namespace DesktopApp.Views
 
         private void StartRecording()
         {
-            if (_recordProcess != null) return; if (SelectedChannel == null) { Log("No channel selected to record.\n"); return; }
+            if (_recordProcess != null) return;
+
+            if (SelectedChannel == null)
+            {
+                Log("No channel selected to record.\n");
+                MessageBox.Show(this, "Please select a channel from the Live TV tab first before recording.",
+                    "No Channel Selected", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
             string streamUrl = Session.Mode == SessionMode.M3u ? Session.PlaylistChannels.FirstOrDefault(p => p.Id == SelectedChannel.Id)?.StreamUrl ?? string.Empty : Session.BuildStreamUrl(SelectedChannel.Id, "ts");
-            if (string.IsNullOrWhiteSpace(streamUrl)) { Log("Stream URL not found for recording.\n"); return; }
+            if (string.IsNullOrWhiteSpace(streamUrl))
+            {
+                Log("Stream URL not found for recording.\n");
+                MessageBox.Show(this, "Unable to get stream URL for the selected channel. Please try selecting the channel again.",
+                    "Stream Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             if (string.IsNullOrWhiteSpace(Session.FfmpegPath) || !File.Exists(Session.FfmpegPath)) { Log("FFmpeg path not set (Settings).\n"); MessageBox.Show(this, "Set FFmpeg path in Settings.", "Recording", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
             string baseDir = Session.RecordingDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
             try
@@ -2012,7 +2077,19 @@ namespace DesktopApp.Views
             _recordProcess = new Process { StartInfo = psi, EnableRaisingEvents = false }; // we handle cleanup directly
             _recordProcess.OutputDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
             _recordProcess.ErrorDataReceived += (s, e) => { if (!string.IsNullOrEmpty(e.Data)) Log("FFMPEG: " + e.Data + "\n"); };
-            if (_recordProcess.Start()) { try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { } RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name, SelectedChannel.Id, true); if (FindName("RecordBtnText") is TextBlock t) t.Text = "Stop"; }
+            if (_recordProcess.Start())
+            {
+                try { _recordProcess.BeginOutputReadLine(); _recordProcess.BeginErrorReadLine(); } catch { }
+                RecordingManager.Instance.Start(_currentRecordingFile, SelectedChannel.Name, SelectedChannel.Id, true);
+
+                // Update button to show Stop state
+                if (FindName("RecordBtnText") is TextBlock btnText) btnText.Text = "Stop Recording";
+                if (FindName("RecordBtnIcon") is TextBlock btnIcon) btnIcon.Text = "⏹️";
+                if (FindName("RecordButton") is Button btn) btn.Background = new SolidColorBrush(Color.FromRgb(0xDC, 0x35, 0x45)); // Red color
+
+                // Update recording page visual feedback
+                UpdateRecordingPageDisplay();
+            }
             else { Log("Failed to start FFmpeg.\n"); _recordProcess.Dispose(); _recordProcess = null; }
         }
         private void StopRecording()
@@ -2025,9 +2102,15 @@ namespace DesktopApp.Views
             _currentRecordingFile = null;
 
             // Update UI state immediately
-            if (FindName("RecordBtnText") is TextBlock btnText) btnText.Text = "Record";
+            if (FindName("RecordBtnText") is TextBlock btnText) btnText.Text = "Start Recording";
+            if (FindName("RecordBtnIcon") is TextBlock btnIcon) btnIcon.Text = "⏺️";
+            if (FindName("RecordButton") is Button btn) btn.Background = new SolidColorBrush(Color.FromRgb(0x28, 0xA7, 0x45)); // Green color
+
             RecordingManager.Instance.Stop();
             Log("Stopping recording...\n");
+
+            // Update recording page visual feedback
+            UpdateRecordingPageDisplay();
 
             // Terminate process on background thread so UI never blocks
             _ = Task.Run(() =>
@@ -2110,7 +2193,12 @@ namespace DesktopApp.Views
         private void NavigateToScheduler(object sender, RoutedEventArgs e)
         {
             ShowPage("Scheduler");
-            SetSelectedNavButton(sender as Button);
+
+            // Always highlight the correct nav button regardless of which button triggered this
+            if (FindName("SchedulerNavButton") is Button schedulerNavBtn)
+            {
+                SetSelectedNavButton(schedulerNavBtn);
+            }
 
             // Initialize the scheduler when navigating to it
             InitializeScheduler();
@@ -2126,7 +2214,13 @@ namespace DesktopApp.Views
         private void NavigateToSettings(object sender, RoutedEventArgs e)
         {
             ShowPage("Settings");
-            SetSelectedNavButton(sender as Button);
+
+            // Always highlight the correct nav button regardless of which button triggered this
+            if (FindName("SettingsNavButton") is Button settingsNavBtn)
+            {
+                SetSelectedNavButton(settingsNavBtn);
+            }
+
             LoadSettingsPage();
         }
 
@@ -2165,6 +2259,81 @@ namespace DesktopApp.Views
             if (FindName("SelectedChannelText") is TextBlock channelText)
             {
                 channelText.Text = SelectedChannel?.Name ?? "None selected";
+            }
+
+            // Update recording status indicators
+            bool isRecording = _recordProcess != null;
+
+            if (FindName("RecordingPageStatusIndicator") is System.Windows.Shapes.Ellipse statusIndicator)
+            {
+                statusIndicator.Fill = isRecording
+                    ? new SolidColorBrush(Color.FromRgb(0xDC, 0x35, 0x45)) // Red for recording
+                    : new SolidColorBrush(Color.FromRgb(0x6C, 0x75, 0x7D)); // Gray for idle
+            }
+
+            if (FindName("RecordingStatusDisplay") is TextBlock statusText)
+            {
+                if (isRecording)
+                {
+                    statusText.Text = $"Recording: {SelectedChannel?.Name ?? "Unknown"}";
+                }
+                else
+                {
+                    statusText.Text = RecordingManager.Instance.StatusDisplay ?? "Idle";
+                }
+            }
+
+            // Update new recording status section
+            var recordingManager = RecordingManager.Instance;
+
+            // Update status badge
+            if (FindName("RecordingStatusBadge") is Border statusBadge && FindName("RecordingStatusBadgeText") is TextBlock badgeText)
+            {
+                badgeText.Text = recordingManager.StatusDisplay;
+
+                statusBadge.Background = recordingManager.State switch
+                {
+                    RecordingState.Recording => new SolidColorBrush(Color.FromRgb(0x25, 0x6D, 0x1B)), // Green
+                    RecordingState.Stopped => new SolidColorBrush(Color.FromRgb(0x5A, 0x3C, 0x05)), // Yellow/Orange
+                    _ => new SolidColorBrush(Color.FromRgb(0x39, 0x41, 0x50)) // Gray
+                };
+            }
+
+            // Show/hide recording details based on recording state
+            if (FindName("RecordingDetailsPanel") is StackPanel detailsPanel && FindName("RecordingIdlePanel") is StackPanel idlePanel)
+            {
+                if (recordingManager.IsRecording)
+                {
+                    detailsPanel.Visibility = Visibility.Visible;
+                    idlePanel.Visibility = Visibility.Collapsed;
+
+                    // Update recording details
+                    if (FindName("RecordingChannelText") is TextBlock channelTextBlock)
+                        channelTextBlock.Text = recordingManager.ChannelName ?? "Unknown";
+
+                    if (FindName("RecordingStartedText") is TextBlock startedTextBlock)
+                        startedTextBlock.Text = recordingManager.StartedDisplay;
+
+                    if (FindName("RecordingFileText") is TextBlock fileTextBlock)
+                        fileTextBlock.Text = recordingManager.FileName ?? "--";
+
+                    if (FindName("RecordingPathText") is TextBlock pathTextBlock)
+                        pathTextBlock.Text = recordingManager.FilePath ?? "--";
+
+                    if (FindName("RecordingDurationText") is TextBlock durationTextBlock)
+                        durationTextBlock.Text = recordingManager.DurationDisplay;
+
+                    if (FindName("RecordingSizeText") is TextBlock sizeTextBlock)
+                        sizeTextBlock.Text = recordingManager.SizeDisplay;
+
+                    if (FindName("RecordingBitrateText") is TextBlock bitrateTextBlock)
+                        bitrateTextBlock.Text = recordingManager.BitrateDisplay;
+                }
+                else
+                {
+                    detailsPanel.Visibility = Visibility.Collapsed;
+                    idlePanel.Visibility = Visibility.Visible;
+                }
             }
         }
 

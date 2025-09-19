@@ -734,38 +734,294 @@
 
             <!-- Recording Page (Hidden by default) -->
             <Grid x:Name="RecordingPage" Visibility="Collapsed">
-                <StackPanel Margin="16">
-                    <TextBlock Text="Manual Recording" Style="{StaticResource HeaderTextStyle}"/>
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <!-- Page Header -->
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                            <TextBlock Text="Recording" Style="{StaticResource HeaderTextStyle}"/>
+                            <Border Background="#28A745" CornerRadius="12" Padding="8,4" Margin="24,4,0,0" VerticalAlignment="Top">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="8" Height="8" Fill="White" Margin="0,0,4,0"/>
+                                    <TextBlock Text="Ready" FontSize="12" Foreground="White" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
 
-                    <Border Style="{StaticResource CardStyle}" MaxWidth="600" HorizontalAlignment="Left">
-                        <StackPanel>
-                            <TextBlock Text="Record Current Channel" FontSize="16" FontWeight="Bold"
-                                     Foreground="#FFDDE6F2" Margin="0,0,0,16"/>
+                        <!-- Quick Start Section -->
+                        <Border Background="#161B22" CornerRadius="6" Padding="16" Margin="0,0,0,16"
+                                BorderBrush="#30363D" BorderThickness="1">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <TextBlock Text="⚡" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Quick Record" FontSize="16" FontWeight="SemiBold"
+                                               Foreground="#DDE6F2" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Text="Start recording the currently selected channel instantly with one click."
+                                           Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
 
-                            <!-- Recording Controls -->
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+                        <!-- Main Recording Section -->
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="400"/>
+                            </Grid.ColumnDefinitions>
 
-                                <StackPanel Grid.Column="0">
-                                    <TextBlock Text="Selected Channel:" FontSize="12" Foreground="#9DB2C7" Margin="0,0,0,4"/>
-                                    <TextBlock x:Name="SelectedChannelText" Text="None selected" FontSize="14"
-                                             Foreground="#FFDDE6F2" Margin="0,0,0,8"/>
+                            <!-- Manual Recording Controls -->
+                            <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                        <TextBlock Text="⏺️" FontSize="20" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Manual Recording" FontSize="18" FontWeight="Bold"
+                                                 Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                    </StackPanel>
 
-                                    <TextBlock Text="Status:" FontSize="12" Foreground="#9DB2C7" Margin="0,0,0,4"/>
-                                    <TextBlock x:Name="RecordingStatusDisplay" Text="{Binding RecordingManager.StatusDisplay}"
-                                             FontSize="14" Foreground="#FFDDE6F2"/>
+                                    <!-- Channel Selection -->
+                                    <Border Background="#182433" CornerRadius="6" Padding="16" Margin="0,0,0,16"
+                                            BorderBrush="#223247" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="📺 Channel Selection" FontSize="14" FontWeight="SemiBold"
+                                                     Foreground="#DDE6F2" Margin="0,0,0,12"/>
+
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <StackPanel Grid.Row="0">
+                                                    <TextBlock Text="Selected Channel:" FontSize="12" Foreground="#9DB2C7" Margin="0,0,0,6"/>
+                                                    <Border Background="#0E1620" CornerRadius="4" Padding="12,8" BorderBrush="#223247" BorderThickness="1">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="📺" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                            <TextBlock x:Name="SelectedChannelText" Text="None selected" FontSize="14"
+                                                                     Foreground="#FFDDE6F2" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <TextBlock Grid.Row="1" Text="💡 Tip: Select a channel from the Live TV tab to enable recording"
+                                                         FontSize="11" Foreground="#657A91" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Recording Controls -->
+                                    <Border Background="#182433" CornerRadius="6" Padding="16" Margin="0,0,0,0"
+                                            BorderBrush="#223247" BorderThickness="1">
+                                        <StackPanel>
+                                            <TextBlock Text="🎬 Recording Controls" FontSize="14" FontWeight="SemiBold"
+                                                     Foreground="#DDE6F2" Margin="0,0,0,12"/>
+
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                                    <TextBlock Text="Current Status:" FontSize="12" Foreground="#9DB2C7" Margin="0,0,0,6"/>
+                                                    <Border Background="#0E1620" CornerRadius="4" Padding="12,8" BorderBrush="#223247" BorderThickness="1">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Ellipse x:Name="RecordingPageStatusIndicator" Width="8" Height="8" Fill="#6C757D" Margin="0,0,8,0"/>
+                                                            <TextBlock x:Name="RecordingStatusDisplay" Text="{Binding RecordingManager.StatusDisplay}"
+                                                                     FontSize="14" Foreground="#FFDDE6F2"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                    <Button x:Name="RecordButton" Background="#28A745" Foreground="White" BorderThickness="0"
+                                                            Padding="32,16" FontSize="16" FontWeight="SemiBold"
+                                                            Click="RecordBtn_Click" Cursor="Hand">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock x:Name="RecordBtnIcon" Text="⏺️" FontSize="16" Margin="0,0,8,0"/>
+                                                            <TextBlock x:Name="RecordBtnText" Text="Start Recording"/>
+                                                        </StackPanel>
+                                                        <Button.Style>
+                                                            <Style TargetType="Button">
+                                                                <Setter Property="Background" Value="#28A745"/>
+                                                                <Setter Property="Template">
+                                                                    <Setter.Value>
+                                                                        <ControlTemplate TargetType="Button">
+                                                                            <Border Background="{TemplateBinding Background}"
+                                                                                    CornerRadius="6"
+                                                                                    Padding="{TemplateBinding Padding}">
+                                                                                <ContentPresenter HorizontalAlignment="Center"
+                                                                                                VerticalAlignment="Center"/>
+                                                                            </Border>
+                                                                        </ControlTemplate>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter Property="Background" Value="#218838"/>
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Recording Information Panel -->
+                            <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                            <TextBlock Text="📊" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Recording Info" FontSize="16" FontWeight="Bold"
+                                                     Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                        </StackPanel>
+
+                                        <!-- Current Recording Status -->
+                                        <Border Background="#182433" CornerRadius="6" Padding="12" Margin="0,0,0,16"
+                                                BorderBrush="#223247" BorderThickness="1">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                    <TextBlock Text="📊" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Current Recording" FontSize="12" FontWeight="SemiBold"
+                                                             Foreground="#DDE6F2" VerticalAlignment="Center"/>
+                                                    <Border x:Name="RecordingStatusBadge" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                            CornerRadius="4" Padding="6,2" Background="#394150">
+                                                        <TextBlock x:Name="RecordingStatusBadgeText" Text="Idle" Foreground="White" FontWeight="SemiBold" FontSize="10"/>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <StackPanel x:Name="RecordingDetailsPanel" Visibility="Collapsed">
+                                                    <TextBlock Text="Channel:" Foreground="#9DB2C7" FontSize="10" Margin="0,0,0,2"/>
+                                                    <TextBlock x:Name="RecordingChannelText" Text="None" Foreground="#DDE6F2" FontWeight="SemiBold" FontSize="11" Margin="0,0,0,6"/>
+
+                                                    <TextBlock Text="Started:" Foreground="#9DB2C7" FontSize="10" Margin="0,0,0,2"/>
+                                                    <TextBlock x:Name="RecordingStartedText" Text="--" Foreground="#DDE6F2" FontSize="11" Margin="0,0,0,6"/>
+
+                                                    <TextBlock Text="File:" Foreground="#9DB2C7" FontSize="10" Margin="0,0,0,2"/>
+                                                    <TextBlock x:Name="RecordingFileText" Text="--" Foreground="#DDE6F2" FontFamily="Consolas" FontSize="9"
+                                                             TextWrapping="Wrap" Margin="0,0,0,2"/>
+                                                    <TextBlock x:Name="RecordingPathText" Text="--" Foreground="#60758C" FontFamily="Consolas" FontSize="8"
+                                                             TextWrapping="Wrap" Margin="0,0,0,8"/>
+
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="Duration" Foreground="#9DB2C7" FontSize="9"/>
+                                                            <TextBlock x:Name="RecordingDurationText" Text="00:00:00" Foreground="#DDE6F2" FontWeight="Bold" FontSize="12"/>
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="1">
+                                                            <TextBlock Text="Size" Foreground="#9DB2C7" FontSize="9"/>
+                                                            <TextBlock x:Name="RecordingSizeText" Text="0 MB" Foreground="#DDE6F2" FontWeight="Bold" FontSize="12"/>
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="2">
+                                                            <TextBlock Text="Bitrate" Foreground="#9DB2C7" FontSize="9"/>
+                                                            <TextBlock x:Name="RecordingBitrateText" Text="-- kbps" Foreground="#DDE6F2" FontWeight="Bold" FontSize="12"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </StackPanel>
+
+                                                <StackPanel x:Name="RecordingIdlePanel" Visibility="Visible">
+                                                    <TextBlock Text="No active recording" Foreground="#9DB2C7" FontSize="11"
+                                                             TextAlignment="Center" Margin="0,16,0,16"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Recording Settings Quick Access -->
+                                        <Border Background="#182433" CornerRadius="6" Padding="12" Margin="0,0,0,16"
+                                                BorderBrush="#223247" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="⚙️ Quick Settings" FontSize="12" FontWeight="SemiBold"
+                                                         Foreground="#DDE6F2" Margin="0,0,0,8"/>
+
+                                                <StackPanel>
+                                                    <TextBlock Text="Output Directory:" FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,2"/>
+                                                    <TextBlock Text="C:\Users\Videos" FontSize="10" Foreground="#DDE6F2"
+                                                             TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
+
+                                                    <TextBlock Text="FFmpeg Status:" FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,2"/>
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                                        <Ellipse Width="6" Height="6" Fill="#28A745" Margin="0,0,4,0"/>
+                                                        <TextBlock Text="Ready" FontSize="10" Foreground="#DDE6F2"/>
+                                                    </StackPanel>
+
+                                                    <Button Content="Open Settings" Background="#347DFF" Foreground="White"
+                                                            BorderThickness="0" Padding="8,4" FontSize="10" Margin="0,4,0,0"
+                                                            Click="NavigateToSettings"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Help & Tips -->
+                                        <Border Background="#161B22" CornerRadius="6" Padding="12"
+                                                BorderBrush="#30363D" BorderThickness="1">
+                                            <StackPanel>
+                                                <TextBlock Text="💡 Tips" FontSize="12" FontWeight="SemiBold"
+                                                         Foreground="#DDE6F2" Margin="0,0,0,8"/>
+
+                                                <StackPanel>
+                                                    <TextBlock Text="• Select a channel from Live TV to enable recording"
+                                                             FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,4" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="• Use the Scheduler for advanced recording options"
+                                                             FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,4" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="• Check Settings to configure output directory"
+                                                             FontSize="10" Foreground="#9DB2C7" Margin="0,0,0,4" TextWrapping="Wrap"/>
+                                                    <TextBlock Text="• Recordings are saved in MP4/TS format"
+                                                             FontSize="10" Foreground="#9DB2C7" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+
+                        <!-- Advanced Options -->
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <TextBlock Text="🔧" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Advanced Options" FontSize="16" FontWeight="Bold"
+                                             Foreground="#F0F6FC" VerticalAlignment="Center"/>
                                 </StackPanel>
 
-                                <Button Grid.Column="1" x:Name="RecordButton" Content="Record"
-                                        Background="#28A745" Foreground="White" BorderThickness="0"
-                                        Padding="24,12" FontSize="14" Click="RecordBtn_Click"/>
-                            </Grid>
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button Grid.Column="0" Background="#347DFF" Foreground="White" BorderThickness="0"
+                                            Padding="16,12" Margin="0,0,8,0" Click="NavigateToScheduler">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="📅" FontSize="14" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Schedule Recording" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Grid.Column="1" Background="#6C757D" Foreground="White" BorderThickness="0"
+                                            Padding="16,12" Margin="8,0,0,0" Click="OpenRecordingFolder_Click">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="📂" FontSize="14" Margin="0,0,8,0"/>
+                                            <TextBlock Text="Open Output Folder" FontSize="12"/>
+                                        </StackPanel>
+                                    </Button>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
 
             <!-- Scheduler Page (Hidden by default) -->
