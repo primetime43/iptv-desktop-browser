@@ -321,6 +321,9 @@ namespace DesktopApp.Views
         private bool _logoutRequested;
         private bool _isClosing;
         private readonly CancellationTokenSource _cts = new();
+
+        // Buffer for log messages during startup before UI is ready
+        private readonly List<string> _startupLogBuffer = new();
         private DateTime _nextScheduledEpgRefreshUtc;
         private string _lastEpgUpdateText = "(never)";
         public string LastEpgUpdateText
@@ -418,8 +421,7 @@ namespace DesktopApp.Views
                     _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
                     _ = RunEpgSchedulerLoopAsync();
                     await LoadCategoriesAsync();
-                    await LoadVodCategoriesAsync();
-                    await LoadSeriesCategoriesAsync();
+                    // VOD and Series categories will be loaded on-demand when user navigates to those sections
                 }
                 else
                 {
@@ -733,11 +735,12 @@ namespace DesktopApp.Views
             try
             {
                 // Navigation buttons are now handled by the new layout system
-                // VOD access check
+                // VOD access check - enable for Xtream mode, disable for M3U
                 if (FindName("VodNavButton") is Button vodBtn)
                 {
-                    vodBtn.IsEnabled = HasVodAccess;
-                    vodBtn.Opacity = HasVodAccess ? 1.0 : 0.5;
+                    bool vodAvailable = Session.Mode == SessionMode.Xtream;
+                    vodBtn.IsEnabled = vodAvailable;
+                    vodBtn.Opacity = vodAvailable ? 1.0 : 0.5;
                 }
             }
             catch (Exception ex)
@@ -753,26 +756,6 @@ namespace DesktopApp.Views
         }
         private void NavCategories_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "categories"; if (!IsGlobalSearchActive) { /* restore category view list remains as-is */ } }
         private void NavGuide_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "guide"; ApplySearch(); }
-        private void NavVod_Click(object sender, RoutedEventArgs e)
-        {
-            if (!HasVodAccess)
-            {
-                MessageBox.Show("VOD is not available for this account or connection type.", "VOD Not Available", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            // Open dedicated VOD window (single instance)
-            if (_vodWindow == null || !_vodWindow.IsVisible)
-            {
-                _vodWindow = new VodWindow(this) { Owner = this };
-                _vodWindow.Closed += (_, __) => _vodWindow = null;
-                _vodWindow.Show();
-            }
-            else
-            {
-                _vodWindow.Activate();
-            }
-        }
         private void NavProfile_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "profile";
         private void NavOutput_Click(object sender, RoutedEventArgs e) => CurrentViewKey = "output";
 
@@ -1114,7 +1097,87 @@ namespace DesktopApp.Views
                 if (_isClosing)
                     return;
 
-                // Output text handling removed in new layout
+                // Quick check if logging is enabled to avoid UI work
+                bool loggingEnabled = true; // Default to enabled during startup
+                try
+                {
+                    if (FindName("SettingsEnableLoggingCheckBox") is CheckBox enableLoggingCheckBox)
+                        loggingEnabled = enableLoggingCheckBox.IsChecked == true;
+                    // If checkbox doesn't exist yet (during startup), assume enabled
+                }
+                catch
+                {
+                    // If checkbox not found, assume logging is enabled for startup
+                    loggingEnabled = true;
+                }
+
+                if (!loggingEnabled)
+                {
+                    // Still write to debug output for development
+                    System.Diagnostics.Debug.Write(text);
+                    return;
+                }
+
+                // Use low priority async update to avoid blocking UI
+                var timestamp = DateTime.Now.ToString("HH:mm:ss.fff");
+                var logEntry = $"[{timestamp}] {text}";
+
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+                {
+                    try
+                    {
+                        if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+                        {
+                            // If this is the first time we're accessing the log, replay buffered messages
+                            if (logTextBlock.Text == "Raw output log will appear here when logging is enabled..." && _startupLogBuffer.Any())
+                            {
+                                var bufferedMessages = string.Join("", _startupLogBuffer);
+                                logTextBlock.Text = bufferedMessages + logEntry;
+                                _startupLogBuffer.Clear();
+                            }
+                            else if (logTextBlock.Text == "Raw output log will appear here when logging is enabled...")
+                            {
+                                logTextBlock.Text = logEntry;
+                            }
+                            else
+                            {
+                                logTextBlock.Text += logEntry;
+                            }
+
+                            // Auto-scroll to bottom (only if user is at bottom)
+                            if (FindName("LogScrollViewer") is ScrollViewer scrollViewer)
+                            {
+                                var isAtBottom = scrollViewer.VerticalOffset >= scrollViewer.ScrollableHeight - 10;
+                                if (isAtBottom)
+                                {
+                                    scrollViewer.ScrollToEnd();
+                                }
+                            }
+
+                            // Limit log size periodically to prevent memory issues
+                            var lines = logTextBlock.Text.Split('\n');
+                            if (lines.Length > 8000) // Reduced threshold for better performance
+                            {
+                                var recentLines = lines.Skip(lines.Length - 4000).ToArray();
+                                logTextBlock.Text = string.Join("\n", recentLines);
+                            }
+                        }
+                        else
+                        {
+                            // UI not ready yet, buffer the message
+                            _startupLogBuffer.Add(logEntry);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // UI not ready yet, buffer the message
+                        _startupLogBuffer.Add(logEntry);
+                        System.Diagnostics.Debug.WriteLine($"UI Log failed, buffered message: {ex.Message}");
+                    }
+                });
+
+                // Also write to debug output for debugging
+                System.Diagnostics.Debug.Write(text);
             }
             catch (Exception ex)
             {
@@ -3214,22 +3277,10 @@ namespace DesktopApp.Views
                 if (FindName("ActiveConnectionsText") is TextBlock activeConnText)
                     activeConnText.Text = Session.UserInfo?.active_cons ?? "0";
 
-                // Initialize debug output for API call logging
-                if (FindName("DebugOutputBox") is TextBox debugBox)
-                {
-                    if (string.IsNullOrEmpty(debugBox.Text))
-                    {
-                        debugBox.Text = $"[{DateTime.Now:HH:mm:ss}] Profile page loaded. API calls will be logged here.\n";
-                        debugBox.Text += $"[{DateTime.Now:HH:mm:ss}] Connection Info - Server: {(Session.UseSsl ? "https" : "http")}://{Session.Host}:{Session.Port}, User: {Session.Username}, Mode: {Session.Mode}\n";
-                    }
-                }
             }
             catch (Exception ex)
             {
-                if (FindName("DebugOutputBox") is TextBox debugBox)
-                {
-                    debugBox.Text += $"\nError loading profile data: {ex.Message}\n";
-                }
+                Debug.WriteLine($"Error loading profile data: {ex.Message}");
             }
         }
 
@@ -3237,9 +3288,6 @@ namespace DesktopApp.Views
         {
             try
             {
-                if (FindName("DebugOutputBox") is TextBox debugBox)
-                    debugBox.Text += $"\n[{DateTime.Now:HH:mm:ss}] Refreshing profile data...\n";
-
                 // Re-fetch user info if in Xtream mode
                 if (Session.Mode == SessionMode.Xtream)
                 {
@@ -3250,8 +3298,6 @@ namespace DesktopApp.Views
                     if (userInfo != null)
                     {
                         Session.UserInfo = userInfo;
-                        if (FindName("DebugOutputBox") is TextBox debugBox2)
-                            debugBox2.Text += $"[{DateTime.Now:HH:mm:ss}] Profile refreshed successfully.\n";
                     }
                 }
 
@@ -3259,19 +3305,10 @@ namespace DesktopApp.Views
             }
             catch (Exception ex)
             {
-                if (FindName("DebugOutputBox") is TextBox debugBox)
-                    debugBox.Text += $"[{DateTime.Now:HH:mm:ss}] Error refreshing profile: {ex.Message}\n";
+                Debug.WriteLine($"Error refreshing profile: {ex.Message}");
             }
         }
 
-        private void ClearDebugOutput_Click(object sender, RoutedEventArgs e)
-        {
-            if (FindName("DebugOutputBox") is TextBox debugBox)
-            {
-                debugBox.Clear();
-                debugBox.Text = $"[{DateTime.Now:HH:mm:ss}] Debug log cleared.\n";
-            }
-        }
 
         // Settings page methods
         private void LoadSettingsPage()
@@ -3316,6 +3353,9 @@ namespace DesktopApp.Views
                     epgInterval.Text = ((int)Session.EpgRefreshInterval.TotalMinutes).ToString();
 
                 ValidateAllSettingsFields();
+
+                // Initialize logging display
+                Log("Settings page loaded. Raw output logging is active.\n");
             }
             catch (Exception ex)
             {
@@ -3913,6 +3953,81 @@ namespace DesktopApp.Views
             catch (Exception ex)
             {
                 SetSettingsStatusMessage($"Error restoring defaults: {ex.Message}", true);
+            }
+        }
+
+        // Log control event handlers
+        private void SettingsEnableLogging_Changed(object sender, RoutedEventArgs e)
+        {
+            if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+            {
+                if (FindName("SettingsEnableLoggingCheckBox") is CheckBox checkBox && checkBox.IsChecked == true)
+                {
+                    if (logTextBlock.Text == "Raw output log will appear here when logging is enabled...")
+                    {
+                        logTextBlock.Text = $"[{DateTime.Now:HH:mm:ss.fff}] Logging enabled.\n";
+                    }
+                    else
+                    {
+                        Log("Logging enabled.\n");
+                    }
+                }
+                else
+                {
+                    Log("Logging disabled.\n");
+                }
+            }
+        }
+
+        private void SettingsClearLog_Click(object sender, RoutedEventArgs e)
+        {
+            if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+            {
+                logTextBlock.Text = $"[{DateTime.Now:HH:mm:ss.fff}] Log cleared.\n";
+            }
+        }
+
+        private void SettingsCopyLog_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+                {
+                    Clipboard.SetText(logTextBlock.Text);
+                    Log("Log copied to clipboard.\n");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to copy log to clipboard: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SettingsSaveLog_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (FindName("RawOutputLogTextBlock") is TextBlock logTextBlock)
+                {
+                    var saveDialog = new Microsoft.Win32.SaveFileDialog
+                    {
+                        Filter = "Text files (*.txt)|*.txt|Log files (*.log)|*.log|All files (*.*)|*.*",
+                        DefaultExt = ".txt",
+                        FileName = $"iptv-log-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.txt"
+                    };
+
+                    if (saveDialog.ShowDialog() == true)
+                    {
+                        System.IO.File.WriteAllText(saveDialog.FileName, logTextBlock.Text);
+                        Log($"Log saved to: {saveDialog.FileName}\n");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save log: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

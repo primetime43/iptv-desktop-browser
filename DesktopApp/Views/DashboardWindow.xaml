@@ -1215,34 +1215,12 @@
 
                                 <StackPanel Orientation="Horizontal">
                                     <Button Content="Refresh Profile" Background="#28A745" Foreground="White"
-                                            BorderThickness="0" Padding="16,8" Margin="0,0,12,0"
+                                            BorderThickness="0" Padding="16,8"
                                             Click="RefreshProfile_Click"/>
-                                    <Button Content="Clear Debug Log" Background="#DC3545" Foreground="White"
-                                            BorderThickness="0" Padding="12,6"
-                                            Click="ClearDebugOutput_Click"/>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
 
-                        <!-- Debug Information -->
-                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                                    <TextBlock Text="Debug Information" FontSize="18" FontWeight="Bold"
-                                             Foreground="#F0F6FC"/>
-                                    <Button Content="Clear Output" Background="#DC3545" Foreground="White"
-                                            BorderThickness="0" Padding="12,6" Margin="16,0,0,0"
-                                            Click="ClearDebugOutput_Click"/>
-                                </StackPanel>
-
-                                <TextBlock Text="API Call Debug Log:" Foreground="#8BA1B9" Margin="0,0,0,8"/>
-                                <ScrollViewer Height="300" VerticalScrollBarVisibility="Auto">
-                                    <TextBox x:Name="DebugOutputBox" IsReadOnly="True" FontFamily="Consolas"
-                                           FontSize="11" TextWrapping="Wrap" AcceptsReturn="True"
-                                           Background="#0E1620" Foreground="#C8D3E0" BorderThickness="0"/>
-                                </ScrollViewer>
-                            </StackPanel>
-                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </Grid>
@@ -1451,6 +1429,43 @@
                                             Click="SettingsUpdateEpgNow_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
                                     <TextBlock x:Name="SettingsEpgIntervalStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#8BA1B9"/>
                                 </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Raw Output Log Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                    <TextBlock Text="📝 Raw Output Log" FontSize="18" FontWeight="Bold"
+                                             Foreground="#F0F6FC" VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="SettingsEnableLoggingCheckBox" Content="Enable Logging"
+                                              Foreground="#9DB2C7" Margin="16,0,0,0"
+                                              IsChecked="True" Checked="SettingsEnableLogging_Changed"
+                                              Unchecked="SettingsEnableLogging_Changed"/>
+                                </StackPanel>
+
+                                <TextBlock Text="Shows API calls, channel loading, and other diagnostic information in real-time."
+                                           Foreground="#8BA1B9" FontSize="12" Margin="0,0,0,12"/>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <Button Content="Clear Log" Width="100" Height="28" Margin="0,0,8,0"
+                                            Click="SettingsClearLog_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    <Button Content="Copy Log" Width="100" Height="28" Margin="0,0,8,0"
+                                            Click="SettingsCopyLog_Click" Background="#347DFF" Foreground="White" Padding="8,4"/>
+                                    <Button Content="Save Log" Width="100" Height="28"
+                                            Click="SettingsSaveLog_Click" Background="#28A745" Foreground="White" Padding="8,4"/>
+                                </StackPanel>
+
+                                <Border Background="#0D1117" BorderBrush="#30363D" BorderThickness="1"
+                                        CornerRadius="4" Height="300">
+                                    <ScrollViewer x:Name="LogScrollViewer" VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Auto" Padding="8">
+                                        <TextBlock x:Name="RawOutputLogTextBlock"
+                                                   Text="Raw output log will appear here when logging is enabled..."
+                                                   Foreground="#8BA1B9" FontFamily="Consolas" FontSize="11"
+                                                   TextWrapping="Wrap"/>
+                                    </ScrollViewer>
+                                </Border>
                             </StackPanel>
                         </Border>
 
