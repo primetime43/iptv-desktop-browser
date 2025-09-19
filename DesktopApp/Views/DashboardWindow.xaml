@@ -658,12 +658,12 @@
                                         <DataTemplate>
                                             <Border Background="#182433" CornerRadius="4" Padding="8" Margin="0,0,0,4">
                                                 <StackPanel>
-                                                    <TextBlock Text="{Binding StartTimeLocal, StringFormat='HH:mm'}"
-                                                              FontSize="11" Foreground="#8BA1B9"/>
+                                                    <TextBlock Text="{Binding TimeRangeLocal}"
+                                                              FontSize="11" Foreground="#8BA1B9" FontWeight="Bold"/>
                                                     <TextBlock Text="{Binding Title}" FontSize="12" Foreground="#DDE6F2"
-                                                              TextWrapping="Wrap" FontWeight="Bold"/>
+                                                              TextWrapping="Wrap" FontWeight="Bold" Margin="0,2,0,0"/>
                                                     <TextBlock Text="{Binding Description}" FontSize="11" Foreground="#9DB2C7"
-                                                              TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="40"/>
+                                                              TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="40" Margin="0,2,0,0"/>
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>

@@ -9,6 +9,11 @@ public sealed class EpgEntry
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public bool IsNow(DateTime utcNow) => utcNow >= StartUtc && utcNow < EndUtc;
-    // 12-hour format with am/pm
+
+    // Local time properties for UI binding
+    public DateTime StartTimeLocal => StartUtc.ToLocalTime();
+    public DateTime EndTimeLocal => EndUtc.ToLocalTime();
+
+    // 12-hour format with am/pm for full time range
     public string TimeRangeLocal => $"{StartUtc.ToLocalTime():h:mm tt} - {EndUtc.ToLocalTime():h:mm tt}";
 }
