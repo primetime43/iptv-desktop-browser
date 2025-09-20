@@ -12,6 +12,10 @@ public class PersistentCacheService : ICacheService
     private readonly IHttpService _httpService;
     private readonly ILogger<PersistentCacheService> _logger;
 
+    // Cache operation status
+    public event Action<string>? CacheOperationStatusChanged;
+    public string CurrentCacheStatus { get; private set; } = "Ready";
+
     // In-memory cache for quick access
     private readonly ConcurrentDictionary<string, BitmapImage> _imageCache = new();
     private readonly ConcurrentDictionary<string, CacheEntry> _dataCache = new();
@@ -223,6 +227,7 @@ public class PersistentCacheService : ICacheService
 
         // No cache hit - download the image
         _logger.LogInformation("🌐 DOWNLOAD: Channel logo cache MISS - Downloading from server: Channel {ChannelId} from {Url}", channelId, logoUrl);
+        SetCacheStatus($"📥 Downloading logo for channel {channelId}...");
 
         // Use semaphore to limit concurrent downloads
         await _imageSemaphore.WaitAsync(cancellationToken);
@@ -256,11 +261,13 @@ public class PersistentCacheService : ICacheService
             });
 
             _logger.LogInformation("✅ DOWNLOAD SUCCESS: Channel logo downloaded and cached: Channel {ChannelId}", channelId);
+            SetCacheStatus("Ready");
             return downloadedBitmap;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to download and cache channel logo: Channel {ChannelId} from {Url}", channelId, logoUrl);
+            SetCacheStatus("Ready");
             return null;
         }
         finally
@@ -289,16 +296,23 @@ public class PersistentCacheService : ICacheService
             }
         }
 
-        // Try loading from disk cache and wait for it to complete
-        var diskData = await LoadFromDiskCacheAsync<T>(key, cancellationToken);
-        if (diskData != null)
+        // Start background disk cache check (non-blocking) with callback to update cache
+        _ = Task.Run(async () =>
         {
-            // Data was loaded from disk into memory cache, return it
-            _logger.LogInformation("📱 CACHE HIT: Data loaded from DISK cache: {Key} (no API call needed)", key);
-            return diskData;
-        }
+            SetCacheStatus($"🔄 Loading {key} from disk...");
+            var diskData = await LoadFromDiskCacheAsync<T>(key, cancellationToken);
+            if (diskData != null)
+            {
+                _logger.LogInformation("🎯 Data loaded from disk to memory cache in background: {Key}", key);
+                SetCacheStatus("Ready");
+            }
+            else
+            {
+                SetCacheStatus("Ready");
+            }
+        });
 
-        _logger.LogInformation("🔄 CACHE MISS: Data not found in memory or disk cache: {Key}", key);
+        _logger.LogInformation("🔄 CACHE MISS: Data not found in memory cache, checking disk in background: {Key}", key);
         return null;
     }
 
@@ -760,6 +774,12 @@ public class PersistentCacheService : ICacheService
             CacheDirectory = _cacheDirectory,
             Entries = cacheEntries.OrderByDescending(e => e.Created).ToList()
         };
+    }
+
+    private void SetCacheStatus(string status)
+    {
+        CurrentCacheStatus = status;
+        CacheOperationStatusChanged?.Invoke(status);
     }
 
     // Cache models

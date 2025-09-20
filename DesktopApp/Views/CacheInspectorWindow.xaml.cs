@@ -196,9 +196,35 @@ public partial class CacheInspectorWindow : Window
                 DeleteSelectedButton.IsEnabled = false;
                 DeleteSelectedButton.Content = "🗑️ Deleting...";
 
+                _logger.LogInformation("Deleting {Count} cache entries using service: {ServiceType}",
+                    selectedItems.Count, _cacheService.GetType().Name);
+
                 foreach (var item in selectedItems)
                 {
+                    _logger.LogInformation("Deleting cache entry: {Key}", item.Key);
                     await _cacheService.RemoveDataAsync(item.Key);
+
+                    // For PersistentCacheService, also manually verify file deletion
+                    if (_cacheService is PersistentCacheService)
+                    {
+                        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                        var cacheDirectory = Path.Combine(appDataPath, "IPTV-Desktop-Browser", "Cache");
+                        var safeFileName = GetSafeFileName(item.Key);
+                        var dataFile = Path.Combine(cacheDirectory, $"{safeFileName}.json");
+
+                        if (File.Exists(dataFile))
+                        {
+                            try
+                            {
+                                File.Delete(dataFile);
+                                _logger.LogInformation("Manually deleted cache file: {File}", dataFile);
+                            }
+                            catch (Exception fileEx)
+                            {
+                                _logger.LogWarning(fileEx, "Failed to manually delete cache file: {File}", dataFile);
+                            }
+                        }
+                    }
                 }
 
                 await LoadCacheInfoAsync();
@@ -264,6 +290,13 @@ public partial class CacheInspectorWindow : Window
             counter++;
         }
         return string.Format("{0:n1} {1}", number, suffixes[counter]);
+    }
+
+    private static string GetSafeFileName(string input)
+    {
+        var invalidChars = Path.GetInvalidFileNameChars();
+        var result = string.Join("_", input.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+        return result.Length > 200 ? result.Substring(0, 200) : result;
     }
 }
 

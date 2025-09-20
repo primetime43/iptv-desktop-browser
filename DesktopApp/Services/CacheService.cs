@@ -202,6 +202,10 @@ public class CacheService : ICacheService
         }
     }
 
+    // Cache status (not implemented for basic cache service)
+    public event Action<string>? CacheOperationStatusChanged;
+    public string CurrentCacheStatus => "Ready";
+
     private async Task CleanupExpiredItemsAsync()
     {
         try

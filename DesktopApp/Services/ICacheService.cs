@@ -20,4 +20,8 @@ public interface ICacheService
     int ImageCacheCount { get; }
     int DataCacheCount { get; }
     long EstimatedMemoryUsage { get; }
+
+    // Cache status
+    event Action<string>? CacheOperationStatusChanged;
+    string CurrentCacheStatus { get; }
 }
