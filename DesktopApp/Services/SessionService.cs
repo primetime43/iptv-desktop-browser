@@ -13,20 +13,55 @@ public class SessionService : ISessionService
         _logger = logger;
     }
 
-    public SessionMode Mode { get; set; } = SessionMode.Xtream;
-    public string Host { get; set; } = string.Empty;
-    public int Port { get; set; }
-    public bool UseSsl { get; set; }
-    public string Username { get; set; } = string.Empty;
-    public string Password { get; set; } = string.Empty;
-    public UserInfo? UserInfo { get; set; }
+    // Delegate to static Session class
+    public SessionMode Mode
+    {
+        get => Models.Session.Mode;
+        set => Models.Session.Mode = value;
+    }
 
-    public List<PlaylistEntry> PlaylistChannels { get; } = new();
-    public List<VodContent> VodContent { get; } = new();
-    public List<VodCategory> VodCategories { get; } = new();
-    public List<SeriesContent> SeriesContent { get; } = new();
-    public List<SeriesCategory> SeriesCategories { get; } = new();
-    public Dictionary<string, List<EpgEntry>> M3uEpgByChannel { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public string Host
+    {
+        get => Models.Session.Host;
+        set => Models.Session.Host = value;
+    }
+
+    public int Port
+    {
+        get => Models.Session.Port;
+        set => Models.Session.Port = value;
+    }
+
+    public bool UseSsl
+    {
+        get => Models.Session.UseSsl;
+        set => Models.Session.UseSsl = value;
+    }
+
+    public string Username
+    {
+        get => Models.Session.Username;
+        set => Models.Session.Username = value;
+    }
+
+    public string Password
+    {
+        get => Models.Session.Password;
+        set => Models.Session.Password = value;
+    }
+
+    public UserInfo? UserInfo
+    {
+        get => Models.Session.UserInfo;
+        set => Models.Session.UserInfo = value;
+    }
+
+    public List<PlaylistEntry> PlaylistChannels => Models.Session.PlaylistChannels;
+    public List<VodContent> VodContent => Models.Session.VodContent;
+    public List<VodCategory> VodCategories => Models.Session.VodCategories;
+    public List<SeriesContent> SeriesContent => Models.Session.SeriesContent;
+    public List<SeriesCategory> SeriesCategories => Models.Session.SeriesCategories;
+    public Dictionary<string, List<EpgEntry>> M3uEpgByChannel => Models.Session.M3uEpgByChannel;
 
     public event Action? M3uEpgUpdated;
 

@@ -9,15 +9,18 @@ public class ChannelService : IChannelService
 {
     private readonly ISessionService _sessionService;
     private readonly IHttpService _httpService;
+    private readonly ICacheService _cacheService;
     private readonly ILogger<ChannelService> _logger;
 
     public ChannelService(
         ISessionService sessionService,
         IHttpService httpService,
+        ICacheService cacheService,
         ILogger<ChannelService> logger)
     {
         _sessionService = sessionService;
         _httpService = httpService;
+        _cacheService = cacheService;
         _logger = logger;
     }
 
@@ -31,6 +34,17 @@ public class ChannelService : IChannelService
             {
                 return LoadM3uCategories();
             }
+
+            // Check cache first
+            var cacheKey = $"live_categories_{_sessionService.Host}_{_sessionService.Username}";
+            _logger.LogInformation("🔍 Checking cache with key: {CacheKey}", cacheKey);
+            var cachedCategories = await _cacheService.GetDataAsync<List<Category>>(cacheKey, cancellationToken);
+            if (cachedCategories != null)
+            {
+                _logger.LogInformation("📱 CACHE HIT: Loaded {Count} categories from CACHE (no API call needed)", cachedCategories.Count);
+                return cachedCategories;
+            }
+            _logger.LogInformation("🌐 API CALL: Cache MISS - Loading categories from API server");
 
             var url = _sessionService.BuildApi("get_live_categories");
             var response = await _httpService.GetStringAsync(url, cancellationToken);
@@ -59,7 +73,10 @@ public class ChannelService : IChannelService
                 }
             }
 
-            _logger.LogInformation("Loaded {Count} categories", categories.Count);
+            // Cache the results
+            await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(2), cancellationToken);
+
+            _logger.LogInformation("✅ API SUCCESS: Loaded {Count} categories from API and cached for future use", categories.Count);
             return categories;
         }
         catch (Exception ex)
@@ -79,6 +96,17 @@ public class ChannelService : IChannelService
             {
                 return LoadM3uChannelsForCategory(category);
             }
+
+            // Check cache first
+            var cacheKey = $"channels_{_sessionService.Host}_{_sessionService.Username}_{category.Id}";
+            _logger.LogInformation("🔍 Checking channels cache with key: {CacheKey}", cacheKey);
+            var cachedChannels = await _cacheService.GetDataAsync<List<Channel>>(cacheKey, cancellationToken);
+            if (cachedChannels != null)
+            {
+                _logger.LogInformation("📱 CACHE HIT: Loaded {Count} channels from CACHE for category: {CategoryName} (no API call needed)", cachedChannels.Count, category.Name);
+                return cachedChannels;
+            }
+            _logger.LogInformation("🌐 API CALL: Channels cache MISS - Loading from API server for category: {CategoryName}", category.Name);
 
             var url = _sessionService.BuildApi("get_live_streams", ("category_id", category.Id));
             var response = await _httpService.GetStringAsync(url, cancellationToken);
@@ -108,7 +136,10 @@ public class ChannelService : IChannelService
                 }
             }
 
-            _logger.LogInformation("Loaded {Count} channels for category {CategoryName}", channels.Count, category.Name);
+            // Cache the results
+            await _cacheService.SetDataAsync(cacheKey, channels, TimeSpan.FromMinutes(30), cancellationToken);
+
+            _logger.LogInformation("✅ API SUCCESS: Loaded {Count} channels from API for category {CategoryName} and cached for future use", channels.Count, category.Name);
             return channels;
         }
         catch (Exception ex)
@@ -133,11 +164,101 @@ public class ChannelService : IChannelService
                 return;
             }
 
+            // Check cache first
+            var cacheKey = $"epg_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
+            var cachedEpg = await _cacheService.GetDataAsync<EpgData>(cacheKey, cancellationToken);
+            if (cachedEpg != null && cachedEpg.IsStillValid())
+            {
+                _logger.LogInformation("📱 CACHE HIT: EPG loaded from CACHE for channel: {ChannelName} (no API call needed)", channel.Name);
+                channel.NowTitle = cachedEpg.NowTitle;
+                channel.NowDescription = cachedEpg.NowDescription;
+                channel.NowTimeRange = cachedEpg.NowTimeRange;
+                channel.EpgLoaded = true;
+                return;
+            }
+
+            _logger.LogInformation("🌐 API CALL: EPG cache MISS - Loading from API server for channel: {ChannelName}", channel.Name);
+
             var url = _sessionService.BuildApi("get_simple_data_table", ("stream_id", channel.Id.ToString()));
             var response = await _httpService.GetStringAsync(url, cancellationToken);
 
             // Parse EPG data and update channel properties
-            // Implementation would continue here...
+            var epgData = new EpgData();
+
+            // Handle potential base64 encoded response
+            var trimmed = response.AsSpan().TrimStart();
+            if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
+            {
+                _logger.LogWarning("EPG non-JSON response skipped for channel: {ChannelName}", channel.Name);
+                channel.EpgLoaded = true;
+                return;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(response);
+                if (doc.RootElement.TryGetProperty("epg_listings", out var listings) && listings.ValueKind == JsonValueKind.Array)
+                {
+                    var nowUtc = DateTime.UtcNow;
+                    bool found = false;
+                    EpgEntry? fallbackFirstFuture = null;
+
+                    foreach (var el in listings.EnumerateArray())
+                    {
+                        var start = GetUnixTimestamp(el, "start_timestamp");
+                        var end = GetUnixTimestamp(el, "stop_timestamp");
+                        if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
+
+                        string titleRaw = TryGetString(el, "title", "name", "programme", "program");
+                        string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
+                        string title = DecodeMaybeBase64(titleRaw);
+                        string desc = DecodeMaybeBase64(descRaw);
+
+                        bool nowFlag = el.TryGetProperty("now_playing", out var np) &&
+                                      (np.ValueKind == JsonValueKind.Number ? np.GetInt32() == 1 :
+                                       (np.ValueKind == JsonValueKind.String && np.GetString() == "1"));
+                        bool isCurrent = nowFlag || (nowUtc >= start && nowUtc < end);
+
+                        if (isCurrent && !string.IsNullOrWhiteSpace(title))
+                        {
+                            epgData.NowTitle = title;
+                            epgData.NowDescription = desc;
+                            epgData.NowTimeRange = $"{start.ToLocalTime():h:mm tt} - {end.ToLocalTime():h:mm tt}";
+                            found = true;
+                            break;
+                        }
+
+                        if (!isCurrent && start > nowUtc && fallbackFirstFuture == null && !string.IsNullOrWhiteSpace(title))
+                        {
+                            fallbackFirstFuture = new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc };
+                        }
+                    }
+
+                    if (!found && fallbackFirstFuture != null)
+                    {
+                        epgData.NowTitle = fallbackFirstFuture.Title;
+                        epgData.NowDescription = fallbackFirstFuture.Description ?? string.Empty;
+                        epgData.NowTimeRange = $"{fallbackFirstFuture.StartUtc.ToLocalTime():h:mm tt} - {fallbackFirstFuture.EndUtc.ToLocalTime():h:mm tt}";
+                        found = true;
+                    }
+
+                    // Update channel with EPG data
+                    channel.NowTitle = epgData.NowTitle;
+                    channel.NowDescription = epgData.NowDescription;
+                    channel.NowTimeRange = epgData.NowTimeRange;
+                    channel.EpgLoaded = true;
+
+                    // Cache the results for 15 minutes
+                    await _cacheService.SetDataAsync(cacheKey, epgData, TimeSpan.FromMinutes(15), cancellationToken);
+
+                    _logger.LogInformation("✅ API SUCCESS: EPG loaded from API for channel {ChannelName} and cached for future use", channel.Name);
+                }
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse EPG JSON for channel: {ChannelName}", channel.Name);
+                channel.EpgLoaded = true;
+            }
 
         }
         catch (Exception ex)
@@ -252,6 +373,58 @@ public class ChannelService : IChannelService
         catch
         {
             return false;
+        }
+    }
+
+    // Helper methods for EPG parsing
+    private static DateTime GetUnixTimestamp(JsonElement el, string prop)
+    {
+        if (!el.TryGetProperty(prop, out var tsEl))
+            return DateTime.MinValue;
+
+        var str = tsEl.GetString();
+        if (string.IsNullOrEmpty(str) || !long.TryParse(str, out var unix) || unix <= 0)
+            return DateTime.MinValue;
+
+        return DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime;
+    }
+
+    private static string TryGetString(JsonElement el, params string[] names)
+    {
+        foreach (var n in names)
+        {
+            if (el.TryGetProperty(n, out var p))
+            {
+                if (p.ValueKind == JsonValueKind.String) return p.GetString() ?? string.Empty;
+                if (p.ValueKind == JsonValueKind.Number) return p.ToString();
+            }
+        }
+        return string.Empty;
+    }
+
+    private static string DecodeMaybeBase64(string raw)
+    {
+        if (string.IsNullOrEmpty(raw))
+            return string.Empty;
+
+        // Check if string looks like Base64 (proper length and characters)
+        if (raw.Length % 4 != 0 || !raw.All(c => char.IsLetterOrDigit(c) || c == '+' || c == '/' || c == '='))
+            return raw;
+
+        try
+        {
+            var bytes = Convert.FromBase64String(raw);
+            var txt = System.Text.Encoding.UTF8.GetString(bytes);
+
+            // If decoded text contains unexpected control characters, return original
+            if (txt.Any(c => char.IsControl(c) && c != '\n' && c != '\r' && c != '\t'))
+                return raw;
+
+            return txt;
+        }
+        catch
+        {
+            return raw;
         }
     }
 }

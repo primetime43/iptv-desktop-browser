@@ -11,15 +11,18 @@ public class VodService : IVodService
 {
     private readonly ISessionService _sessionService;
     private readonly IHttpService _httpService;
+    private readonly ICacheService _cacheService;
     private readonly ILogger<VodService> _logger;
 
     public VodService(
         ISessionService sessionService,
         IHttpService httpService,
+        ICacheService cacheService,
         ILogger<VodService> logger)
     {
         _sessionService = sessionService;
         _httpService = httpService;
+        _cacheService = cacheService;
         _logger = logger;
     }
 
@@ -32,6 +35,15 @@ public class VodService : IVodService
             if (_sessionService.Mode == SessionMode.M3u)
             {
                 return _sessionService.VodCategories.ToList();
+            }
+
+            // Check cache first
+            var cacheKey = $"vod_categories_{_sessionService.Host}_{_sessionService.Username}";
+            var cachedCategories = await _cacheService.GetDataAsync<List<VodCategory>>(cacheKey, cancellationToken);
+            if (cachedCategories != null)
+            {
+                _logger.LogInformation("Loaded {Count} VOD categories from cache", cachedCategories.Count);
+                return cachedCategories;
             }
 
             var url = _sessionService.BuildApi("get_vod_categories");
@@ -60,6 +72,9 @@ public class VodService : IVodService
                 }
             }
 
+            // Cache the results
+            await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(1), cancellationToken);
+
             _logger.LogInformation("Loaded {Count} VOD categories", categories.Count);
             return categories;
         }
@@ -81,6 +96,15 @@ public class VodService : IVodService
                 return _sessionService.VodContent
                     .Where(v => v.CategoryId == categoryId)
                     .ToList();
+            }
+
+            // Check cache first
+            var cacheKey = $"vod_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
+            var cachedContent = await _cacheService.GetDataAsync<List<VodContent>>(cacheKey, cancellationToken);
+            if (cachedContent != null)
+            {
+                _logger.LogInformation("Loaded {Count} VOD items for category {CategoryId} from cache", cachedContent.Count, categoryId);
+                return cachedContent;
             }
 
             var url = _sessionService.BuildApi("get_vod_streams", ("category_id", categoryId));
@@ -127,6 +151,9 @@ public class VodService : IVodService
                     content.Add(vodContent);
                 }
             }
+
+            // Cache the results
+            await _cacheService.SetDataAsync(cacheKey, content, TimeSpan.FromMinutes(30), cancellationToken);
 
             _logger.LogInformation("Loaded {Count} VOD items for category {CategoryId}", content.Count, categoryId);
             return content;
@@ -313,16 +340,9 @@ public class VodService : IVodService
         {
             if (string.IsNullOrEmpty(content.StreamIcon)) return;
 
-            var imageBytes = await _httpService.GetByteArrayAsync(content.StreamIcon, cancellationToken);
-            if (imageBytes.Length > 0)
+            var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
+            if (bitmap != null)
             {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.StreamSource = new MemoryStream(imageBytes);
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.EndInit();
-                bitmap.Freeze();
-
                 content.PosterImage = bitmap;
             }
         }
@@ -339,16 +359,9 @@ public class VodService : IVodService
         {
             if (string.IsNullOrEmpty(content.StreamIcon)) return;
 
-            var imageBytes = await _httpService.GetByteArrayAsync(content.StreamIcon, cancellationToken);
-            if (imageBytes.Length > 0)
+            var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
+            if (bitmap != null)
             {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.StreamSource = new MemoryStream(imageBytes);
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.EndInit();
-                bitmap.Freeze();
-
                 content.PosterImage = bitmap;
             }
         }

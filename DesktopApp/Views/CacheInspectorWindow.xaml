@@ -1,0 +1,133 @@
+<Window x:Class="DesktopApp.Views.CacheInspectorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Cache Inspector" Height="600" Width="1000"
+        WindowStartupLocation="CenterOwner">
+
+    <Window.Resources>
+        <Style x:Key="HeaderStyle" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Margin" Value="0,10,0,5"/>
+        </Style>
+
+        <Style x:Key="StatStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="5,2"/>
+        </Style>
+
+        <Style x:Key="ButtonStyle" TargetType="Button">
+            <Setter Property="Margin" Value="5"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="MinWidth" Value="100"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="Cache Inspector &amp; Management"
+                   FontSize="18" FontWeight="Bold" Margin="0,0,0,15"/>
+
+        <!-- Statistics -->
+        <GroupBox Grid.Row="1" Header="Cache Statistics" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Memory Cache" Style="{StaticResource HeaderStyle}"/>
+                    <TextBlock x:Name="MemoryImageCountText" Style="{StaticResource StatStyle}"/>
+                    <TextBlock x:Name="MemoryDataCountText" Style="{StaticResource StatStyle}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="Disk Cache" Style="{StaticResource HeaderStyle}"/>
+                    <TextBlock x:Name="DiskImageCountText" Style="{StaticResource StatStyle}"/>
+                    <TextBlock x:Name="DiskDataCountText" Style="{StaticResource StatStyle}"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Storage" Style="{StaticResource HeaderStyle}"/>
+                    <TextBlock x:Name="TotalSizeText" Style="{StaticResource StatStyle}"/>
+                    <TextBlock x:Name="CacheDirectoryText" Style="{StaticResource StatStyle}"/>
+                </StackPanel>
+            </Grid>
+        </GroupBox>
+
+        <!-- Cache Entries List -->
+        <GroupBox Grid.Row="2" Header="Cache Entries">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Filter -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                    <TextBlock Text="Filter:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBox x:Name="FilterTextBox" Width="200"
+                             TextChanged="FilterTextBox_TextChanged"
+                             ToolTip="Filter by key or data type"/>
+                    <CheckBox x:Name="ShowExpiredCheckBox" Content="Show Expired"
+                              Margin="20,0,0,0" VerticalAlignment="Center"
+                              Checked="ShowExpiredCheckBox_Changed"
+                              Unchecked="ShowExpiredCheckBox_Changed"/>
+                </StackPanel>
+
+                <!-- Data Grid -->
+                <DataGrid Grid.Row="1" x:Name="CacheEntriesGrid"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          GridLinesVisibility="Horizontal"
+                          AlternatingRowBackground="LightGray"
+                          SelectionMode="Extended">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Key" Binding="{Binding Key}" Width="300"
+                                            CanUserSort="True"/>
+                        <DataGridTextColumn Header="Type" Binding="{Binding DataType}" Width="120"
+                                            CanUserSort="True"/>
+                        <DataGridTextColumn Header="Created" Binding="{Binding Created, StringFormat='MMM dd HH:mm'}" Width="100"
+                                            CanUserSort="True"/>
+                        <DataGridTextColumn Header="Expires" Binding="{Binding ExpiresAt, StringFormat='MMM dd HH:mm'}" Width="100"
+                                            CanUserSort="True"/>
+                        <DataGridTextColumn Header="Access Count" Binding="{Binding AccessCount}" Width="90"
+                                            CanUserSort="True"/>
+                        <DataGridTextColumn Header="Size" Binding="{Binding SizeBytesFormatted}" Width="80"
+                                            CanUserSort="True"/>
+                        <DataGridCheckBoxColumn Header="Expired" Binding="{Binding IsExpired}" Width="60"
+                                                CanUserSort="True"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </GroupBox>
+
+        <!-- Action Buttons -->
+        <WrapPanel Grid.Row="3" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button x:Name="RefreshButton" Content="🔄 Refresh"
+                    Style="{StaticResource ButtonStyle}"
+                    Click="RefreshButton_Click"/>
+            <Button x:Name="ClearExpiredButton" Content="🧹 Clear Expired"
+                    Style="{StaticResource ButtonStyle}"
+                    Click="ClearExpiredButton_Click"/>
+            <Button x:Name="ClearImageCacheButton" Content="🖼️ Clear Images"
+                    Style="{StaticResource ButtonStyle}"
+                    Click="ClearImageCacheButton_Click"/>
+            <Button x:Name="DeleteSelectedButton" Content="🗑️ Delete Selected"
+                    Style="{StaticResource ButtonStyle}"
+                    Click="DeleteSelectedButton_Click"/>
+            <Button x:Name="OpenCacheFolderButton" Content="📁 Open Folder"
+                    Style="{StaticResource ButtonStyle}"
+                    Click="OpenCacheFolderButton_Click"/>
+        </WrapPanel>
+    </Grid>
+</Window>
