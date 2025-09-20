@@ -289,14 +289,20 @@ public class PersistentCacheService : ICacheService
             }
         }
 
-        // Start background disk cache check (non-blocking)
-        _ = Task.Run(async () => await LoadFromDiskCacheAsync<T>(key, cancellationToken));
+        // Try loading from disk cache and wait for it to complete
+        var diskData = await LoadFromDiskCacheAsync<T>(key, cancellationToken);
+        if (diskData != null)
+        {
+            // Data was loaded from disk into memory cache, return it
+            _logger.LogInformation("📱 CACHE HIT: Data loaded from DISK cache: {Key} (no API call needed)", key);
+            return diskData;
+        }
 
-        _logger.LogInformation("🔄 CACHE MISS: Data not found in cache: {Key}", key);
+        _logger.LogInformation("🔄 CACHE MISS: Data not found in memory or disk cache: {Key}", key);
         return null;
     }
 
-    private async Task LoadFromDiskCacheAsync<T>(string key, CancellationToken cancellationToken) where T : class
+    private async Task<T?> LoadFromDiskCacheAsync<T>(string key, CancellationToken cancellationToken) where T : class
     {
         var dataFile = Path.Combine(_dataDirectory, $"{GetSafeFileName(key)}.json");
         if (File.Exists(dataFile))
@@ -311,7 +317,7 @@ public class PersistentCacheService : ICacheService
                     var deserializedData = JsonSerializer.Deserialize<T>(fileEntry.DataJson);
                     if (deserializedData != null)
                     {
-                        // Load back into memory cache
+                        // Load back into memory cache so subsequent calls will hit memory
                         var memoryEntry = new CacheEntry
                         {
                             Data = deserializedData,
@@ -322,7 +328,8 @@ public class PersistentCacheService : ICacheService
                         };
                         _dataCache[key] = memoryEntry;
 
-                        _logger.LogInformation("🎯 Data loaded from disk cache: {Key}", key);
+                        _logger.LogInformation("🎯 Data loaded from disk to memory cache: {Key}", key);
+                        return deserializedData;
                     }
                 }
                 else
@@ -337,6 +344,7 @@ public class PersistentCacheService : ICacheService
                 try { File.Delete(dataFile); } catch { }
             }
         }
+        return null;
     }
 
     public async Task SetDataAsync<T>(string key, T data, TimeSpan? expiration = null, CancellationToken cancellationToken = default) where T : class
