@@ -530,6 +530,9 @@ namespace DesktopApp.Views
             _vodService = vodService ?? throw new ArgumentNullException(nameof(vodService));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
 
+            // Set up raw output logging for cache status
+            _channelService.SetRawOutputLogger(Log);
+
             InitializeComponent();
             DataContext = this;
             // User name display removed in new layout

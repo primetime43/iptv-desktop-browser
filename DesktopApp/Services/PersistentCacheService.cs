@@ -734,47 +734,78 @@ public class PersistentCacheService : ICacheService
 
     public async Task<CacheInfo> GetCacheInfoAsync()
     {
-        var imageFiles = Directory.GetFiles(_imageDirectory).Length;
-        var dataFiles = Directory.GetFiles(_dataDirectory).Length;
-        var totalSize = GetCacheSizeBytes();
-
-        var cacheEntries = new List<CacheEntryInfo>();
-
-        // Get data cache entries
-        foreach (var file in Directory.GetFiles(_dataDirectory, "*.json"))
+        return await Task.Run(() =>
         {
-            try
+            var imageFiles = Directory.GetFiles(_imageDirectory).Length;
+            var dataFiles = Directory.GetFiles(_dataDirectory).Length;
+            var totalSize = GetCacheSizeBytes();
+
+            // For performance: Only provide basic stats, detailed entries loaded on demand
+            return new CacheInfo
             {
-                var json = await File.ReadAllTextAsync(file);
-                var entry = JsonSerializer.Deserialize<PersistentCacheEntry>(json);
-                if (entry != null)
-                {
-                    cacheEntries.Add(new CacheEntryInfo
-                    {
-                        Key = entry.Key,
-                        DataType = entry.DataType,
-                        Created = entry.Created,
-                        ExpiresAt = entry.ExpiresAt,
-                        AccessCount = entry.AccessCount,
-                        IsExpired = entry.IsExpired,
-                        SizeBytes = new FileInfo(file).Length
-                    });
-                }
-            }
-            catch { }
-        }
-
-        return new CacheInfo
-        {
-            MemoryImageCount = ImageCacheCount,
-            MemoryDataCount = DataCacheCount,
-            DiskImageCount = imageFiles,
-            DiskDataCount = dataFiles,
-            TotalSizeBytes = totalSize,
-            CacheDirectory = _cacheDirectory,
-            Entries = cacheEntries.OrderByDescending(e => e.Created).ToList()
-        };
+                MemoryImageCount = ImageCacheCount,
+                MemoryDataCount = DataCacheCount,
+                DiskImageCount = imageFiles,
+                DiskDataCount = dataFiles,
+                TotalSizeBytes = totalSize,
+                CacheDirectory = _cacheDirectory,
+                Entries = new List<CacheEntryInfo>() // Empty - loaded on demand
+            };
+        });
     }
+
+    public async Task<List<CacheEntryInfo>> GetCacheEntriesAsync(int maxEntries = 1000)
+    {
+        return await Task.Run(() =>
+        {
+            var cacheEntries = new List<CacheEntryInfo>();
+            var files = Directory.GetFiles(_dataDirectory, "*.json");
+
+            // Process files in parallel for better performance
+            var results = new ConcurrentBag<CacheEntryInfo>();
+
+            Parallel.ForEach(files.Take(maxEntries), file =>
+            {
+                try
+                {
+                    // Fast metadata extraction without full deserialization
+                    var fileInfo = new FileInfo(file);
+                    var key = Path.GetFileNameWithoutExtension(file);
+
+                    // Read only first part of file to extract metadata quickly
+                    var json = File.ReadAllText(file);
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    if (root.TryGetProperty("Key", out var keyProp) &&
+                        root.TryGetProperty("DataType", out var typeProp) &&
+                        root.TryGetProperty("Created", out var createdProp) &&
+                        root.TryGetProperty("ExpiresAt", out var expiresProp) &&
+                        root.TryGetProperty("AccessCount", out var accessProp))
+                    {
+                        var entry = new CacheEntryInfo
+                        {
+                            Key = keyProp.GetString() ?? key,
+                            DataType = typeProp.GetString() ?? "Unknown",
+                            Created = createdProp.GetDateTime(),
+                            ExpiresAt = expiresProp.GetDateTime(),
+                            AccessCount = accessProp.GetInt32(),
+                            IsExpired = DateTime.UtcNow > expiresProp.GetDateTime(),
+                            SizeBytes = fileInfo.Length
+                        };
+                        results.Add(entry);
+                    }
+                }
+                catch
+                {
+                    // Skip corrupted files
+                }
+            });
+
+            return results.OrderByDescending(e => e.Created).ToList();
+        });
+    }
+
 
     private void SetCacheStatus(string status)
     {

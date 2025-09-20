@@ -11,6 +11,7 @@ public class ChannelService : IChannelService
     private readonly IHttpService _httpService;
     private readonly ICacheService _cacheService;
     private readonly ILogger<ChannelService> _logger;
+    private Action<string>? _rawOutputLogger;
 
     public ChannelService(
         ISessionService sessionService,
@@ -22,6 +23,11 @@ public class ChannelService : IChannelService
         _httpService = httpService;
         _cacheService = cacheService;
         _logger = logger;
+    }
+
+    public void SetRawOutputLogger(Action<string>? logger)
+    {
+        _rawOutputLogger = logger;
     }
 
     public async Task<List<Category>> LoadCategoriesAsync(CancellationToken cancellationToken = default)
@@ -41,10 +47,14 @@ public class ChannelService : IChannelService
             var cachedCategories = await _cacheService.GetDataAsync<List<Category>>(cacheKey, cancellationToken);
             if (cachedCategories != null)
             {
-                _logger.LogInformation("📱 CACHE HIT: Loaded {Count} categories from CACHE (no API call needed)", cachedCategories.Count);
+                var cacheHitMsg = $"📱 CACHE HIT: Loaded {cachedCategories.Count} categories from CACHE (no API call needed)";
+                _logger.LogInformation(cacheHitMsg);
+                _rawOutputLogger?.Invoke(cacheHitMsg + "\n");
                 return cachedCategories;
             }
-            _logger.LogInformation("🌐 API CALL: Cache MISS - Loading categories from API server");
+            var cacheMissMsg = "🌐 API CALL: Cache MISS - Loading categories from API server";
+            _logger.LogInformation(cacheMissMsg);
+            _rawOutputLogger?.Invoke(cacheMissMsg + "\n");
 
             var url = _sessionService.BuildApi("get_live_categories");
             var response = await _httpService.GetStringAsync(url, cancellationToken);
@@ -103,10 +113,14 @@ public class ChannelService : IChannelService
             var cachedChannels = await _cacheService.GetDataAsync<List<Channel>>(cacheKey, cancellationToken);
             if (cachedChannels != null)
             {
-                _logger.LogInformation("📱 CACHE HIT: Loaded {Count} channels from CACHE for category: {CategoryName} (no API call needed)", cachedChannels.Count, category.Name);
+                var cacheHitMsg = $"📱 CACHE HIT: Loaded {cachedChannels.Count} channels from CACHE for category: {category.Name} (no API call needed)";
+                _logger.LogInformation(cacheHitMsg);
+                _rawOutputLogger?.Invoke(cacheHitMsg + "\n");
                 return cachedChannels;
             }
-            _logger.LogInformation("🌐 API CALL: Channels cache MISS - Loading from API server for category: {CategoryName}", category.Name);
+            var cacheMissMsg = $"🌐 API CALL: Channels cache MISS - Loading from API server for category: {category.Name}";
+            _logger.LogInformation(cacheMissMsg);
+            _rawOutputLogger?.Invoke(cacheMissMsg + "\n");
 
             var url = _sessionService.BuildApi("get_live_streams", ("category_id", category.Id));
             var response = await _httpService.GetStringAsync(url, cancellationToken);
@@ -169,7 +183,9 @@ public class ChannelService : IChannelService
             var cachedEpg = await _cacheService.GetDataAsync<EpgData>(cacheKey, cancellationToken);
             if (cachedEpg != null && cachedEpg.IsStillValid())
             {
-                _logger.LogInformation("📱 CACHE HIT: EPG loaded from CACHE for channel: {ChannelName} (no API call needed)", channel.Name);
+                var epgCacheHitMsg = $"📱 CACHE HIT: EPG loaded from CACHE for channel: {channel.Name} (no API call needed)";
+                _logger.LogInformation(epgCacheHitMsg);
+                _rawOutputLogger?.Invoke(epgCacheHitMsg + "\n");
                 channel.NowTitle = cachedEpg.NowTitle;
                 channel.NowDescription = cachedEpg.NowDescription;
                 channel.NowTimeRange = cachedEpg.NowTimeRange;
@@ -177,7 +193,9 @@ public class ChannelService : IChannelService
                 return;
             }
 
-            _logger.LogInformation("🌐 API CALL: EPG cache MISS - Loading from API server for channel: {ChannelName}", channel.Name);
+            var epgCacheMissMsg = $"🌐 API CALL: EPG cache MISS - Loading from API server for channel: {channel.Name}";
+            _logger.LogInformation(epgCacheMissMsg);
+            _rawOutputLogger?.Invoke(epgCacheMissMsg + "\n");
 
             var url = _sessionService.BuildApi("get_simple_data_table", ("stream_id", channel.Id.ToString()));
             var response = await _httpService.GetStringAsync(url, cancellationToken);
@@ -202,12 +220,19 @@ public class ChannelService : IChannelService
                     var nowUtc = DateTime.UtcNow;
                     bool found = false;
                     EpgEntry? fallbackFirstFuture = null;
+                    DateTime? latestEndTime = null;
 
                     foreach (var el in listings.EnumerateArray())
                     {
                         var start = GetUnixTimestamp(el, "start_timestamp");
                         var end = GetUnixTimestamp(el, "stop_timestamp");
                         if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
+
+                        // Track the latest end time across all EPG entries for smart cache expiration
+                        if (!latestEndTime.HasValue || end > latestEndTime.Value)
+                        {
+                            latestEndTime = end;
+                        }
 
                         string titleRaw = TryGetString(el, "title", "name", "programme", "program");
                         string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
@@ -225,7 +250,7 @@ public class ChannelService : IChannelService
                             epgData.NowDescription = desc;
                             epgData.NowTimeRange = $"{start.ToLocalTime():h:mm tt} - {end.ToLocalTime():h:mm tt}";
                             found = true;
-                            break;
+                            // Don't break here - we still need to find the latest end time
                         }
 
                         if (!isCurrent && start > nowUtc && fallbackFirstFuture == null && !string.IsNullOrWhiteSpace(title))
@@ -233,6 +258,9 @@ public class ChannelService : IChannelService
                             fallbackFirstFuture = new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc };
                         }
                     }
+
+                    // Set the latest show end time for smart cache expiration
+                    epgData.LatestShowEndUtc = latestEndTime;
 
                     if (!found && fallbackFirstFuture != null)
                     {
@@ -248,10 +276,15 @@ public class ChannelService : IChannelService
                     channel.NowTimeRange = epgData.NowTimeRange;
                     channel.EpgLoaded = true;
 
-                    // Cache the results for 15 minutes
-                    await _cacheService.SetDataAsync(cacheKey, epgData, TimeSpan.FromMinutes(15), cancellationToken);
+                    // Cache the results with smart expiration based on EPG content
+                    // The EpgData.IsStillValid() method will determine when to expire based on the latest show end time
+                    await _cacheService.SetDataAsync(cacheKey, epgData, null, cancellationToken);
 
-                    _logger.LogInformation("✅ API SUCCESS: EPG loaded from API for channel {ChannelName} and cached for future use", channel.Name);
+                    var expirationInfo = epgData.LatestShowEndUtc.HasValue
+                        ? $"until {epgData.LatestShowEndUtc.Value.ToLocalTime():MM/dd HH:mm}"
+                        : "for 30 minutes (fallback)";
+                    _logger.LogInformation("✅ API SUCCESS: EPG loaded from API for channel {ChannelName} and cached {ExpirationInfo}", channel.Name, expirationInfo);
+                    _rawOutputLogger?.Invoke($"📺 EPG cached for {channel.Name} {expirationInfo}\n");
                 }
             }
             catch (JsonException ex)

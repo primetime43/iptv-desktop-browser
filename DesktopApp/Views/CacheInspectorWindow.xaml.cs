@@ -60,9 +60,10 @@ public partial class CacheInspectorWindow : Window
 
             if (_cacheService is PersistentCacheService persistentCache)
             {
+                // Phase 1: Load basic statistics quickly
                 var cacheInfo = await persistentCache.GetCacheInfoAsync();
 
-                // Update statistics
+                // Update statistics immediately
                 MemoryImageCountText.Text = $"Images in memory: {cacheInfo.MemoryImageCount:N0}";
                 MemoryDataCountText.Text = $"Data entries in memory: {cacheInfo.MemoryDataCount:N0}";
                 DiskImageCountText.Text = $"Images on disk: {cacheInfo.DiskImageCount:N0}";
@@ -70,16 +71,43 @@ public partial class CacheInspectorWindow : Window
                 TotalSizeText.Text = $"Total size: {FormatBytes(cacheInfo.TotalSizeBytes)}";
                 CacheDirectoryText.Text = $"Location: {cacheInfo.CacheDirectory}";
 
-                // Update entries
-                _cacheEntries.Clear();
-                foreach (var entry in cacheInfo.Entries)
-                {
-                    _cacheEntries.Add(new CacheEntryInfoViewModel(entry));
-                }
-
-                _collectionViewSource.View.Refresh();
-                _logger.LogInformation("Cache info loaded: {ImageCount} images, {DataCount} data entries, {TotalSize} bytes",
+                _logger.LogInformation("Cache statistics loaded: {ImageCount} images, {DataCount} data entries, {TotalSize} bytes",
                     cacheInfo.DiskImageCount, cacheInfo.DiskDataCount, cacheInfo.TotalSizeBytes);
+
+                // Phase 2: Load detailed entries in background (limited to 1000 for performance)
+                if (cacheInfo.DiskDataCount > 0)
+                {
+                    RefreshButton.Content = "🔄 Loading entries...";
+
+                    try
+                    {
+                        var entries = await persistentCache.GetCacheEntriesAsync(1000);
+
+                        // Update entries on UI thread
+                        _cacheEntries.Clear();
+                        foreach (var entry in entries)
+                        {
+                            _cacheEntries.Add(new CacheEntryInfoViewModel(entry));
+                        }
+
+                        _collectionViewSource.View.Refresh();
+                        _logger.LogInformation("Cache entries loaded: {Count} detailed entries", entries.Count);
+
+                        if (entries.Count == 1000 && cacheInfo.DiskDataCount > 1000)
+                        {
+                            RefreshButton.Content = $"🔄 Showing first 1000 of {cacheInfo.DiskDataCount:N0}";
+                        }
+                        else
+                        {
+                            RefreshButton.Content = "🔄 Refresh";
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to load cache entries");
+                        RefreshButton.Content = "⚠️ Failed to load entries";
+                    }
+                }
             }
             else
             {
@@ -204,29 +232,14 @@ public partial class CacheInspectorWindow : Window
                     _logger.LogInformation("Deleting cache entry: {Key}", item.Key);
                     await _cacheService.RemoveDataAsync(item.Key);
 
-                    // For PersistentCacheService, also manually verify file deletion
-                    if (_cacheService is PersistentCacheService)
-                    {
-                        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                        var cacheDirectory = Path.Combine(appDataPath, "IPTV-Desktop-Browser", "Cache");
-                        var safeFileName = GetSafeFileName(item.Key);
-                        var dataFile = Path.Combine(cacheDirectory, $"{safeFileName}.json");
-
-                        if (File.Exists(dataFile))
-                        {
-                            try
-                            {
-                                File.Delete(dataFile);
-                                _logger.LogInformation("Manually deleted cache file: {File}", dataFile);
-                            }
-                            catch (Exception fileEx)
-                            {
-                                _logger.LogWarning(fileEx, "Failed to manually delete cache file: {File}", dataFile);
-                            }
-                        }
-                    }
+                    // Remove from UI collection immediately
+                    _cacheEntries.Remove(item);
                 }
 
+                // Refresh the collection view to update the display
+                _collectionViewSource.View.Refresh();
+
+                // Also reload cache info to update statistics
                 await LoadCacheInfoAsync();
 
                 MessageBox.Show($"{selectedItems.Count} cache entries deleted successfully!", "Success",
