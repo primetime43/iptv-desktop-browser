@@ -281,7 +281,10 @@ public class PersistentCacheService : ICacheService
         // Check in-memory cache first (fast, non-blocking)
         if (_dataCache.TryGetValue(key, out var entry))
         {
-            if (entry.IsExpired)
+            // For EpgData, skip cache service expiration check and let EpgData.IsStillValid() handle it
+            var isEpgData = typeof(T) == typeof(EpgData);
+
+            if (!isEpgData && entry.IsExpired)
             {
                 _dataCache.TryRemove(key, out _);
                 // Remove file asynchronously in background
@@ -296,7 +299,23 @@ public class PersistentCacheService : ICacheService
             }
         }
 
-        // Start background disk cache check (non-blocking) with callback to update cache
+        // For EpgData, do synchronous disk loading to ensure cache is actually used
+        var isEpgDataType = typeof(T) == typeof(EpgData);
+        if (isEpgDataType)
+        {
+            SetCacheStatus($"🔄 Loading {key} from disk...");
+            var diskData = await LoadFromDiskCacheAsync<T>(key, cancellationToken);
+            SetCacheStatus("Ready");
+            if (diskData != null)
+            {
+                _logger.LogInformation("🎯 EPG data loaded from disk to memory cache: {Key}", key);
+                return diskData;
+            }
+            _logger.LogInformation("🔄 CACHE MISS: EPG data not found on disk: {Key}", key);
+            return null;
+        }
+
+        // For non-EPG data, use background disk cache check (non-blocking) for performance
         _ = Task.Run(async () =>
         {
             SetCacheStatus($"🔄 Loading {key} from disk...");
@@ -326,7 +345,9 @@ public class PersistentCacheService : ICacheService
                 var json = await File.ReadAllTextAsync(dataFile, cancellationToken);
                 var fileEntry = JsonSerializer.Deserialize<PersistentCacheEntry>(json);
 
-                if (fileEntry != null && !fileEntry.IsExpired)
+                // For EpgData, skip cache service expiration check and let EpgData.IsStillValid() handle it
+                var isEpgData = typeof(T) == typeof(EpgData);
+                if (fileEntry != null && (isEpgData || !fileEntry.IsExpired))
                 {
                     var deserializedData = JsonSerializer.Deserialize<T>(fileEntry.DataJson);
                     if (deserializedData != null)

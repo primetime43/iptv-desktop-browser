@@ -16,22 +16,26 @@ public class EpgData
     /// <summary>
     /// Smart EPG cache expiration: valid until 5 minutes before the last show ends,
     /// with a minimum validity of 30 minutes and maximum of 24 hours.
+    /// Uses local time for calculations since that's what users see in the guide.
     /// </summary>
     public bool IsStillValid()
     {
-        var now = DateTime.UtcNow;
+        var now = DateTime.Now; // Use local time
 
         // If we have EPG data with show times, use smart expiration
         if (LatestShowEndUtc.HasValue)
         {
+            // Convert UTC to local time for comparison
+            var latestShowEndLocal = LatestShowEndUtc.Value.ToLocalTime();
+
             // Expire 5 minutes before the last show ends (to fetch next batch)
-            var smartExpirationTime = LatestShowEndUtc.Value.AddMinutes(-5);
+            var smartExpirationTime = latestShowEndLocal.AddMinutes(-5);
 
             // Ensure minimum validity of 30 minutes (in case shows are very short)
-            var minimumExpirationTime = CachedAt.AddMinutes(30);
+            var minimumExpirationTime = CachedAt.ToLocalTime().AddMinutes(30);
 
             // Ensure maximum validity of 24 hours (in case EPG data goes far into future)
-            var maximumExpirationTime = CachedAt.AddHours(24);
+            var maximumExpirationTime = CachedAt.ToLocalTime().AddHours(24);
 
             // Use the earliest of smart expiration or max, but not earlier than minimum
             var actualExpirationTime = smartExpirationTime > minimumExpirationTime
@@ -42,6 +46,6 @@ public class EpgData
         }
 
         // Fallback: traditional 30-minute expiration if no show end time available
-        return now < CachedAt.AddMinutes(30);
+        return now < CachedAt.ToLocalTime().AddMinutes(30);
     }
 }

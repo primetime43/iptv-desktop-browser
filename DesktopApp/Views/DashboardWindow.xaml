@@ -382,6 +382,14 @@
                         </StackPanel>
                     </Button>
 
+                    <Button x:Name="LogsNavButton" Style="{StaticResource NavButtonStyle}"
+                            Click="NavigateToLogs">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📝" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Logs"/>
+                        </StackPanel>
+                    </Button>
+
                     <Button x:Name="CacheInspectorNavButton" Style="{StaticResource NavButtonStyle}"
                             Click="OpenCacheInspector">
                         <StackPanel Orientation="Horizontal">
@@ -2125,6 +2133,37 @@
                             </StackPanel>
                         </Border>
 
+
+                        <!-- Actions -->
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Actions" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Restore Defaults" Width="140" Height="40" Margin="0,0,12,0"
+                                            Click="SettingsRestoreDefaults_Click" Background="#DC3545" Foreground="White" Padding="12,6"/>
+                                    <Button Content="Save Settings" Width="120" Height="40"
+                                            Click="SettingsSave_Click" Background="#28A745" Foreground="White" Padding="12,6"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Logs Page -->
+            <Grid x:Name="LogsPage" Visibility="Collapsed">
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Logs" Style="{StaticResource HeaderTextStyle}"/>
+
+                        <!-- Status bar -->
+                        <Border Background="#1A242F" Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <TextBlock x:Name="LogsStatusText" Text="View and manage application logs and diagnostic information"
+                                       Foreground="#8BA1B9" FontSize="12"/>
+                        </Border>
+
                         <!-- Raw Output Log Section -->
                         <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
                             <StackPanel>
@@ -2159,21 +2198,6 @@
                                                    TextWrapping="Wrap"/>
                                     </ScrollViewer>
                                 </Border>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Actions -->
-                        <Border Style="{StaticResource CardStyle}">
-                            <StackPanel>
-                                <TextBlock Text="Actions" FontSize="18" FontWeight="Bold"
-                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
-
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="Restore Defaults" Width="140" Height="40" Margin="0,0,12,0"
-                                            Click="SettingsRestoreDefaults_Click" Background="#DC3545" Foreground="White" Padding="12,6"/>
-                                    <Button Content="Save Settings" Width="120" Height="40"
-                                            Click="SettingsSave_Click" Background="#28A745" Foreground="White" Padding="12,6"/>
-                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </StackPanel>

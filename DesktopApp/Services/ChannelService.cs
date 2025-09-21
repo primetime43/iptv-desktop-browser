@@ -277,8 +277,32 @@ public class ChannelService : IChannelService
                     channel.EpgLoaded = true;
 
                     // Cache the results with smart expiration based on EPG content
-                    // The EpgData.IsStillValid() method will determine when to expire based on the latest show end time
-                    await _cacheService.SetDataAsync(cacheKey, epgData, null, cancellationToken);
+                    // Calculate expiration time based on the latest show end time (convert to local time)
+                    TimeSpan cacheExpiration;
+                    if (epgData.LatestShowEndUtc.HasValue)
+                    {
+                        // Convert UTC time to local time for expiration calculation
+                        var latestShowEndLocal = epgData.LatestShowEndUtc.Value.ToLocalTime();
+
+                        // Expire 5 minutes before the last show ends (to fetch next batch)
+                        var smartExpirationTimeLocal = latestShowEndLocal.AddMinutes(-5);
+                        var timeUntilExpiration = smartExpirationTimeLocal - DateTime.Now;
+
+                        // Ensure minimum validity of 30 minutes and maximum of 24 hours
+                        if (timeUntilExpiration < TimeSpan.FromMinutes(30))
+                            cacheExpiration = TimeSpan.FromMinutes(30);
+                        else if (timeUntilExpiration > TimeSpan.FromHours(24))
+                            cacheExpiration = TimeSpan.FromHours(24);
+                        else
+                            cacheExpiration = timeUntilExpiration;
+                    }
+                    else
+                    {
+                        // Fallback: 30-minute expiration if no show end time available
+                        cacheExpiration = TimeSpan.FromMinutes(30);
+                    }
+
+                    await _cacheService.SetDataAsync(cacheKey, epgData, cacheExpiration, cancellationToken);
 
                     var expirationInfo = epgData.LatestShowEndUtc.HasValue
                         ? $"until {epgData.LatestShowEndUtc.Value.ToLocalTime():MM/dd HH:mm}"

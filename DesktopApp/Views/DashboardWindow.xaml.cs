@@ -2542,6 +2542,12 @@ namespace DesktopApp.Views
             LoadSettingsPage();
         }
 
+        private void NavigateToLogs(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Logs");
+            SetSelectedNavButton(sender as Button);
+        }
+
         private void OpenCacheInspector(object sender, RoutedEventArgs e)
         {
             try
@@ -2566,6 +2572,7 @@ namespace DesktopApp.Views
             if (FindName("SchedulerPage") is Grid schedulerPage) schedulerPage.Visibility = Visibility.Collapsed;
             if (FindName("ProfilePage") is Grid profilePage) profilePage.Visibility = Visibility.Collapsed;
             if (FindName("SettingsPage") is Grid settingsPage) settingsPage.Visibility = Visibility.Collapsed;
+            if (FindName("LogsPage") is Grid logsPage) logsPage.Visibility = Visibility.Collapsed;
 
             // Show selected page
             if (FindName($"{pageName}Page") is Grid targetPage)
@@ -2581,6 +2588,7 @@ namespace DesktopApp.Views
             if (FindName("SchedulerNavButton") is Button schedulerBtn) schedulerBtn.Tag = null;
             if (FindName("ProfileNavButton") is Button profileBtn) profileBtn.Tag = null;
             if (FindName("SettingsNavButton") is Button settingsBtn) settingsBtn.Tag = null;
+            if (FindName("LogsNavButton") is Button logsBtn) logsBtn.Tag = null;
 
             // Set selected button
             if (selectedButton != null)
