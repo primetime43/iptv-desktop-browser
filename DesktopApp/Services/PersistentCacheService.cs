@@ -282,6 +282,7 @@ public class PersistentCacheService : ICacheService
         if (_dataCache.TryGetValue(key, out var entry))
         {
             // For EpgData, skip cache service expiration check and let EpgData.IsStillValid() handle it
+            // For VOD data, use the cache service expiration which is properly calculated
             var isEpgData = typeof(T) == typeof(EpgData);
 
             if (!isEpgData && entry.IsExpired)
@@ -299,19 +300,27 @@ public class PersistentCacheService : ICacheService
             }
         }
 
-        // For EpgData, do synchronous disk loading to ensure cache is actually used
+        // For EpgData and VOD data types, do synchronous disk loading to ensure cache is actually used
         var isEpgDataType = typeof(T) == typeof(EpgData);
-        if (isEpgDataType)
+        var isVodDataType = typeof(T) == typeof(List<VodCategory>) ||
+                           typeof(T) == typeof(List<VodContent>) ||
+                           typeof(T) == typeof(List<SeriesCategory>) ||
+                           typeof(T) == typeof(List<SeriesContent>) ||
+                           typeof(T) == typeof(List<EpisodeContent>);
+
+        if (isEpgDataType || isVodDataType)
         {
             SetCacheStatus($"🔄 Loading {key} from disk...");
             var diskData = await LoadFromDiskCacheAsync<T>(key, cancellationToken);
             SetCacheStatus("Ready");
             if (diskData != null)
             {
-                _logger.LogInformation("🎯 EPG data loaded from disk to memory cache: {Key}", key);
+                var dataType = isEpgDataType ? "EPG" : "VOD";
+                _logger.LogInformation("🎯 {DataType} data loaded from disk to memory cache: {Key}", dataType, key);
                 return diskData;
             }
-            _logger.LogInformation("🔄 CACHE MISS: EPG data not found on disk: {Key}", key);
+            var missType = isEpgDataType ? "EPG" : "VOD";
+            _logger.LogInformation("🔄 CACHE MISS: {MissType} data not found on disk: {Key}", missType, key);
             return null;
         }
 
