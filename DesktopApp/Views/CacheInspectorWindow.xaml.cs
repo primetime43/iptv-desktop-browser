@@ -319,8 +319,8 @@ public class CacheEntryInfoViewModel : INotifyPropertyChanged
     {
         Key = entry.Key;
         DataType = entry.DataType;
-        Created = entry.Created;
-        ExpiresAt = entry.ExpiresAt;
+        Created = entry.Created.ToLocalTime();
+        ExpiresAt = entry.ExpiresAt.ToLocalTime();
         AccessCount = entry.AccessCount;
         IsExpired = entry.IsExpired;
         SizeBytes = entry.SizeBytes;
