@@ -37,13 +37,16 @@ public class VodService : IVodService
                 return _sessionService.VodCategories.ToList();
             }
 
-            // Check cache first
-            var cacheKey = $"vod_categories_{_sessionService.Host}_{_sessionService.Username}";
-            var cachedCategories = await _cacheService.GetDataAsync<List<VodCategory>>(cacheKey, cancellationToken);
-            if (cachedCategories != null)
+            // Check cache first (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
             {
-                _logger.LogInformation("Loaded {Count} VOD categories from cache", cachedCategories.Count);
-                return cachedCategories;
+                var cacheKey = $"vod_categories_{_sessionService.Host}_{_sessionService.Username}";
+                var cachedCategories = await _cacheService.GetDataAsync<List<VodCategory>>(cacheKey, cancellationToken);
+                if (cachedCategories != null)
+                {
+                    _logger.LogInformation("Loaded {Count} VOD categories from cache", cachedCategories.Count);
+                    return cachedCategories;
+                }
             }
 
             var url = _sessionService.BuildApi("get_vod_categories");
@@ -72,8 +75,12 @@ public class VodService : IVodService
                 }
             }
 
-            // Cache the results
-            await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(1), cancellationToken);
+            // Cache the results (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
+            {
+                var cacheKey = $"vod_categories_{_sessionService.Host}_{_sessionService.Username}";
+                await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(1), cancellationToken);
+            }
 
             _logger.LogInformation("Loaded {Count} VOD categories", categories.Count);
             return categories;
@@ -98,13 +105,16 @@ public class VodService : IVodService
                     .ToList();
             }
 
-            // Check cache first
-            var cacheKey = $"vod_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
-            var cachedContent = await _cacheService.GetDataAsync<List<VodContent>>(cacheKey, cancellationToken);
-            if (cachedContent != null)
+            // Check cache first (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
             {
-                _logger.LogInformation("Loaded {Count} VOD items for category {CategoryId} from cache", cachedContent.Count, categoryId);
-                return cachedContent;
+                var cacheKey = $"vod_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
+                var cachedContent = await _cacheService.GetDataAsync<List<VodContent>>(cacheKey, cancellationToken);
+                if (cachedContent != null)
+                {
+                    _logger.LogInformation("Loaded {Count} VOD items for category {CategoryId} from cache", cachedContent.Count, categoryId);
+                    return cachedContent;
+                }
             }
 
             var url = _sessionService.BuildApi("get_vod_streams", ("category_id", categoryId));
@@ -152,8 +162,12 @@ public class VodService : IVodService
                 }
             }
 
-            // Cache the results
-            await _cacheService.SetDataAsync(cacheKey, content, TimeSpan.FromMinutes(30), cancellationToken);
+            // Cache the results (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
+            {
+                var cacheKey = $"vod_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
+                await _cacheService.SetDataAsync(cacheKey, content, TimeSpan.FromMinutes(30), cancellationToken);
+            }
 
             _logger.LogInformation("Loaded {Count} VOD items for category {CategoryId}", content.Count, categoryId);
             return content;
@@ -176,13 +190,16 @@ public class VodService : IVodService
                 return _sessionService.SeriesCategories.ToList();
             }
 
-            // Check cache first
-            var cacheKey = $"series_categories_{_sessionService.Host}_{_sessionService.Username}";
-            var cachedCategories = await _cacheService.GetDataAsync<List<SeriesCategory>>(cacheKey, cancellationToken);
-            if (cachedCategories != null)
+            // Check cache first (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
             {
-                _logger.LogInformation("Loaded {Count} series categories from cache", cachedCategories.Count);
-                return cachedCategories;
+                var cacheKey = $"series_categories_{_sessionService.Host}_{_sessionService.Username}";
+                var cachedCategories = await _cacheService.GetDataAsync<List<SeriesCategory>>(cacheKey, cancellationToken);
+                if (cachedCategories != null)
+                {
+                    _logger.LogInformation("Loaded {Count} series categories from cache", cachedCategories.Count);
+                    return cachedCategories;
+                }
             }
 
             var url = _sessionService.BuildApi("get_series_categories");
@@ -211,8 +228,12 @@ public class VodService : IVodService
                 }
             }
 
-            // Cache the results
-            await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(1), cancellationToken);
+            // Cache the results (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
+            {
+                var cacheKey = $"series_categories_{_sessionService.Host}_{_sessionService.Username}";
+                await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(1), cancellationToken);
+            }
 
             _logger.LogInformation("Loaded {Count} series categories", categories.Count);
             return categories;
@@ -237,13 +258,16 @@ public class VodService : IVodService
                     .ToList();
             }
 
-            // Check cache first
-            var cacheKey = $"series_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
-            var cachedContent = await _cacheService.GetDataAsync<List<SeriesContent>>(cacheKey, cancellationToken);
-            if (cachedContent != null)
+            // Check cache first (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
             {
-                _logger.LogInformation("Loaded {Count} series for category {CategoryId} from cache", cachedContent.Count, categoryId);
-                return cachedContent;
+                var cacheKey = $"series_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
+                var cachedContent = await _cacheService.GetDataAsync<List<SeriesContent>>(cacheKey, cancellationToken);
+                if (cachedContent != null)
+                {
+                    _logger.LogInformation("Loaded {Count} series for category {CategoryId} from cache", cachedContent.Count, categoryId);
+                    return cachedContent;
+                }
             }
 
             var url = _sessionService.BuildApi("get_series", ("category_id", categoryId));
@@ -288,8 +312,12 @@ public class VodService : IVodService
                 }
             }
 
-            // Cache the results
-            await _cacheService.SetDataAsync(cacheKey, content, TimeSpan.FromMinutes(30), cancellationToken);
+            // Cache the results (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
+            {
+                var cacheKey = $"series_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
+                await _cacheService.SetDataAsync(cacheKey, content, TimeSpan.FromMinutes(30), cancellationToken);
+            }
 
             _logger.LogInformation("Loaded {Count} series for category {CategoryId}", content.Count, categoryId);
             return content;
@@ -307,13 +335,16 @@ public class VodService : IVodService
         {
             _logger.LogInformation("Loading episodes for series: {SeriesId}", seriesId);
 
-            // Check cache first
-            var cacheKey = $"episodes_{_sessionService.Host}_{_sessionService.Username}_{seriesId}";
-            var cachedEpisodes = await _cacheService.GetDataAsync<List<EpisodeContent>>(cacheKey, cancellationToken);
-            if (cachedEpisodes != null)
+            // Check cache first (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
             {
-                _logger.LogInformation("Loaded {Count} episodes for series {SeriesId} from cache", cachedEpisodes.Count, seriesId);
-                return cachedEpisodes;
+                var cacheKey = $"episodes_{_sessionService.Host}_{_sessionService.Username}_{seriesId}";
+                var cachedEpisodes = await _cacheService.GetDataAsync<List<EpisodeContent>>(cacheKey, cancellationToken);
+                if (cachedEpisodes != null)
+                {
+                    _logger.LogInformation("Loaded {Count} episodes for series {SeriesId} from cache", cachedEpisodes.Count, seriesId);
+                    return cachedEpisodes;
+                }
             }
 
             var url = _sessionService.BuildApi("get_series_info", ("series_id", seriesId));
@@ -357,8 +388,12 @@ public class VodService : IVodService
                 }
             }
 
-            // Cache the results - episodes change rarely, so cache for longer
-            await _cacheService.SetDataAsync(cacheKey, episodes, TimeSpan.FromHours(2), cancellationToken);
+            // Cache the results - episodes change rarely, so cache for longer (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
+            {
+                var cacheKey = $"episodes_{_sessionService.Host}_{_sessionService.Username}_{seriesId}";
+                await _cacheService.SetDataAsync(cacheKey, episodes, TimeSpan.FromHours(2), cancellationToken);
+            }
 
             _logger.LogInformation("Loaded {Count} episodes for series {SeriesId}", episodes.Count, seriesId);
             return episodes;
@@ -376,10 +411,13 @@ public class VodService : IVodService
         {
             if (string.IsNullOrEmpty(content.StreamIcon)) return;
 
-            var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
-            if (bitmap != null)
+            if (_sessionService.CachingEnabled)
             {
-                content.PosterImage = bitmap;
+                var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
+                if (bitmap != null)
+                {
+                    content.PosterImage = bitmap;
+                }
             }
         }
         catch (Exception ex)
@@ -395,10 +433,13 @@ public class VodService : IVodService
         {
             if (string.IsNullOrEmpty(content.StreamIcon)) return;
 
-            var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
-            if (bitmap != null)
+            if (_sessionService.CachingEnabled)
             {
-                content.PosterImage = bitmap;
+                var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
+                if (bitmap != null)
+                {
+                    content.PosterImage = bitmap;
+                }
             }
         }
         catch (Exception ex)

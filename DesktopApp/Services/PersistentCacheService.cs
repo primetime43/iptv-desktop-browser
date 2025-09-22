@@ -10,6 +10,7 @@ namespace DesktopApp.Services;
 public class PersistentCacheService : ICacheService
 {
     private readonly IHttpService _httpService;
+    private readonly ISessionService _sessionService;
     private readonly ILogger<PersistentCacheService> _logger;
 
     // Cache operation status
@@ -33,9 +34,10 @@ public class PersistentCacheService : ICacheService
     private const long MaxCacheSizeBytes = 100 * 1024 * 1024; // 100MB
     private static readonly TimeSpan DefaultDataExpiration = TimeSpan.FromMinutes(30);
 
-    public PersistentCacheService(IHttpService httpService, ILogger<PersistentCacheService> logger)
+    public PersistentCacheService(IHttpService httpService, ISessionService sessionService, ILogger<PersistentCacheService> logger)
     {
         _httpService = httpService;
+        _sessionService = sessionService;
         _logger = logger;
 
         // Setup cache directories
@@ -63,91 +65,99 @@ public class PersistentCacheService : ICacheService
         if (string.IsNullOrWhiteSpace(url))
             return null;
 
+        if (!_sessionService.CachingEnabled)
+            return null;
+
         var cacheKey = GetSafeFileName(url);
 
-        // Check in-memory cache first
-        if (_imageCache.TryGetValue(cacheKey, out var cachedImage))
+        if (_sessionService.CachingEnabled)
         {
-            _logger.LogInformation("🎯 Image cache HIT (memory): {Url}", url);
-            return cachedImage;
-        }
-
-        // Check file cache (try to load synchronously for immediate display)
-        var imageFile = Path.Combine(_imageDirectory, $"{cacheKey}.jpg");
-        if (File.Exists(imageFile))
-        {
-            try
+            // Check in-memory cache first
+            if (_imageCache.TryGetValue(cacheKey, out var cachedImage))
             {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.UriSource = new Uri(imageFile);
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.EndInit();
-                bitmap.Freeze();
-
-                _imageCache[cacheKey] = bitmap;
-                _logger.LogInformation("🎯 Image cache HIT (disk): {Url}", url);
-                return bitmap;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to load cached image from disk: {File}", imageFile);
-                // Delete corrupted file in background
-                _ = Task.Run(() =>
-                {
-                    try { File.Delete(imageFile); } catch { }
-                });
-            }
-        }
-
-        // Download and cache
-        await _imageSemaphore.WaitAsync(cancellationToken);
-        try
-        {
-            // Double-check after acquiring semaphore
-            if (_imageCache.TryGetValue(cacheKey, out cachedImage))
+                _logger.LogInformation("🎯 Image cache HIT (memory): {Url}", url);
                 return cachedImage;
+            }
 
-            _logger.LogInformation("🔄 Image cache MISS - Downloading: {Url}", url);
-            var imageBytes = await _httpService.GetByteArrayAsync(url, cancellationToken);
-
-            if (imageBytes.Length == 0)
-                return null;
-
-            // Save to disk
-            await File.WriteAllBytesAsync(imageFile, imageBytes, cancellationToken);
-
-            // Load into memory
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.StreamSource = new MemoryStream(imageBytes);
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.EndInit();
-            bmp.Freeze();
-
-            // Apply size limits
-            if (_imageCache.Count >= MaxImageCacheSize)
+            // Check file cache (try to load synchronously for immediate display)
+            var imageFile = Path.Combine(_imageDirectory, $"{cacheKey}.jpg");
+            if (File.Exists(imageFile))
             {
-                var keysToRemove = _imageCache.Keys.Take(MaxImageCacheSize / 10).ToList();
-                foreach (var key in keysToRemove)
+                try
                 {
-                    _imageCache.TryRemove(key, out _);
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri(imageFile);
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+
+                    _imageCache[cacheKey] = bitmap;
+                    _logger.LogInformation("🎯 Image cache HIT (disk): {Url}", url);
+                    return bitmap;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load cached image from disk: {File}", imageFile);
+                    // Delete corrupted file in background
+                    _ = Task.Run(() =>
+                    {
+                        try { File.Delete(imageFile); } catch { }
+                    });
                 }
             }
 
-            _imageCache[cacheKey] = bmp;
-            _logger.LogInformation("💾 Image cached to disk and memory: {Url}", url);
-            return bmp;
+            // Download and cache
+            await _imageSemaphore.WaitAsync(cancellationToken);
+            try
+            {
+                // Double-check after acquiring semaphore
+                if (_imageCache.TryGetValue(cacheKey, out cachedImage))
+                    return cachedImage;
+
+                _logger.LogInformation("🔄 Image cache MISS - Downloading: {Url}", url);
+                var imageBytes = await _httpService.GetByteArrayAsync(url, cancellationToken);
+
+                if (imageBytes.Length == 0)
+                    return null;
+
+                // Save to disk
+                await File.WriteAllBytesAsync(imageFile, imageBytes, cancellationToken);
+
+                // Load into memory
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.StreamSource = new MemoryStream(imageBytes);
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.EndInit();
+                bmp.Freeze();
+
+                // Apply size limits
+                if (_imageCache.Count >= MaxImageCacheSize)
+                {
+                    var keysToRemove = _imageCache.Keys.Take(MaxImageCacheSize / 10).ToList();
+                    foreach (var key in keysToRemove)
+                    {
+                        _imageCache.TryRemove(key, out _);
+                    }
+                }
+
+                _imageCache[cacheKey] = bmp;
+                _logger.LogInformation("💾 Image cached to disk and memory: {Url}", url);
+                return bmp;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to download and cache image: {Url}", url);
+                return null;
+            }
+            finally
+            {
+                _imageSemaphore.Release();
+            }
         }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to download and cache image: {Url}", url);
-            return null;
-        }
-        finally
-        {
-            _imageSemaphore.Release();
-        }
+
+        return null;
     }
 
     public async Task<BitmapImage?> GetChannelLogoAsync(int channelId, string logoUrl, CancellationToken cancellationToken = default)
@@ -155,129 +165,140 @@ public class PersistentCacheService : ICacheService
         if (string.IsNullOrWhiteSpace(logoUrl))
             return null;
 
+        if (!_sessionService.CachingEnabled)
+            return null;
+
         // Use channel_id as the primary cache key for better cache matching
         var channelCacheKey = $"channel_logo_{channelId}";
         var urlCacheKey = GetSafeFileName(logoUrl);
 
-        // Check in-memory cache first using channel_id
-        if (_imageCache.TryGetValue(channelCacheKey, out var cachedImage))
+        if (_sessionService.CachingEnabled)
         {
-            _logger.LogInformation("📱 CACHE HIT: Channel logo loaded from MEMORY cache: Channel {ChannelId} (no download needed)", channelId);
-            return cachedImage;
-        }
+            // Check in-memory cache first using channel_id
+            if (_imageCache.TryGetValue(channelCacheKey, out var cachedImage))
+            {
+                _logger.LogInformation("📱 CACHE HIT: Channel logo loaded from MEMORY cache: Channel {ChannelId} (no download needed)", channelId);
+                return cachedImage;
+            }
 
-        // Check file cache using channel_id first
-        var channelImageFile = Path.Combine(_imageDirectory, $"{channelCacheKey}.jpg");
-        if (File.Exists(channelImageFile))
-        {
+            // Check file cache using channel_id first
+            var channelImageFile = Path.Combine(_imageDirectory, $"{channelCacheKey}.jpg");
+            if (File.Exists(channelImageFile))
+            {
+                try
+                {
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri(channelImageFile);
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+
+                    _imageCache[channelCacheKey] = bitmap;
+                    _logger.LogInformation("📱 CACHE HIT: Channel logo loaded from DISK cache: Channel {ChannelId} (no download needed)", channelId);
+                    return bitmap;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load cached channel logo for channel {ChannelId}", channelId);
+                }
+            }
+
+            // Check if we have the logo cached by URL (for migration from old cache)
+            var urlImageFile = Path.Combine(_imageDirectory, $"{urlCacheKey}.jpg");
+            if (File.Exists(urlImageFile))
+            {
+                try
+                {
+                    var bitmap = new BitmapImage();
+                    bitmap.BeginInit();
+                    bitmap.UriSource = new Uri(urlImageFile);
+                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmap.EndInit();
+                    bitmap.Freeze();
+
+                    // Cache using channel_id for future requests
+                    _imageCache[channelCacheKey] = bitmap;
+
+                    // Copy file to channel-based name for future use
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            File.Copy(urlImageFile, channelImageFile, true);
+                            _logger.LogInformation("📁 Migrated logo cache from URL to channel_id: {ChannelId}", channelId);
+                        }
+                        catch { }
+                    });
+
+                    _logger.LogInformation("📱 CACHE HIT: Channel logo loaded from URL cache (migrating): Channel {ChannelId} (no download needed)", channelId);
+                    return bitmap;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to migrate logo cache for channel {ChannelId}", channelId);
+                }
+            }
+
+            // No cache hit - download the image
+            _logger.LogInformation("🌐 DOWNLOAD: Channel logo cache MISS - Downloading from server: Channel {ChannelId} from {Url}", channelId, logoUrl);
+            SetCacheStatus($"📥 Downloading logo for channel {channelId}...");
+
+            // Use semaphore to limit concurrent downloads
+            await _imageSemaphore.WaitAsync(cancellationToken);
             try
             {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.UriSource = new Uri(channelImageFile);
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.EndInit();
-                bitmap.Freeze();
+                var imageData = await _httpService.GetByteArrayAsync(logoUrl, cancellationToken);
 
-                _imageCache[channelCacheKey] = bitmap;
-                _logger.LogInformation("📱 CACHE HIT: Channel logo loaded from DISK cache: Channel {ChannelId} (no download needed)", channelId);
-                return bitmap;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to load cached channel logo for channel {ChannelId}", channelId);
-            }
-        }
+                // Create BitmapImage from downloaded data
+                var downloadedBitmap = new BitmapImage();
+                downloadedBitmap.BeginInit();
+                downloadedBitmap.StreamSource = new MemoryStream(imageData);
+                downloadedBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                downloadedBitmap.EndInit();
+                downloadedBitmap.Freeze();
 
-        // Check if we have the logo cached by URL (for migration from old cache)
-        var urlImageFile = Path.Combine(_imageDirectory, $"{urlCacheKey}.jpg");
-        if (File.Exists(urlImageFile))
-        {
-            try
-            {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.UriSource = new Uri(urlImageFile);
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.EndInit();
-                bitmap.Freeze();
+                // Cache in memory using channel_id
+                _imageCache[channelCacheKey] = downloadedBitmap;
 
-                // Cache using channel_id for future requests
-                _imageCache[channelCacheKey] = bitmap;
-
-                // Copy file to channel-based name for future use
+                // Save to disk using channel_id
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        File.Copy(urlImageFile, channelImageFile, true);
-                        _logger.LogInformation("📁 Migrated logo cache from URL to channel_id: {ChannelId}", channelId);
+                        await File.WriteAllBytesAsync(channelImageFile, imageData, cancellationToken);
+                        _logger.LogInformation("💾 Channel logo cached to disk: Channel {ChannelId}", channelId);
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to cache channel logo to disk: Channel {ChannelId}", channelId);
+                    }
                 });
 
-                _logger.LogInformation("📱 CACHE HIT: Channel logo loaded from URL cache (migrating): Channel {ChannelId} (no download needed)", channelId);
-                return bitmap;
+                _logger.LogInformation("✅ DOWNLOAD SUCCESS: Channel logo downloaded and cached: Channel {ChannelId}", channelId);
+                SetCacheStatus("Ready");
+                return downloadedBitmap;
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to migrate logo cache for channel {ChannelId}", channelId);
+                _logger.LogWarning(ex, "Failed to download and cache channel logo: Channel {ChannelId} from {Url}", channelId, logoUrl);
+                SetCacheStatus("Ready");
+                return null;
+            }
+            finally
+            {
+                _imageSemaphore.Release();
             }
         }
 
-        // No cache hit - download the image
-        _logger.LogInformation("🌐 DOWNLOAD: Channel logo cache MISS - Downloading from server: Channel {ChannelId} from {Url}", channelId, logoUrl);
-        SetCacheStatus($"📥 Downloading logo for channel {channelId}...");
-
-        // Use semaphore to limit concurrent downloads
-        await _imageSemaphore.WaitAsync(cancellationToken);
-        try
-        {
-            var imageData = await _httpService.GetByteArrayAsync(logoUrl, cancellationToken);
-
-            // Create BitmapImage from downloaded data
-            var downloadedBitmap = new BitmapImage();
-            downloadedBitmap.BeginInit();
-            downloadedBitmap.StreamSource = new MemoryStream(imageData);
-            downloadedBitmap.CacheOption = BitmapCacheOption.OnLoad;
-            downloadedBitmap.EndInit();
-            downloadedBitmap.Freeze();
-
-            // Cache in memory using channel_id
-            _imageCache[channelCacheKey] = downloadedBitmap;
-
-            // Save to disk using channel_id
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    await File.WriteAllBytesAsync(channelImageFile, imageData, cancellationToken);
-                    _logger.LogInformation("💾 Channel logo cached to disk: Channel {ChannelId}", channelId);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to cache channel logo to disk: Channel {ChannelId}", channelId);
-                }
-            });
-
-            _logger.LogInformation("✅ DOWNLOAD SUCCESS: Channel logo downloaded and cached: Channel {ChannelId}", channelId);
-            SetCacheStatus("Ready");
-            return downloadedBitmap;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to download and cache channel logo: Channel {ChannelId} from {Url}", channelId, logoUrl);
-            SetCacheStatus("Ready");
-            return null;
-        }
-        finally
-        {
-            _imageSemaphore.Release();
-        }
+        return null;
     }
 
     public async Task<T?> GetDataAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
     {
+        if (!_sessionService.CachingEnabled)
+            return null;
+
         // Check in-memory cache first (fast, non-blocking)
         if (_dataCache.TryGetValue(key, out var entry))
         {
@@ -393,6 +414,9 @@ public class PersistentCacheService : ICacheService
 
     public async Task SetDataAsync<T>(string key, T data, TimeSpan? expiration = null, CancellationToken cancellationToken = default) where T : class
     {
+        if (!_sessionService.CachingEnabled)
+            return;
+
         var expirationTime = expiration ?? DefaultDataExpiration;
         var entry = new CacheEntry
         {
@@ -458,6 +482,9 @@ public class PersistentCacheService : ICacheService
 
     public async Task<bool> HasDataAsync(string key, CancellationToken cancellationToken = default)
     {
+        if (!_sessionService.CachingEnabled)
+            return false;
+
         if (_dataCache.TryGetValue(key, out var entry) && !entry.IsExpired)
             return true;
 
@@ -481,6 +508,9 @@ public class PersistentCacheService : ICacheService
 
     public async Task RemoveDataAsync(string key, CancellationToken cancellationToken = default)
     {
+        if (!_sessionService.CachingEnabled)
+            return;
+
         _dataCache.TryRemove(key, out _);
         await RemoveDataFileAsync(key);
         _logger.LogInformation("🗑️ Removed cache entry: {Key}", key);
@@ -488,6 +518,9 @@ public class PersistentCacheService : ICacheService
 
     public async Task ClearExpiredDataAsync(CancellationToken cancellationToken = default)
     {
+        if (!_sessionService.CachingEnabled)
+            return;
+
         var removedCount = 0;
 
         // Clean memory cache
@@ -545,6 +578,27 @@ public class PersistentCacheService : ICacheService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to clear image cache directory");
+        }
+    }
+
+    public async Task ClearAllDataAsync(CancellationToken cancellationToken = default)
+    {
+        if (!_sessionService.CachingEnabled)
+            return;
+
+        _dataCache.Clear();
+        try
+        {
+            foreach (var file in Directory.GetFiles(_dataDirectory))
+            {
+                File.Delete(file);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+            _logger.LogInformation("🧹 All cache data cleared");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to clear data cache directory");
         }
     }
 

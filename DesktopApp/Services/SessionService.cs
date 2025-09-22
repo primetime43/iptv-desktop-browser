@@ -56,6 +56,8 @@ public class SessionService : ISessionService
         set => Models.Session.UserInfo = value;
     }
 
+    public bool CachingEnabled => Models.Session.CachingEnabled;
+
     public List<PlaylistEntry> PlaylistChannels => Models.Session.PlaylistChannels;
     public List<VodContent> VodContent => Models.Session.VodContent;
     public List<VodCategory> VodCategories => Models.Session.VodCategories;

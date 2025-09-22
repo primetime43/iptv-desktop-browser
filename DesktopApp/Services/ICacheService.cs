@@ -15,6 +15,7 @@ public interface ICacheService
     Task<bool> HasDataAsync(string key, CancellationToken cancellationToken = default);
     Task RemoveDataAsync(string key, CancellationToken cancellationToken = default);
     Task ClearExpiredDataAsync(CancellationToken cancellationToken = default);
+    Task ClearAllDataAsync(CancellationToken cancellationToken = default);
 
     // Cache statistics
     int ImageCacheCount { get; }

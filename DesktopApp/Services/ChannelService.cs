@@ -41,20 +41,23 @@ public class ChannelService : IChannelService
                 return LoadM3uCategories();
             }
 
-            // Check cache first
-            var cacheKey = $"live_categories_{_sessionService.Host}_{_sessionService.Username}";
-            _logger.LogInformation("🔍 Checking cache with key: {CacheKey}", cacheKey);
-            var cachedCategories = await _cacheService.GetDataAsync<List<Category>>(cacheKey, cancellationToken);
-            if (cachedCategories != null)
+            // Check cache first (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
             {
-                var cacheHitMsg = $"📱 CACHE HIT: Loaded {cachedCategories.Count} categories from CACHE (no API call needed)";
-                _logger.LogInformation(cacheHitMsg);
-                _rawOutputLogger?.Invoke(cacheHitMsg + "\n");
-                return cachedCategories;
+                var cacheKey = $"live_categories_{_sessionService.Host}_{_sessionService.Username}";
+                _logger.LogInformation("🔍 Checking cache with key: {CacheKey}", cacheKey);
+                var cachedCategories = await _cacheService.GetDataAsync<List<Category>>(cacheKey, cancellationToken);
+                if (cachedCategories != null)
+                {
+                    var cacheHitMsg = $"📱 CACHE HIT: Loaded {cachedCategories.Count} categories from CACHE (no API call needed)";
+                    _logger.LogInformation(cacheHitMsg);
+                    _rawOutputLogger?.Invoke(cacheHitMsg + "\n");
+                    return cachedCategories;
+                }
+                var cacheMissMsg = "🌐 API CALL: Cache MISS - Loading categories from API server";
+                _logger.LogInformation(cacheMissMsg);
+                _rawOutputLogger?.Invoke(cacheMissMsg + "\n");
             }
-            var cacheMissMsg = "🌐 API CALL: Cache MISS - Loading categories from API server";
-            _logger.LogInformation(cacheMissMsg);
-            _rawOutputLogger?.Invoke(cacheMissMsg + "\n");
 
             var url = _sessionService.BuildApi("get_live_categories");
             var response = await _httpService.GetStringAsync(url, cancellationToken);
@@ -83,8 +86,12 @@ public class ChannelService : IChannelService
                 }
             }
 
-            // Cache the results
-            await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(2), cancellationToken);
+            // Cache the results (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
+            {
+                var cacheKey = $"live_categories_{_sessionService.Host}_{_sessionService.Username}";
+                await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(2), cancellationToken);
+            }
 
             _logger.LogInformation("✅ API SUCCESS: Loaded {Count} categories from API and cached for future use", categories.Count);
             return categories;
@@ -107,20 +114,23 @@ public class ChannelService : IChannelService
                 return LoadM3uChannelsForCategory(category);
             }
 
-            // Check cache first
-            var cacheKey = $"channels_{_sessionService.Host}_{_sessionService.Username}_{category.Id}";
-            _logger.LogInformation("🔍 Checking channels cache with key: {CacheKey}", cacheKey);
-            var cachedChannels = await _cacheService.GetDataAsync<List<Channel>>(cacheKey, cancellationToken);
-            if (cachedChannels != null)
+            // Check cache first (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
             {
-                var cacheHitMsg = $"📱 CACHE HIT: Loaded {cachedChannels.Count} channels from CACHE for category: {category.Name} (no API call needed)";
-                _logger.LogInformation(cacheHitMsg);
-                _rawOutputLogger?.Invoke(cacheHitMsg + "\n");
-                return cachedChannels;
+                var cacheKey = $"channels_{_sessionService.Host}_{_sessionService.Username}_{category.Id}";
+                _logger.LogInformation("🔍 Checking channels cache with key: {CacheKey}", cacheKey);
+                var cachedChannels = await _cacheService.GetDataAsync<List<Channel>>(cacheKey, cancellationToken);
+                if (cachedChannels != null)
+                {
+                    var cacheHitMsg = $"📱 CACHE HIT: Loaded {cachedChannels.Count} channels from CACHE for category: {category.Name} (no API call needed)";
+                    _logger.LogInformation(cacheHitMsg);
+                    _rawOutputLogger?.Invoke(cacheHitMsg + "\n");
+                    return cachedChannels;
+                }
+                var cacheMissMsg = $"🌐 API CALL: Channels cache MISS - Loading from API server for category: {category.Name}";
+                _logger.LogInformation(cacheMissMsg);
+                _rawOutputLogger?.Invoke(cacheMissMsg + "\n");
             }
-            var cacheMissMsg = $"🌐 API CALL: Channels cache MISS - Loading from API server for category: {category.Name}";
-            _logger.LogInformation(cacheMissMsg);
-            _rawOutputLogger?.Invoke(cacheMissMsg + "\n");
 
             var url = _sessionService.BuildApi("get_live_streams", ("category_id", category.Id));
             var response = await _httpService.GetStringAsync(url, cancellationToken);
@@ -150,8 +160,12 @@ public class ChannelService : IChannelService
                 }
             }
 
-            // Cache the results
-            await _cacheService.SetDataAsync(cacheKey, channels, TimeSpan.FromMinutes(30), cancellationToken);
+            // Cache the results (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
+            {
+                var cacheKey = $"channels_{_sessionService.Host}_{_sessionService.Username}_{category.Id}";
+                await _cacheService.SetDataAsync(cacheKey, channels, TimeSpan.FromMinutes(30), cancellationToken);
+            }
 
             _logger.LogInformation("✅ API SUCCESS: Loaded {Count} channels from API for category {CategoryName} and cached for future use", channels.Count, category.Name);
             return channels;
@@ -178,24 +192,27 @@ public class ChannelService : IChannelService
                 return;
             }
 
-            // Check cache first
-            var cacheKey = $"epg_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
-            var cachedEpg = await _cacheService.GetDataAsync<EpgData>(cacheKey, cancellationToken);
-            if (cachedEpg != null && cachedEpg.IsStillValid())
+            // Check cache first (only if caching is enabled)
+            if (_sessionService.CachingEnabled)
             {
-                var epgCacheHitMsg = $"📱 CACHE HIT: EPG loaded from CACHE for channel: {channel.Name} (no API call needed)";
-                _logger.LogInformation(epgCacheHitMsg);
-                _rawOutputLogger?.Invoke(epgCacheHitMsg + "\n");
-                channel.NowTitle = cachedEpg.NowTitle;
-                channel.NowDescription = cachedEpg.NowDescription;
-                channel.NowTimeRange = cachedEpg.NowTimeRange;
-                channel.EpgLoaded = true;
-                return;
-            }
+                var cacheKey = $"epg_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
+                var cachedEpg = await _cacheService.GetDataAsync<EpgData>(cacheKey, cancellationToken);
+                if (cachedEpg != null && cachedEpg.IsStillValid())
+                {
+                    var epgCacheHitMsg = $"📱 CACHE HIT: EPG loaded from CACHE for channel: {channel.Name} (no API call needed)";
+                    _logger.LogInformation(epgCacheHitMsg);
+                    _rawOutputLogger?.Invoke(epgCacheHitMsg + "\n");
+                    channel.NowTitle = cachedEpg.NowTitle;
+                    channel.NowDescription = cachedEpg.NowDescription;
+                    channel.NowTimeRange = cachedEpg.NowTimeRange;
+                    channel.EpgLoaded = true;
+                    return;
+                }
 
-            var epgCacheMissMsg = $"🌐 API CALL: EPG cache MISS - Loading from API server for channel: {channel.Name}";
-            _logger.LogInformation(epgCacheMissMsg);
-            _rawOutputLogger?.Invoke(epgCacheMissMsg + "\n");
+                var epgCacheMissMsg = $"🌐 API CALL: EPG cache MISS - Loading from API server for channel: {channel.Name}";
+                _logger.LogInformation(epgCacheMissMsg);
+                _rawOutputLogger?.Invoke(epgCacheMissMsg + "\n");
+            }
 
             var url = _sessionService.BuildApi("get_simple_data_table", ("stream_id", channel.Id.ToString()));
             var response = await _httpService.GetStringAsync(url, cancellationToken);
@@ -302,13 +319,22 @@ public class ChannelService : IChannelService
                         cacheExpiration = TimeSpan.FromMinutes(30);
                     }
 
-                    await _cacheService.SetDataAsync(cacheKey, epgData, cacheExpiration, cancellationToken);
+                    // Cache the results (only if caching is enabled)
+                    if (_sessionService.CachingEnabled)
+                    {
+                        var cacheKey = $"epg_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
+                        await _cacheService.SetDataAsync(cacheKey, epgData, cacheExpiration, cancellationToken);
 
-                    var expirationInfo = epgData.LatestShowEndUtc.HasValue
-                        ? $"until {epgData.LatestShowEndUtc.Value.ToLocalTime():MM/dd HH:mm}"
-                        : "for 30 minutes (fallback)";
-                    _logger.LogInformation("✅ API SUCCESS: EPG loaded from API for channel {ChannelName} and cached {ExpirationInfo}", channel.Name, expirationInfo);
-                    _rawOutputLogger?.Invoke($"📺 EPG cached for {channel.Name} {expirationInfo}\n");
+                        var expirationInfo = epgData.LatestShowEndUtc.HasValue
+                            ? $"until {epgData.LatestShowEndUtc.Value.ToLocalTime():MM/dd HH:mm}"
+                            : "for 30 minutes (fallback)";
+                        _logger.LogInformation("✅ API SUCCESS: EPG loaded from API for channel {ChannelName} and cached {ExpirationInfo}", channel.Name, expirationInfo);
+                        _rawOutputLogger?.Invoke($"📺 EPG cached for {channel.Name} {expirationInfo}\n");
+                    }
+                    else
+                    {
+                        _logger.LogInformation("✅ API SUCCESS: EPG loaded from API for channel {ChannelName} (caching disabled)", channel.Name);
+                    }
                 }
             }
             catch (JsonException ex)

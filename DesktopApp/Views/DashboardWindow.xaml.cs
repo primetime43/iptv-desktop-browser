@@ -1097,14 +1097,17 @@ namespace DesktopApp.Views
 
             try
             {
-                // Use channel_id based caching for better cache matching
-                var cachedImage = await _cacheService.GetChannelLogoAsync(channel.Id, url, _cts.Token);
-                if (cachedImage != null)
+                // Use channel_id based caching for better cache matching (only if caching is enabled)
+                if (Session.CachingEnabled)
                 {
-                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    var cachedImage = await _cacheService.GetChannelLogoAsync(channel.Id, url, _cts.Token);
+                    if (cachedImage != null)
                     {
-                        channel.LogoImage = cachedImage;
-                    });
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            channel.LogoImage = cachedImage;
+                        });
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -3846,6 +3849,9 @@ namespace DesktopApp.Views
                 if (FindName("SettingsEpgIntervalTextBox") is TextBox epgInterval)
                     epgInterval.Text = ((int)Session.EpgRefreshInterval.TotalMinutes).ToString();
 
+                if (FindName("SettingsCachingEnabledCheckBox") is CheckBox cachingEnabled)
+                    cachingEnabled.IsChecked = Session.CachingEnabled;
+
                 ValidateAllSettingsFields();
 
                 // Initialize logging display
@@ -4523,6 +4529,58 @@ namespace DesktopApp.Views
                 MessageBox.Show($"Failed to save log: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private void SettingsCachingEnabledCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (SettingsCachingEnabledCheckBox.IsChecked.HasValue)
+            {
+                Session.CachingEnabled = SettingsCachingEnabledCheckBox.IsChecked.Value;
+                Log($"Caching {(Session.CachingEnabled ? "enabled" : "disabled")}\n");
+            }
+        }
+
+        private async void SettingsClearCache_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var result = MessageBox.Show("Clear all cached data and images? This will remove all cached EPG data, VOD content, and images.",
+                    "Confirm Clear Cache", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    var button = sender as Button;
+                    if (button != null)
+                    {
+                        button.IsEnabled = false;
+                        button.Content = "🧹 Clearing...";
+                    }
+
+                    _cacheService.ClearImageCache();
+                    await _cacheService.ClearAllDataAsync();
+
+                    Log("All cache cleared successfully\n");
+                    MessageBox.Show("Cache cleared successfully!", "Success",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    if (button != null)
+                    {
+                        button.IsEnabled = true;
+                        button.Content = "Clear All Cache";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to clear cache: {ex.Message}\n");
+                MessageBox.Show($"Failed to clear cache: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SettingsCacheInspector_Click(object sender, RoutedEventArgs e)
+        {
+            OpenCacheInspector(sender, e);
         }
 
         private void ShowLoadingOverlay(string overlayName)

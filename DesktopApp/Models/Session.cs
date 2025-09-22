@@ -59,6 +59,9 @@ public static class Session
     public static string? RecordingDirectory { get; set; } // base folder for recordings
     public static string FfmpegArgsTemplate { get; set; } = "-i \"{url}\" -c copy -f mpegts \"{output}\""; // tokens: {url} {output} {title}
 
+    // Caching settings
+    public static bool CachingEnabled { get; set; } = true; // enabled by default
+
     // EPG refresh tracking (only meaningful for Xtream mode currently)
     public static DateTime? LastEpgUpdateUtc { get; set; }
     public static TimeSpan EpgRefreshInterval { get; set; } = TimeSpan.FromMinutes(30);

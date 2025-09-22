@@ -190,6 +190,18 @@ public class CacheService : ICacheService
         }
     }
 
+    public async Task ClearAllDataAsync(CancellationToken cancellationToken = default)
+    {
+        var allKeys = _dataCache.Keys.ToList();
+
+        foreach (var key in allKeys)
+        {
+            _dataCache.TryRemove(key, out _);
+        }
+
+        _logger.LogDebug("Cleared all {Count} cache entries", allKeys.Count);
+    }
+
     public int ImageCacheCount => _imageCache.Count;
     public int DataCacheCount => _dataCache.Count;
 
