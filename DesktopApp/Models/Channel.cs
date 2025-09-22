@@ -44,11 +44,15 @@ public sealed class Channel : INotifyPropertyChanged
     private int _epgAttempts;
     public int EpgAttempts { get => _epgAttempts; set { if (value != _epgAttempts) { _epgAttempts = value; OnPropertyChanged(); } } }
 
+    private bool _isFavorite;
+    public bool IsFavorite { get => _isFavorite; set { if (value != _isFavorite) { _isFavorite = value; OnPropertyChanged(); OnPropertyChanged(nameof(TooltipText)); } } }
+
     public string TooltipText
     {
         get
         {
             var text = "";
+            if (IsFavorite) text += "⭐ ";
             if (IsRecording) text += "🔴 RECORDING\n";
             if (EpgLoading) return text + "Loading EPG...";
             if (!EpgLoaded) return text + "Hover to load program info"; // generic prompt

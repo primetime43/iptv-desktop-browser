@@ -62,6 +62,9 @@ public static class Session
     // Caching settings
     public static bool CachingEnabled { get; set; } = false; // disabled by default
 
+    // Favorites events
+    public static event Action? FavoritesChanged;
+
     // EPG refresh tracking (only meaningful for Xtream mode currently)
     public static DateTime? LastEpgUpdateUtc { get; set; }
     public static TimeSpan EpgRefreshInterval { get; set; } = TimeSpan.FromMinutes(30);
@@ -74,6 +77,53 @@ public static class Session
     }
 
     public static string BaseUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}";
+
+    // Favorites methods
+    public static bool IsFavoriteChannel(int channelId)
+    {
+        var store = new FavoritesStore();
+        return store.IsFavorite(GetCurrentSessionKey(), channelId);
+    }
+
+    public static void AddFavoriteChannel(Channel channel)
+    {
+        var store = new FavoritesStore();
+        store.AddFavorite(GetCurrentSessionKey(), channel);
+        FavoritesChanged?.Invoke();
+    }
+
+    public static void RemoveFavoriteChannel(int channelId)
+    {
+        var store = new FavoritesStore();
+        store.RemoveFavorite(GetCurrentSessionKey(), channelId);
+        FavoritesChanged?.Invoke();
+    }
+
+    public static void ToggleFavoriteChannel(Channel channel)
+    {
+        if (IsFavoriteChannel(channel.Id))
+            RemoveFavoriteChannel(channel.Id);
+        else
+            AddFavoriteChannel(channel);
+    }
+
+    public static List<FavoriteChannel> GetFavoriteChannels()
+    {
+        var store = new FavoritesStore();
+        return store.GetForCurrentSession(GetCurrentSessionKey());
+    }
+
+    private static string GetCurrentSessionKey()
+    {
+        if (Mode == SessionMode.M3u)
+        {
+            return $"m3u_{Environment.UserName}";
+        }
+        else
+        {
+            return $"{Environment.UserName}_{Host}_{Port}_{Username}";
+        }
+    }
 
     public static string BuildApi(string? action = null)
     {
