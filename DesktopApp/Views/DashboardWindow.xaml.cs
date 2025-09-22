@@ -1834,15 +1834,24 @@ namespace DesktopApp.Views
                 await _logoSemaphore.WaitAsync(_cts.Token);
                 try
                 {
-                    var imageData = await _http.GetByteArrayAsync(vod.StreamIcon, _cts.Token);
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.StreamSource = new MemoryStream(imageData);
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.EndInit();
-                    bitmap.Freeze();
+                    // Try to get from cache first, then fallback to direct download if cache fails
+                    var bitmap = await _cacheService.GetImageAsync(vod.StreamIcon, _cts.Token);
+                    if (bitmap != null)
+                    {
+                        vod.PosterImage = bitmap;
+                        return;
+                    }
 
-                    vod.PosterImage = bitmap;
+                    // Fallback to direct download if cache fails
+                    var imageData = await _http.GetByteArrayAsync(vod.StreamIcon, _cts.Token);
+                    var fallbackBitmap = new BitmapImage();
+                    fallbackBitmap.BeginInit();
+                    fallbackBitmap.StreamSource = new MemoryStream(imageData);
+                    fallbackBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    fallbackBitmap.EndInit();
+                    fallbackBitmap.Freeze();
+
+                    vod.PosterImage = fallbackBitmap;
                 }
                 finally
                 {
@@ -1853,6 +1862,49 @@ namespace DesktopApp.Views
             catch (Exception ex)
             {
                 Log($"Failed to load poster for {vod.Name}: {ex.Message}\n");
+            }
+        }
+
+        private async Task LoadSeriesPosterAsync(SeriesContent series)
+        {
+            if (string.IsNullOrEmpty(series.StreamIcon)) return;
+
+            try
+            {
+                await _logoSemaphore.WaitAsync(_cts.Token);
+                try
+                {
+                    // Try to get from cache first, then fallback to direct download if cache fails
+                    var bitmap = await _cacheService.GetImageAsync(series.StreamIcon, _cts.Token);
+                    if (bitmap != null)
+                    {
+                        series.PosterImage = bitmap;
+                        return;
+                    }
+
+                    // Fallback to direct download if cache fails
+                    var imageBytes = await _http.GetByteArrayAsync(series.StreamIcon, _cts.Token);
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        using var stream = new MemoryStream(imageBytes);
+                        var fallbackBitmap = new BitmapImage();
+                        fallbackBitmap.BeginInit();
+                        fallbackBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        fallbackBitmap.StreamSource = stream;
+                        fallbackBitmap.EndInit();
+                        fallbackBitmap.Freeze();
+                        series.PosterImage = fallbackBitmap;
+                    }, DispatcherPriority.Background, _cts.Token);
+                }
+                finally
+                {
+                    _logoSemaphore.Release();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log($"Failed to load poster for {series.Name}: {ex.Message}\n");
             }
         }
 
@@ -1937,39 +1989,6 @@ namespace DesktopApp.Views
             catch (Exception ex) { Log("ERROR loading series content: " + ex.Message + "\n"); }
         }
 
-        private async Task LoadSeriesPosterAsync(SeriesContent series)
-        {
-            if (string.IsNullOrEmpty(series.StreamIcon)) return;
-
-            try
-            {
-                await _logoSemaphore.WaitAsync(_cts.Token);
-                try
-                {
-                    var imageBytes = await _http.GetByteArrayAsync(series.StreamIcon, _cts.Token);
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        using var stream = new MemoryStream(imageBytes);
-                        var bitmap = new BitmapImage();
-                        bitmap.BeginInit();
-                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        bitmap.StreamSource = stream;
-                        bitmap.EndInit();
-                        bitmap.Freeze();
-                        series.PosterImage = bitmap;
-                    }, DispatcherPriority.Background, _cts.Token);
-                }
-                finally
-                {
-                    _logoSemaphore.Release();
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                Log($"Failed to load poster for {series.Name}: {ex.Message}\n");
-            }
-        }
 
         private async Task LoadSeriesDetailsAsync(SeriesContent series)
         {
