@@ -65,20 +65,18 @@ public class PersistentCacheService : ICacheService
         if (string.IsNullOrWhiteSpace(url))
             return null;
 
-        if (!_sessionService.CachingEnabled)
-            return null;
-
         var cacheKey = GetSafeFileName(url);
 
+        // Always check in-memory cache first (regardless of disk caching setting)
+        if (_imageCache.TryGetValue(cacheKey, out var cachedImage))
+        {
+            _logger.LogInformation("🎯 Image cache HIT (memory): {Url}", url);
+            return cachedImage;
+        }
+
+        // Only check disk cache if caching is enabled
         if (_sessionService.CachingEnabled)
         {
-            // Check in-memory cache first
-            if (_imageCache.TryGetValue(cacheKey, out var cachedImage))
-            {
-                _logger.LogInformation("🎯 Image cache HIT (memory): {Url}", url);
-                return cachedImage;
-            }
-
             // Check file cache (try to load synchronously for immediate display)
             var imageFile = Path.Combine(_imageDirectory, $"{cacheKey}.jpg");
             if (File.Exists(imageFile))
@@ -121,8 +119,11 @@ public class PersistentCacheService : ICacheService
                 if (imageBytes.Length == 0)
                     return null;
 
-                // Save to disk
-                await File.WriteAllBytesAsync(imageFile, imageBytes, cancellationToken);
+                // Save to disk only if caching is enabled
+                if (_sessionService.CachingEnabled)
+                {
+                    await File.WriteAllBytesAsync(imageFile, imageBytes, cancellationToken);
+                }
 
                 // Load into memory
                 var bmp = new BitmapImage();
@@ -143,7 +144,14 @@ public class PersistentCacheService : ICacheService
                 }
 
                 _imageCache[cacheKey] = bmp;
-                _logger.LogInformation("💾 Image cached to disk and memory: {Url}", url);
+                if (_sessionService.CachingEnabled)
+                {
+                    _logger.LogInformation("💾 Image cached to disk and memory: {Url}", url);
+                }
+                else
+                {
+                    _logger.LogInformation("💾 Image cached to memory only (disk caching disabled): {Url}", url);
+                }
                 return bmp;
             }
             catch (Exception ex)
@@ -165,21 +173,20 @@ public class PersistentCacheService : ICacheService
         if (string.IsNullOrWhiteSpace(logoUrl))
             return null;
 
-        if (!_sessionService.CachingEnabled)
-            return null;
-
         // Use channel_id as the primary cache key for better cache matching
         var channelCacheKey = $"channel_logo_{channelId}";
         var urlCacheKey = GetSafeFileName(logoUrl);
 
+        // Always check in-memory cache first (regardless of disk caching setting)
+        if (_imageCache.TryGetValue(channelCacheKey, out var cachedImage))
+        {
+            _logger.LogInformation("📱 CACHE HIT: Channel logo loaded from MEMORY cache: Channel {ChannelId} (no download needed)", channelId);
+            return cachedImage;
+        }
+
+        // Only check disk cache if caching is enabled
         if (_sessionService.CachingEnabled)
         {
-            // Check in-memory cache first using channel_id
-            if (_imageCache.TryGetValue(channelCacheKey, out var cachedImage))
-            {
-                _logger.LogInformation("📱 CACHE HIT: Channel logo loaded from MEMORY cache: Channel {ChannelId} (no download needed)", channelId);
-                return cachedImage;
-            }
 
             // Check file cache using channel_id first
             var channelImageFile = Path.Combine(_imageDirectory, $"{channelCacheKey}.jpg");
@@ -261,19 +268,22 @@ public class PersistentCacheService : ICacheService
                 // Cache in memory using channel_id
                 _imageCache[channelCacheKey] = downloadedBitmap;
 
-                // Save to disk using channel_id
-                _ = Task.Run(async () =>
+                // Save to disk using channel_id only if caching is enabled
+                if (_sessionService.CachingEnabled)
                 {
-                    try
+                    _ = Task.Run(async () =>
                     {
-                        await File.WriteAllBytesAsync(channelImageFile, imageData, cancellationToken);
-                        _logger.LogInformation("💾 Channel logo cached to disk: Channel {ChannelId}", channelId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to cache channel logo to disk: Channel {ChannelId}", channelId);
-                    }
-                });
+                        try
+                        {
+                            await File.WriteAllBytesAsync(channelImageFile, imageData, cancellationToken);
+                            _logger.LogInformation("💾 Channel logo cached to disk: Channel {ChannelId}", channelId);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to cache channel logo to disk: Channel {ChannelId}", channelId);
+                        }
+                    });
+                }
 
                 _logger.LogInformation("✅ DOWNLOAD SUCCESS: Channel logo downloaded and cached: Channel {ChannelId}", channelId);
                 SetCacheStatus("Ready");
@@ -291,14 +301,50 @@ public class PersistentCacheService : ICacheService
             }
         }
 
-        return null;
+        // If disk caching is disabled, still download and cache in memory only
+        await _imageSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            // Double-check after acquiring semaphore
+            if (_imageCache.TryGetValue(channelCacheKey, out cachedImage))
+                return cachedImage;
+
+            SetCacheStatus("Downloading channel logo...");
+            _logger.LogInformation("🔄 Channel logo cache MISS - Downloading: Channel {ChannelId} from {Url}", channelId, logoUrl);
+
+            var imageData = await _httpService.GetByteArrayAsync(logoUrl, cancellationToken);
+            if (imageData.Length == 0)
+                return null;
+
+            var downloadedBitmap = new BitmapImage();
+            downloadedBitmap.BeginInit();
+            downloadedBitmap.StreamSource = new MemoryStream(imageData);
+            downloadedBitmap.CacheOption = BitmapCacheOption.OnLoad;
+            downloadedBitmap.EndInit();
+            downloadedBitmap.Freeze();
+
+            // Cache in memory using channel_id
+            _imageCache[channelCacheKey] = downloadedBitmap;
+
+            _logger.LogInformation("✅ DOWNLOAD SUCCESS: Channel logo downloaded and cached to memory only (disk caching disabled): Channel {ChannelId}", channelId);
+            SetCacheStatus("Ready");
+            return downloadedBitmap;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to download channel logo: Channel {ChannelId} from {Url}", channelId, logoUrl);
+            SetCacheStatus("Ready");
+            return null;
+        }
+        finally
+        {
+            _imageSemaphore.Release();
+        }
     }
 
     public async Task<T?> GetDataAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
     {
-        if (!_sessionService.CachingEnabled)
-            return null;
-
+        // Always check in-memory cache first (regardless of disk caching setting)
         // Check in-memory cache first (fast, non-blocking)
         if (_dataCache.TryGetValue(key, out var entry))
         {
@@ -329,7 +375,7 @@ public class PersistentCacheService : ICacheService
                            typeof(T) == typeof(List<SeriesContent>) ||
                            typeof(T) == typeof(List<EpisodeContent>);
 
-        if (isEpgDataType || isVodDataType)
+        if ((isEpgDataType || isVodDataType) && _sessionService.CachingEnabled)
         {
             SetCacheStatus($"🔄 Loading {key} from disk...");
             var diskData = await LoadFromDiskCacheAsync<T>(key, cancellationToken);
@@ -342,26 +388,29 @@ public class PersistentCacheService : ICacheService
             }
             var missType = isEpgDataType ? "EPG" : "VOD";
             _logger.LogInformation("🔄 CACHE MISS: {MissType} data not found on disk: {Key}", missType, key);
-            return null;
         }
 
         // For non-EPG data, use background disk cache check (non-blocking) for performance
-        _ = Task.Run(async () =>
+        if (_sessionService.CachingEnabled)
         {
-            SetCacheStatus($"🔄 Loading {key} from disk...");
-            var diskData = await LoadFromDiskCacheAsync<T>(key, cancellationToken);
-            if (diskData != null)
+            _ = Task.Run(async () =>
             {
-                _logger.LogInformation("🎯 Data loaded from disk to memory cache in background: {Key}", key);
-                SetCacheStatus("Ready");
+                SetCacheStatus($"🔄 Loading {key} from disk...");
+                var diskData = await LoadFromDiskCacheAsync<T>(key, cancellationToken);
+                if (diskData != null)
+                {
+                    _logger.LogInformation("🎯 Data loaded from disk to memory cache in background: {Key}", key);
+                    SetCacheStatus("Ready");
             }
             else
             {
                 SetCacheStatus("Ready");
             }
-        });
+            });
+        }
 
-        _logger.LogInformation("🔄 CACHE MISS: Data not found in memory cache, checking disk in background: {Key}", key);
+        _logger.LogInformation("🔄 CACHE MISS: Data not found in memory cache{DiskCheck}: {Key}",
+            _sessionService.CachingEnabled ? ", checking disk in background" : " (disk caching disabled)", key);
         return null;
     }
 
@@ -414,8 +463,6 @@ public class PersistentCacheService : ICacheService
 
     public async Task SetDataAsync<T>(string key, T data, TimeSpan? expiration = null, CancellationToken cancellationToken = default) where T : class
     {
-        if (!_sessionService.CachingEnabled)
-            return;
 
         var expirationTime = expiration ?? DefaultDataExpiration;
         var entry = new CacheEntry
@@ -436,11 +483,14 @@ public class PersistentCacheService : ICacheService
         // Store in memory immediately (fast, non-blocking)
         _dataCache[key] = entry;
 
-        // Store to disk asynchronously in background (non-blocking)
-        _ = Task.Run(async () => await SaveToDiskAsync(key, data, entry, cancellationToken));
+        // Store to disk asynchronously in background (non-blocking) only if caching is enabled
+        if (_sessionService.CachingEnabled)
+        {
+            _ = Task.Run(async () => await SaveToDiskAsync(key, data, entry, cancellationToken));
+        }
 
-        _logger.LogInformation("💾 CACHE STORED: Data cached to memory for key: {Key} (expires: {ExpiresAt}) [Cache size: {MemCount}]",
-            key, entry.ExpiresAt, _dataCache.Count);
+        _logger.LogInformation("💾 CACHE STORED: Data cached to memory{DiskInfo} for key: {Key} (expires: {ExpiresAt}) [Cache size: {MemCount}]",
+            _sessionService.CachingEnabled ? " and disk" : " only (disk caching disabled)", key, entry.ExpiresAt, _dataCache.Count);
     }
 
     private async Task SaveToDiskAsync<T>(string key, T data, CacheEntry entry, CancellationToken cancellationToken)
@@ -482,11 +532,13 @@ public class PersistentCacheService : ICacheService
 
     public async Task<bool> HasDataAsync(string key, CancellationToken cancellationToken = default)
     {
-        if (!_sessionService.CachingEnabled)
-            return false;
-
+        // Always check memory cache first
         if (_dataCache.TryGetValue(key, out var entry) && !entry.IsExpired)
             return true;
+
+        // Only check disk cache if caching is enabled
+        if (!_sessionService.CachingEnabled)
+            return false;
 
         var dataFile = Path.Combine(_dataDirectory, $"{GetSafeFileName(key)}.json");
         if (File.Exists(dataFile))
@@ -508,22 +560,24 @@ public class PersistentCacheService : ICacheService
 
     public async Task RemoveDataAsync(string key, CancellationToken cancellationToken = default)
     {
-        if (!_sessionService.CachingEnabled)
-            return;
-
+        // Always remove from memory
         _dataCache.TryRemove(key, out _);
-        await RemoveDataFileAsync(key);
-        _logger.LogInformation("🗑️ Removed cache entry: {Key}", key);
+
+        // Only remove from disk if caching is enabled
+        if (_sessionService.CachingEnabled)
+        {
+            await RemoveDataFileAsync(key);
+        }
+
+        _logger.LogInformation("🗑️ Removed cache entry from memory{DiskInfo}: {Key}",
+            _sessionService.CachingEnabled ? " and disk" : " (disk caching disabled)", key);
     }
 
     public async Task ClearExpiredDataAsync(CancellationToken cancellationToken = default)
     {
-        if (!_sessionService.CachingEnabled)
-            return;
-
         var removedCount = 0;
 
-        // Clean memory cache
+        // Always clean memory cache
         var expiredKeys = _dataCache
             .Where(kvp => kvp.Value.IsExpired)
             .Select(kvp => kvp.Key)
@@ -532,13 +586,21 @@ public class PersistentCacheService : ICacheService
         foreach (var key in expiredKeys)
         {
             _dataCache.TryRemove(key, out _);
-            await RemoveDataFileAsync(key);
+
+            // Only remove from disk if caching is enabled
+            if (_sessionService.CachingEnabled)
+            {
+                await RemoveDataFileAsync(key);
+            }
+
             removedCount++;
         }
 
-        // Clean disk cache
-        var dataFiles = Directory.GetFiles(_dataDirectory, "*.json");
-        foreach (var file in dataFiles)
+        // Clean disk cache only if caching is enabled
+        if (_sessionService.CachingEnabled)
+        {
+            var dataFiles = Directory.GetFiles(_dataDirectory, "*.json");
+            foreach (var file in dataFiles)
         {
             try
             {
@@ -557,6 +619,7 @@ public class PersistentCacheService : ICacheService
                 removedCount++;
             }
         }
+        }
 
         if (removedCount > 0)
         {
@@ -566,39 +629,56 @@ public class PersistentCacheService : ICacheService
 
     public void ClearImageCache()
     {
+        // Always clear memory cache
         _imageCache.Clear();
-        try
+
+        // Only clear disk cache if caching is enabled
+        if (_sessionService.CachingEnabled)
         {
-            foreach (var file in Directory.GetFiles(_imageDirectory))
+            try
             {
-                File.Delete(file);
+                foreach (var file in Directory.GetFiles(_imageDirectory))
+                {
+                    File.Delete(file);
+                }
+                _logger.LogInformation("🧹 Image cache cleared from memory and disk");
             }
-            _logger.LogInformation("🧹 Image cache cleared");
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to clear image cache directory");
+            }
         }
-        catch (Exception ex)
+        else
         {
-            _logger.LogWarning(ex, "Failed to clear image cache directory");
+            _logger.LogInformation("🧹 Image cache cleared from memory only (disk caching disabled)");
         }
     }
 
     public async Task ClearAllDataAsync(CancellationToken cancellationToken = default)
     {
-        if (!_sessionService.CachingEnabled)
-            return;
-
+        // Always clear memory cache
         _dataCache.Clear();
-        try
+
+        // Only clear disk cache if caching is enabled
+        if (_sessionService.CachingEnabled)
         {
-            foreach (var file in Directory.GetFiles(_dataDirectory))
+            try
             {
-                File.Delete(file);
-                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var file in Directory.GetFiles(_dataDirectory))
+                {
+                    File.Delete(file);
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+                _logger.LogInformation("🧹 All cache data cleared from memory and disk");
             }
-            _logger.LogInformation("🧹 All cache data cleared");
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to clear data cache directory");
+            }
         }
-        catch (Exception ex)
+        else
         {
-            _logger.LogWarning(ex, "Failed to clear data cache directory");
+            _logger.LogInformation("🧹 All cache data cleared from memory only (disk caching disabled)");
         }
     }
 
