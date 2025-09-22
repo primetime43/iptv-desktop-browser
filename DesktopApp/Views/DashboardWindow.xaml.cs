@@ -537,6 +537,9 @@ namespace DesktopApp.Views
             DataContext = this;
             // User name display removed in new layout
 
+            // Subscribe to favorites changes
+            Session.FavoritesChanged += OnFavoritesChanged;
+
             CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
             ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
             VodContentCollectionView = CollectionViewSource.GetDefaultView(_vodContent);
@@ -803,6 +806,7 @@ namespace DesktopApp.Views
                                            .Take(1000) // safeguard huge lists
                                            .ToList();
             foreach (var m in matches) _channels.Add(m);
+            UpdateChannelsFavoriteStatus();
             ChannelsCountText = matches.Count.ToString() + " channels";
             ChannelsCollectionView.Refresh();
             // Lazy load logos for shown subset
@@ -985,7 +989,11 @@ namespace DesktopApp.Views
             var groups = Session.PlaylistChannels.GroupBy(p => string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category)
                 .OrderBy(g => g.Key)
                 .Select(g => new Category { Id = g.Key, Name = g.Key, ParentId = 0, ImageUrl = null }).ToList();
-            _categories.Clear(); foreach (var c in groups) _categories.Add(c);
+
+            // Add Favorites as the first category
+            _categories.Clear();
+            _categories.Add(new Category { Id = "⭐ Favorites", Name = "⭐ Favorites", ParentId = 0, ImageUrl = null });
+            foreach (var c in groups) _categories.Add(c);
             CategoriesCountText = _categories.Count + " categories";
             ApplySearch();
         }
@@ -998,6 +1006,8 @@ namespace DesktopApp.Views
                 var categories = await _channelService.LoadCategoriesAsync(_cts.Token);
 
                 _categories.Clear();
+                // Add Favorites as the first category
+                _categories.Add(new Category { Id = "⭐ Favorites", Name = "⭐ Favorites", ParentId = 0, ImageUrl = null });
                 foreach (var c in categories)
                 {
                     _categories.Add(c);
@@ -1034,6 +1044,13 @@ namespace DesktopApp.Views
                 return; // avoid overriding global results
 
             ShowLoadingOverlay("ChannelsLoadingOverlay");
+
+            // Handle special Favorites category
+            if (cat.Id == "⭐ Favorites")
+            {
+                await LoadFavoritesAsCategoryAsync();
+                return;
+            }
             if (Session.Mode == SessionMode.M3u)
             {
                 SetGuideLoading(true);
@@ -1048,6 +1065,7 @@ namespace DesktopApp.Views
                     var list = Session.PlaylistChannels.Where(p => (string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category) == cat.Id)
                         .Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId }).ToList();
                     _channels.Clear(); foreach (var c in list) _channels.Add(c);
+                    UpdateChannelsFavoriteStatus();
                     ChannelsCountText = _channels.Count.ToString() + " channels";
                     _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
                     foreach (var c in _channels) UpdateChannelEpgFromXmltv(c);
@@ -1067,6 +1085,7 @@ namespace DesktopApp.Views
                 {
                     _channels.Add(c);
                 }
+                UpdateChannelsFavoriteStatus();
 
                 ChannelsCountText = _channels.Count.ToString() + " channels";
                 Log($"Loaded {channels.Count} channels for category: {cat.Name}\n");
@@ -1078,6 +1097,89 @@ namespace DesktopApp.Views
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading channels: " + ex.Message + "\n"); }
+            finally
+            {
+                SetGuideLoading(false);
+                HideLoadingOverlay("ChannelsLoadingOverlay");
+            }
+            ApplySearch();
+        }
+
+        private async Task LoadFavoritesAsCategoryAsync()
+        {
+            SetGuideLoading(true);
+            try
+            {
+                Log("Loading favorites as category...\n");
+                var favoriteChannels = Session.GetFavoriteChannels();
+                var channels = new List<Channel>();
+
+                // Convert FavoriteChannel objects to Channel objects
+                foreach (var favorite in favoriteChannels)
+                {
+                    // Try to find the channel in current session data for fresh info
+                    Channel? existingChannel = null;
+
+                    if (Session.Mode == SessionMode.M3u)
+                    {
+                        var playlistChannel = Session.PlaylistChannels?.FirstOrDefault(p => p.Id == favorite.Id);
+                        if (playlistChannel != null)
+                        {
+                            existingChannel = new Channel
+                            {
+                                Id = playlistChannel.Id,
+                                Name = playlistChannel.Name,
+                                Logo = playlistChannel.Logo,
+                                EpgChannelId = playlistChannel.TvgId
+                            };
+                        }
+                    }
+
+                    if (existingChannel != null)
+                    {
+                        // Use fresh data from playlist/session
+                        existingChannel.IsFavorite = true;
+                        channels.Add(existingChannel);
+                    }
+                    else
+                    {
+                        // Use stored favorite data
+                        var favoriteChannel = new Channel
+                        {
+                            Id = favorite.Id,
+                            Name = favorite.Name,
+                            Logo = favorite.Logo,
+                            EpgChannelId = favorite.EpgChannelId,
+                            IsFavorite = true
+                        };
+                        channels.Add(favoriteChannel);
+                    }
+                }
+
+                // Update UI
+                _channels.Clear();
+                foreach (var c in channels)
+                {
+                    _channels.Add(c);
+                }
+
+                ChannelsCountText = $"{_channels.Count} favorite channels";
+                Log($"Loaded {channels.Count} favorite channels\n");
+
+                // Load logos and EPG data
+                _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
+
+                // Update EPG for channels if in M3U mode
+                if (Session.Mode == SessionMode.M3u)
+                {
+                    foreach (var c in _channels)
+                        UpdateChannelEpgFromXmltv(c);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Error loading favorites: {ex.Message}\n");
+            }
             finally
             {
                 SetGuideLoading(false);
@@ -1452,7 +1554,7 @@ namespace DesktopApp.Views
         {
             try { StopRecording(); } catch { }
             try { if (_vodWindow != null) { _vodWindow.Close(); _vodWindow = null; } } catch { }
-            CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; RecordingManager.Instance.PropertyChanged -= OnRecordingManagerChanged; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
+            CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; Session.FavoritesChanged -= OnFavoritesChanged; RecordingManager.Instance.PropertyChanged -= OnRecordingManagerChanged; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
         }
 
         private void OnRecordingManagerChanged(object? sender, PropertyChangedEventArgs e)
@@ -1503,6 +1605,26 @@ namespace DesktopApp.Views
         {
             if (sender is FrameworkElement fe && fe.DataContext is Channel ch)
                 await EnsureEpgLoadedAsync(ch);
+        }
+
+        private void ChannelTile_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            // Currently no specific action needed on mouse leave
+        }
+
+        private void ChannelFavoriteButton_Click(object sender, RoutedEventArgs e)
+        {
+            e.Handled = true; // Prevent the channel tile click event from firing
+
+            if (sender is Button button && button.DataContext is Channel channel)
+            {
+                Session.ToggleFavoriteChannel(channel);
+
+                // Update the channel's IsFavorite property to reflect the change
+                channel.IsFavorite = Session.IsFavoriteChannel(channel.Id);
+
+                Log($"{(channel.IsFavorite ? "Added" : "Removed")} '{channel.Name}' {(channel.IsFavorite ? "to" : "from")} favorites\n");
+            }
         }
 
         private void ChannelTile_Click(object sender, RoutedEventArgs e) { }
@@ -2507,6 +2629,13 @@ namespace DesktopApp.Views
             SetSelectedNavButton(sender as Button);
         }
 
+        private void NavigateToFavorites(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Favorites");
+            SetSelectedNavButton(sender as Button);
+            LoadFavoritesPage();
+        }
+
         private async void NavigateToVod(object sender, RoutedEventArgs e)
         {
             ShowPage("Vod");
@@ -2586,6 +2715,7 @@ namespace DesktopApp.Views
         {
             // Hide all pages
             if (FindName("LiveTvPage") is Grid liveTvPage) liveTvPage.Visibility = Visibility.Collapsed;
+            if (FindName("FavoritesPage") is Grid favoritesPage) favoritesPage.Visibility = Visibility.Collapsed;
             if (FindName("VodPage") is Grid vodPage) vodPage.Visibility = Visibility.Collapsed;
             if (FindName("RecordingPage") is Grid recordingPage) recordingPage.Visibility = Visibility.Collapsed;
             if (FindName("SchedulerPage") is Grid schedulerPage) schedulerPage.Visibility = Visibility.Collapsed;
@@ -2602,6 +2732,7 @@ namespace DesktopApp.Views
         {
             // Clear all nav button selections
             if (FindName("LiveTvNavButton") is Button liveTvBtn) liveTvBtn.Tag = null;
+            if (FindName("FavoritesNavButton") is Button favoritesBtn) favoritesBtn.Tag = null;
             if (FindName("VodNavButton") is Button vodBtn) vodBtn.Tag = null;
             if (FindName("RecordingNavButton") is Button recordingBtn) recordingBtn.Tag = null;
             if (FindName("SchedulerNavButton") is Button schedulerBtn) schedulerBtn.Tag = null;
@@ -3147,6 +3278,193 @@ namespace DesktopApp.Views
             {
                 _scheduler.CancelRecording(recording.Id);
             }
+        }
+
+        // Favorites page methods
+        private void LoadFavoritesPage()
+        {
+            try
+            {
+                var favoriteChannels = Session.GetFavoriteChannels();
+                var channels = new List<Channel>();
+
+                // Convert FavoriteChannel objects to Channel objects and load their current data
+                foreach (var favorite in favoriteChannels)
+                {
+                    // Try to find the channel in current categories/channels for fresh data
+                    var existingChannel = _channels.FirstOrDefault(c => c.Id == favorite.Id);
+                    if (existingChannel != null)
+                    {
+                        // Use existing channel data (includes fresh logo, EPG, etc.)
+                        var favoriteChannel = new Channel
+                        {
+                            Id = existingChannel.Id,
+                            Name = existingChannel.Name,
+                            Logo = existingChannel.Logo,
+                            LogoImage = existingChannel.LogoImage,
+                            EpgChannelId = existingChannel.EpgChannelId,
+                            NowTitle = existingChannel.NowTitle,
+                            NowTimeRange = existingChannel.NowTimeRange,
+                            EpgLoaded = existingChannel.EpgLoaded,
+                            EpgLoading = existingChannel.EpgLoading,
+                            IsRecording = existingChannel.IsRecording,
+                            IsFavorite = true
+                        };
+                        channels.Add(favoriteChannel);
+                    }
+                    else
+                    {
+                        // Use stored favorite data when channel isn't currently loaded
+                        var favoriteChannel = new Channel
+                        {
+                            Id = favorite.Id,
+                            Name = favorite.Name,
+                            Logo = favorite.Logo,
+                            EpgChannelId = favorite.EpgChannelId,
+                            LogoImage = null, // Will be loaded later
+                            IsFavorite = true
+                        };
+                        channels.Add(favoriteChannel);
+                    }
+                }
+
+                // Update UI
+                if (FindName("FavoritesChannelsControl") is ItemsControl favoritesControl)
+                {
+                    favoritesControl.ItemsSource = channels;
+                }
+
+                // Update count and visibility
+                UpdateFavoritesDisplay(channels.Count);
+
+                // Load logos for favorites that don't have them
+                _ = Task.Run(() => LoadFavoriteLogosAsync(channels));
+            }
+            catch (Exception ex)
+            {
+                Log($"Error loading favorites: {ex.Message}\n");
+            }
+        }
+
+        private void UpdateFavoritesDisplay(int count)
+        {
+            if (FindName("FavoritesCountLabel") is TextBlock countLabel)
+            {
+                countLabel.Text = count == 0 ? "No favorites" :
+                                 count == 1 ? "1 favorite" :
+                                 $"{count} favorites";
+            }
+
+            if (FindName("NoFavoritesMessage") is Border noFavoritesMessage)
+            {
+                noFavoritesMessage.Visibility = count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (FindName("FavoritesChannelsControl") is ItemsControl favoritesControl)
+            {
+                favoritesControl.Visibility = count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        private void UpdateChannelsFavoriteStatus()
+        {
+            // Update IsFavorite property for all loaded channels
+            foreach (var channel in _channels)
+            {
+                channel.IsFavorite = Session.IsFavoriteChannel(channel.Id);
+            }
+        }
+
+        private void OnFavoritesChanged()
+        {
+            // Update favorite status of all loaded channels when favorites change
+            Dispatcher.Invoke(() =>
+            {
+                UpdateChannelsFavoriteStatus();
+
+                // If we're on the favorites page, refresh it
+                if (FindName("FavoritesPage") is FrameworkElement favoritesPage &&
+                    favoritesPage.Visibility == Visibility.Visible)
+                {
+                    LoadFavoritesPage();
+                }
+            });
+        }
+
+        private async Task LoadFavoriteLogosAsync(List<Channel> favoriteChannels)
+        {
+            foreach (var channel in favoriteChannels.Where(c => !string.IsNullOrWhiteSpace(c.Logo) && c.LogoImage == null))
+            {
+                if (_cts.IsCancellationRequested) return;
+
+                try
+                {
+                    var logoImage = await _cacheService.GetChannelLogoAsync(channel.Id, channel.Logo, _cts.Token);
+                    if (logoImage != null)
+                    {
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            channel.LogoImage = logoImage;
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"Error loading logo for favorite channel {channel.Name}: {ex.Message}\n");
+                }
+            }
+        }
+
+        private void RefreshFavorites_Click(object sender, RoutedEventArgs e)
+        {
+            LoadFavoritesPage();
+        }
+
+        private void ClearAllFavorites_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(this,
+                "Are you sure you want to remove all channels from favorites?",
+                "Clear All Favorites",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                // Get current favorites and remove them
+                var favoriteChannels = Session.GetFavoriteChannels();
+                foreach (var favorite in favoriteChannels)
+                {
+                    Session.RemoveFavoriteChannel(favorite.Id);
+                }
+
+                // Refresh the favorites page
+                LoadFavoritesPage();
+
+                Log("All favorite channels cleared\n");
+            }
+        }
+
+        private void RemoveFromFavorites_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.DataContext is Channel channel)
+            {
+                Session.RemoveFavoriteChannel(channel.Id);
+
+                // Refresh the favorites page
+                LoadFavoritesPage();
+
+                Log($"Removed '{channel.Name}' from favorites\n");
+            }
+        }
+
+        private void FavoritesViewToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            // Switch to list view (implementation can be added later if needed)
+        }
+
+        private void FavoritesViewToggle_Unchecked(object sender, RoutedEventArgs e)
+        {
+            // Switch to grid view (default)
         }
 
         // Initialize scheduler when navigating to Scheduler tab
