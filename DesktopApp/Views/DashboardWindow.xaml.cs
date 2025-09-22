@@ -1097,17 +1097,14 @@ namespace DesktopApp.Views
 
             try
             {
-                // Use channel_id based caching for better cache matching (only if caching is enabled)
-                if (Session.CachingEnabled)
+                // Use channel_id based caching for better cache matching
+                var cachedImage = await _cacheService.GetChannelLogoAsync(channel.Id, url, _cts.Token);
+                if (cachedImage != null)
                 {
-                    var cachedImage = await _cacheService.GetChannelLogoAsync(channel.Id, url, _cts.Token);
-                    if (cachedImage != null)
+                    await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        await Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            channel.LogoImage = cachedImage;
-                        });
-                    }
+                        channel.LogoImage = cachedImage;
+                    });
                 }
             }
             catch (OperationCanceledException)
@@ -4536,7 +4533,7 @@ namespace DesktopApp.Views
             if (SettingsCachingEnabledCheckBox.IsChecked.HasValue)
             {
                 Session.CachingEnabled = SettingsCachingEnabledCheckBox.IsChecked.Value;
-                Log($"Caching {(Session.CachingEnabled ? "enabled" : "disabled")}\n");
+                Log($"Disk caching {(Session.CachingEnabled ? "enabled" : "disabled")} (in-memory caching always active)\n");
             }
         }
 
