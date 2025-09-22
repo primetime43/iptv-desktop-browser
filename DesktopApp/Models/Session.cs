@@ -62,8 +62,10 @@ public static class Session
     // Caching settings
     public static bool CachingEnabled { get; set; } = false; // disabled by default
 
-    // Favorites events
+    // Favorites events and caching
     public static event Action? FavoritesChanged;
+    private static List<FavoriteChannel>? _cachedFavorites = null;
+    private static string? _lastSessionKey = null;
 
     // EPG refresh tracking (only meaningful for Xtream mode currently)
     public static DateTime? LastEpgUpdateUtc { get; set; }
@@ -81,14 +83,19 @@ public static class Session
     // Favorites methods
     public static bool IsFavoriteChannel(int channelId)
     {
-        var store = new FavoritesStore();
-        return store.IsFavorite(GetCurrentSessionKey(), channelId);
+        var favorites = GetFavoriteChannels();
+        return favorites.Any(f => f.Id == channelId);
     }
 
     public static void AddFavoriteChannel(Channel channel)
     {
         var store = new FavoritesStore();
         store.AddFavorite(GetCurrentSessionKey(), channel);
+
+        // Invalidate cache
+        _cachedFavorites = null;
+        _lastSessionKey = null;
+
         FavoritesChanged?.Invoke();
     }
 
@@ -96,6 +103,11 @@ public static class Session
     {
         var store = new FavoritesStore();
         store.RemoveFavorite(GetCurrentSessionKey(), channelId);
+
+        // Invalidate cache
+        _cachedFavorites = null;
+        _lastSessionKey = null;
+
         FavoritesChanged?.Invoke();
     }
 
@@ -109,8 +121,20 @@ public static class Session
 
     public static List<FavoriteChannel> GetFavoriteChannels()
     {
+        var currentSessionKey = GetCurrentSessionKey();
+
+        // Check if cache is valid for current session
+        if (_cachedFavorites != null && _lastSessionKey == currentSessionKey)
+        {
+            return _cachedFavorites;
+        }
+
+        // Cache miss or session changed - load from store
         var store = new FavoritesStore();
-        return store.GetForCurrentSession(GetCurrentSessionKey());
+        _cachedFavorites = store.GetForCurrentSession(currentSessionKey);
+        _lastSessionKey = currentSessionKey;
+
+        return _cachedFavorites;
     }
 
     private static string GetCurrentSessionKey()

@@ -860,6 +860,7 @@ namespace DesktopApp.Views
             Dispatcher.Invoke(() =>
             {
                 LastEpgUpdateText = DateTime.UtcNow.ToLocalTime().ToString("g");
+                // Use batch update for better performance, but preserve onlyIfEmpty logic
                 foreach (var ch in _channels) UpdateChannelEpgFromXmltv(ch, onlyIfEmpty: ch != SelectedChannel);
                 if (SelectedChannel != null) LoadUpcomingFromXmltv(SelectedChannel);
             });
@@ -877,6 +878,26 @@ namespace DesktopApp.Views
             if (onlyIfEmpty && !string.IsNullOrEmpty(ch.NowTitle)) return;
             ch.NowTitle = current.Title; ch.NowDescription = current.Description; ch.NowTimeRange = $"{current.StartUtc.ToLocalTime():h:mm tt} - {current.EndUtc.ToLocalTime():h:mm tt}";
             if (ReferenceEquals(ch, SelectedChannel)) NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
+        }
+
+        private void UpdateChannelsEpgFromXmltvBatch(IEnumerable<Channel> channels)
+        {
+            if (Session.Mode != SessionMode.M3u || Session.PlaylistChannels == null) return;
+
+            // Create lookup dictionary for O(1) access instead of O(N) for each channel
+            var playlistLookup = Session.PlaylistChannels.ToDictionary(p => p.Id, p => p);
+            var nowUtc = DateTime.UtcNow;
+
+            foreach (var ch in channels)
+            {
+                if (!playlistLookup.TryGetValue(ch.Id, out var pl)) continue;
+                var tvgId = pl.TvgId; if (string.IsNullOrWhiteSpace(tvgId)) continue;
+                if (!Session.M3uEpgByChannel.TryGetValue(tvgId, out var entries) || entries.Count == 0) continue;
+                var current = entries.LastOrDefault(e => e.StartUtc <= nowUtc && e.EndUtc > nowUtc);
+                if (current == null) continue;
+                ch.NowTitle = current.Title; ch.NowDescription = current.Description; ch.NowTimeRange = $"{current.StartUtc.ToLocalTime():h:mm tt} - {current.EndUtc.ToLocalTime():h:mm tt}";
+                if (ReferenceEquals(ch, SelectedChannel)) NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
+            }
         }
 
         private void LoadUpcomingFromXmltv(Channel ch)
@@ -1068,7 +1089,7 @@ namespace DesktopApp.Views
                     UpdateChannelsFavoriteStatus();
                     ChannelsCountText = _channels.Count.ToString() + " channels";
                     _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
-                    foreach (var c in _channels) UpdateChannelEpgFromXmltv(c);
+                    UpdateChannelsEpgFromXmltvBatch(_channels);
                 }
                 finally { SetGuideLoading(false); }
                 ApplySearch();
@@ -1172,8 +1193,7 @@ namespace DesktopApp.Views
                 // Update EPG for channels if in M3U mode
                 if (Session.Mode == SessionMode.M3u)
                 {
-                    foreach (var c in _channels)
-                        UpdateChannelEpgFromXmltv(c);
+                    UpdateChannelsEpgFromXmltvBatch(_channels);
                 }
             }
             catch (Exception ex)
@@ -3368,10 +3388,14 @@ namespace DesktopApp.Views
 
         private void UpdateChannelsFavoriteStatus()
         {
+            // Optimize: Get all favorites once instead of reading file for each channel
+            var favoriteChannels = Session.GetFavoriteChannels();
+            var favoriteIds = favoriteChannels.Select(f => f.Id).ToHashSet();
+
             // Update IsFavorite property for all loaded channels
             foreach (var channel in _channels)
             {
-                channel.IsFavorite = Session.IsFavoriteChannel(channel.Id);
+                channel.IsFavorite = favoriteIds.Contains(channel.Id);
             }
         }
 
