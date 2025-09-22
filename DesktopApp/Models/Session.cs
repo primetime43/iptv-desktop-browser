@@ -60,7 +60,7 @@ public static class Session
     public static string FfmpegArgsTemplate { get; set; } = "-i \"{url}\" -c copy -f mpegts \"{output}\""; // tokens: {url} {output} {title}
 
     // Caching settings
-    public static bool CachingEnabled { get; set; } = true; // enabled by default
+    public static bool CachingEnabled { get; set; } = false; // disabled by default
 
     // EPG refresh tracking (only meaningful for Xtream mode currently)
     public static DateTime? LastEpgUpdateUtc { get; set; }
