@@ -68,7 +68,12 @@ public partial class App : Application
                 {
                     builder.AddConsole();
                     builder.AddDebug();
-                    builder.SetMinimumLevel(LogLevel.Information);
+                    builder.SetMinimumLevel(LogLevel.Warning);
+                    // Reduce HTTP client logging noise
+                    builder.AddFilter("System.Net.Http", LogLevel.Warning);
+                    builder.AddFilter("Microsoft.Extensions.Http", LogLevel.Warning);
+                    // Reduce service logging noise
+                    builder.AddFilter("DesktopApp.Services", LogLevel.Warning);
                 });
             });
     }
