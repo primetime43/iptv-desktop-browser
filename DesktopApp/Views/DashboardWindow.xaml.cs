@@ -17,6 +17,7 @@ using System.Diagnostics;
 using System.Windows.Data;
 using System.Windows.Threading;
 using System.Windows.Media;
+using DesktopApp.Services;
 
 namespace DesktopApp.Views
 {
@@ -27,6 +28,9 @@ namespace DesktopApp.Views
         // NOTE: Duplicate recording fields and OnClosed removed. This is the consolidated file.
         // Collections / state
         private readonly HttpClient _http = new();
+        private readonly IChannelService _channelService;
+        private readonly IVodService _vodService;
+        private readonly ICacheService _cacheService;
         private readonly ObservableCollection<Category> _categories = new(); public ObservableCollection<Category> Categories => _categories;
         private readonly ObservableCollection<Channel> _channels = new(); public ObservableCollection<Channel> Channels => _channels;
         private readonly Dictionary<string, BitmapImage> _logoCache = new(StringComparer.OrdinalIgnoreCase);
@@ -520,8 +524,15 @@ namespace DesktopApp.Views
             }
         }
 
-        public DashboardWindow()
+        public DashboardWindow(IChannelService channelService, IVodService vodService, ICacheService cacheService)
         {
+            _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
+            _vodService = vodService ?? throw new ArgumentNullException(nameof(vodService));
+            _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
+
+            // Set up raw output logging for cache status
+            _channelService.SetRawOutputLogger(Log);
+
             InitializeComponent();
             DataContext = this;
             // User name display removed in new layout
@@ -980,31 +991,30 @@ namespace DesktopApp.Views
         }
         private async Task LoadCategoriesAsync()
         {
-            if (Session.Mode != SessionMode.Xtream) return;
             ShowLoadingOverlay("CategoriesLoadingOverlay");
             try
             {
-                var url = Session.BuildApi("get_live_categories"); Log($"GET {url}\n"); var json = await _http.GetStringAsync(url, _cts.Token); Log(json + "\n\n");
-                var parsed = new List<Category>();
-                try
+                Log("Loading categories using ChannelService...\n");
+                var categories = await _channelService.LoadCategoriesAsync(_cts.Token);
+
+                _categories.Clear();
+                foreach (var c in categories)
                 {
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
-                        foreach (var el in doc.RootElement.EnumerateArray())
-                            parsed.Add(new Category
-                            {
-                                Id = el.TryGetProperty("category_id", out var idEl) ? idEl.GetString() ?? string.Empty : string.Empty,
-                                Name = el.TryGetProperty("category_name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
-                                ParentId = el.TryGetProperty("parent_id", out var pEl) ? pEl.GetInt32() : 0,
-                                ImageUrl = el.TryGetProperty("category_image", out var imgEl) && imgEl.ValueKind == JsonValueKind.String ? imgEl.GetString() : null
-                            });
+                    _categories.Add(c);
                 }
-                catch (Exception ex) { Log("PARSE ERROR categories: " + ex.Message + "\n"); }
-                _categories.Clear(); foreach (var c in parsed) _categories.Add(c); CategoriesCountText = $"{_categories.Count} categories";
+
+                CategoriesCountText = $"{_categories.Count} categories";
                 ApplySearch();
+                Log($"Loaded {categories.Count} categories\n");
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { Log("ERROR: " + ex.Message + "\n"); }
+            catch (Exception ex)
+            {
+                Log("ERROR: " + ex.Message + "\n");
+                // On error, clear categories to show empty state
+                _categories.Clear();
+                CategoriesCountText = "0 categories";
+            }
             finally { HideLoadingOverlay("CategoriesLoadingOverlay"); }
         }
         private void SetGuideLoading(bool loading)
@@ -1049,42 +1059,22 @@ namespace DesktopApp.Views
             SetGuideLoading(true);
             try
             {
-                var url = Session.BuildApi("get_live_streams") + "&category_id=" + Uri.EscapeDataString(cat.Id);
-                Log($"GET {url}\n"); var json = await _http.GetStringAsync(url, _cts.Token); Log(json + "\n\n");
-                var parsed = new List<Channel>();
-                try
+                Log($"Loading channels for category: {cat.Name} using ChannelService...\n");
+                var channels = await _channelService.LoadChannelsForCategoryAsync(cat, _cts.Token);
+
+                _channels.Clear();
+                foreach (var c in channels)
                 {
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
-                        foreach (var el in doc.RootElement.EnumerateArray())
-                            parsed.Add(new Channel
-                            {
-                                Id = el.TryGetProperty("stream_id", out var idEl) && idEl.TryGetInt32(out var sid) ? sid : 0,
-                                Name = el.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
-                                Logo = el.TryGetProperty("stream_icon", out var iconEl) ? iconEl.GetString() : null,
-                                EpgChannelId = el.TryGetProperty("epg_channel_id", out var epgEl) ? epgEl.GetString() : null
-                            });
+                    _channels.Add(c);
                 }
-                catch (Exception ex) { Log("PARSE ERROR channels: " + ex.Message + "\n"); }
-                _channels.Clear(); foreach (var c in parsed) _channels.Add(c);
+
                 ChannelsCountText = _channels.Count.ToString() + " channels";
-                _ = Task.Run(() => PreloadLogosAsync(parsed), _cts.Token);
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        await LoadEpgDataBatchedAsync(_channels.ToList());
-                        if (Session.LastEpgUpdateUtc == null)
-                        {
-                            Session.LastEpgUpdateUtc = DateTime.UtcNow;
-                            Dispatcher.Invoke(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Log($"ERROR in EPG batch loading: {ex.Message}\n");
-                    }
-                }, _cts.Token);
+                Log($"Loaded {channels.Count} channels for category: {cat.Name}\n");
+
+                _ = Task.Run(() => PreloadLogosAsync(channels), _cts.Token);
+
+                // Start gradual EPG loading in background without blocking UI
+                _ = Task.Run(() => StartGradualEpgLoadingAsync(channels), _cts.Token);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading channels: " + ex.Message + "\n"); }
@@ -1101,30 +1091,24 @@ namespace DesktopApp.Views
         { try { await Task.WhenAll(channels.Where(c => !string.IsNullOrWhiteSpace(c.Logo)).Select(LoadLogoAsync)); } catch { } }
         private async Task LoadLogoAsync(Channel channel)
         {
-            if (_cts.IsCancellationRequested) return; var url = channel.Logo; if (string.IsNullOrWhiteSpace(url)) return; if (_logoCache.TryGetValue(url, out var cached)) { channel.LogoImage = cached; return; }
+            if (_cts.IsCancellationRequested) return;
+            var url = channel.Logo;
+            if (string.IsNullOrWhiteSpace(url)) return;
+
             try
             {
-                await _logoSemaphore.WaitAsync(_cts.Token);
-                using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, _cts.Token); if (!resp.IsSuccessStatusCode) return;
-                await using var ms = new MemoryStream(); await resp.Content.CopyToAsync(ms, _cts.Token); if (_cts.IsCancellationRequested) return; ms.Position = 0;
-                await Application.Current.Dispatcher.InvokeAsync(() =>
+                // Use channel_id based caching for better cache matching (only if caching is enabled)
+                if (Session.CachingEnabled)
                 {
-                    try
+                    var cachedImage = await _cacheService.GetChannelLogoAsync(channel.Id, url, _cts.Token);
+                    if (cachedImage != null)
                     {
-                        var bmp = new BitmapImage();
-                        bmp.BeginInit();
-                        bmp.CacheOption = BitmapCacheOption.OnLoad;
-                        bmp.StreamSource = ms;
-                        bmp.EndInit();
-                        bmp.Freeze();
-                        _logoCache[url] = bmp;
-                        channel.LogoImage = bmp;
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            channel.LogoImage = cachedImage;
+                        });
                     }
-                    catch (Exception ex)
-                    {
-                        Log($"Failed to load logo for {channel.Name}: {ex.Message}\n");
-                    }
-                });
+                }
             }
             catch (OperationCanceledException)
             {
@@ -1132,12 +1116,7 @@ namespace DesktopApp.Views
             }
             catch (Exception ex)
             {
-                Log($"Error loading logo from {url}: {ex.Message}\n");
-            }
-            finally
-            {
-                if (_logoSemaphore.CurrentCount < 6)
-                    _logoSemaphore.Release();
+                Log($"Error loading logo for channel {channel.Id} from {url}: {ex.Message}\n");
             }
         }
 
@@ -1211,42 +1190,95 @@ namespace DesktopApp.Views
 
         private async Task EnsureEpgLoadedAsync(Channel ch, bool force = false)
         {
-            if (Session.Mode != SessionMode.Xtream) return; if (_cts.IsCancellationRequested) return; if (!force && (ch.EpgLoaded || ch.EpgLoading)) return; if (!force && ch.EpgAttempts >= 3 && !string.IsNullOrEmpty(ch.NowTitle)) return; await LoadEpgCurrentOnlyAsync(ch, force);
-        }
-        private static string TryGetString(JsonElement el, params string[] names)
-        { foreach (var n in names) if (el.TryGetProperty(n, out var p)) { if (p.ValueKind == JsonValueKind.String) return p.GetString() ?? string.Empty; if (p.ValueKind == JsonValueKind.Number) return p.ToString(); } return string.Empty; }
-        private async Task LoadEpgCurrentOnlyAsync(Channel ch, bool force)
-        {
-            if (Session.Mode != SessionMode.Xtream) return; ch.EpgLoading = true; ch.EpgAttempts++;
+            if (Session.Mode != SessionMode.Xtream) return;
+            if (_cts.IsCancellationRequested) return;
+            if (!force && (ch.EpgLoaded || ch.EpgLoading)) return;
+            if (!force && ch.EpgAttempts >= 3 && !string.IsNullOrEmpty(ch.NowTitle)) return;
+
+            // Use ChannelService instead of direct API calls
+            ch.EpgLoading = true;
+            ch.EpgAttempts++;
             try
             {
-                if (_cts.IsCancellationRequested) { ch.EpgLoaded = true; ch.EpgLoading = false; return; }
-                var url = Session.BuildApi("get_simple_data_table") + "&stream_id=" + ch.Id; Log($"GET {url} (current only, attempt {ch.EpgAttempts})\n");
-                using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, _cts.Token); var json = await resp.Content.ReadAsStringAsync(_cts.Token); Log("(length=" + json.Length + ")\n\n"); if (_cts.IsCancellationRequested) return;
-                var trimmed = json.AsSpan().TrimStart(); if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '[')) { Log("EPG non-JSON response skipped\n"); ch.EpgLoaded = true; return; }
-                var nowUtc = DateTime.UtcNow; bool found = false; EpgEntry? fallbackFirstFuture = null;
-                try
-                {
-                    using var doc = JsonDocument.Parse(json); if (doc.RootElement.TryGetProperty("epg_listings", out var listings) && listings.ValueKind == JsonValueKind.Array)
-                        foreach (var el in listings.EnumerateArray())
-                        {
-                            var start = GetUnix(el, "start_timestamp"); var end = GetUnix(el, "stop_timestamp"); if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
-                            string titleRaw = TryGetString(el, "title", "name", "programme", "program"); string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
-                            string title = DecodeMaybeBase64(titleRaw); string desc = DecodeMaybeBase64(descRaw);
-                            bool nowFlag = el.TryGetProperty("now_playing", out var np) && (np.ValueKind == JsonValueKind.Number ? np.GetInt32() == 1 : (np.ValueKind == JsonValueKind.String && np.GetString() == "1")); bool isCurrent = nowFlag || (nowUtc >= start && nowUtc < end);
-                            if (isCurrent && !string.IsNullOrWhiteSpace(title)) { ApplyNow(ch, title, desc, start, end); found = true; break; }
-                            if (!isCurrent && start > nowUtc && fallbackFirstFuture == null && !string.IsNullOrWhiteSpace(title)) fallbackFirstFuture = new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc };
-                        }
-                }
-                catch (Exception ex) { Log("PARSE ERROR (current epg): " + ex.Message + "\n"); }
-                if (!found && fallbackFirstFuture != null) { ApplyNow(ch, fallbackFirstFuture.Title, fallbackFirstFuture.Description ?? string.Empty, fallbackFirstFuture.StartUtc, fallbackFirstFuture.EndUtc); found = true; }
-                if (!found) { ch.EpgLoaded = false; Log($"No current EPG data found for channel {ch.Name} (attempt {ch.EpgAttempts})\n"); }
-                else ch.EpgLoaded = true;
+                await _channelService.LoadEpgForChannelAsync(ch, _cts.Token);
             }
-            catch (OperationCanceledException) { ch.EpgLoaded = true; }
-            catch (Exception ex) { Log("ERROR loading epg: " + ex.Message + "\n"); ch.EpgLoaded = true; }
-            finally { ch.EpgLoading = false; }
+            catch (Exception ex)
+            {
+                Log($"ERROR loading EPG for {ch.Name}: {ex.Message}\n");
+            }
+            finally
+            {
+                ch.EpgLoading = false;
+            }
         }
+
+        private async Task StartGradualEpgLoadingAsync(IEnumerable<Channel> channels)
+        {
+            if (Session.Mode != SessionMode.Xtream || _cts.IsCancellationRequested) return;
+
+            var channelList = channels.ToList();
+            Log($"Starting gradual EPG loading for {channelList.Count} channels in background\n");
+
+            const int batchSize = 5; // Load EPG for 5 channels at a time
+            const int delayBetweenBatches = 1000; // 1 second delay between batches
+
+            try
+            {
+                for (int i = 0; i < channelList.Count; i += batchSize)
+                {
+                    if (_cts.IsCancellationRequested) break;
+
+                    var batch = channelList.Skip(i).Take(batchSize);
+                    var batchTasks = batch.Select(async channel =>
+                    {
+                        if (_cts.IsCancellationRequested || channel.EpgLoaded || channel.EpgLoading)
+                            return;
+
+                        try
+                        {
+                            channel.EpgLoading = true;
+                            await _channelService.LoadEpgForChannelAsync(channel, _cts.Token);
+                        }
+                        catch (Exception ex)
+                        {
+                            // Don't log individual EPG failures in background loading to avoid spam
+                        }
+                        finally
+                        {
+                            channel.EpgLoading = false;
+                        }
+                    });
+
+                    await Task.WhenAll(batchTasks);
+
+                    // Small delay between batches to avoid overwhelming the server
+                    if (i + batchSize < channelList.Count && !_cts.IsCancellationRequested)
+                    {
+                        await Task.Delay(delayBetweenBatches, _cts.Token);
+                    }
+                }
+
+                // Update EPG timestamp when background loading completes
+                if (!_cts.IsCancellationRequested && Session.LastEpgUpdateUtc == null)
+                {
+                    Session.LastEpgUpdateUtc = DateTime.UtcNow;
+                    await Dispatcher.InvokeAsync(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
+                }
+
+                Log($"Completed gradual EPG loading for {channelList.Count} channels\n");
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when cancellation is requested
+            }
+            catch (Exception ex)
+            {
+                Log($"Error in gradual EPG loading: {ex.Message}\n");
+            }
+        }
+
+        private static string TryGetString(JsonElement el, params string[] names)
+        { foreach (var n in names) if (el.TryGetProperty(n, out var p)) { if (p.ValueKind == JsonValueKind.String) return p.GetString() ?? string.Empty; if (p.ValueKind == JsonValueKind.Number) return p.ToString(); } return string.Empty; }
         private void ApplyNow(Channel ch, string title, string desc, DateTime startUtc, DateTime endUtc)
         { ch.NowTitle = title; ch.NowDescription = desc; ch.NowTimeRange = $"{startUtc.ToLocalTime():h:mm tt} - {endUtc.ToLocalTime():h:mm tt}"; if (ReferenceEquals(ch, SelectedChannel)) NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})"; if (Session.LastEpgUpdateUtc == null) { Session.LastEpgUpdateUtc = DateTime.UtcNow; LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"); } }
         private async Task LoadFullEpgForSelectedChannelAsync(Channel ch)
@@ -1805,15 +1837,24 @@ namespace DesktopApp.Views
                 await _logoSemaphore.WaitAsync(_cts.Token);
                 try
                 {
-                    var imageData = await _http.GetByteArrayAsync(vod.StreamIcon, _cts.Token);
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.StreamSource = new MemoryStream(imageData);
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    bitmap.EndInit();
-                    bitmap.Freeze();
+                    // Try to get from cache first, then fallback to direct download if cache fails
+                    var bitmap = await _cacheService.GetImageAsync(vod.StreamIcon, _cts.Token);
+                    if (bitmap != null)
+                    {
+                        vod.PosterImage = bitmap;
+                        return;
+                    }
 
-                    vod.PosterImage = bitmap;
+                    // Fallback to direct download if cache fails
+                    var imageData = await _http.GetByteArrayAsync(vod.StreamIcon, _cts.Token);
+                    var fallbackBitmap = new BitmapImage();
+                    fallbackBitmap.BeginInit();
+                    fallbackBitmap.StreamSource = new MemoryStream(imageData);
+                    fallbackBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                    fallbackBitmap.EndInit();
+                    fallbackBitmap.Freeze();
+
+                    vod.PosterImage = fallbackBitmap;
                 }
                 finally
                 {
@@ -1824,6 +1865,49 @@ namespace DesktopApp.Views
             catch (Exception ex)
             {
                 Log($"Failed to load poster for {vod.Name}: {ex.Message}\n");
+            }
+        }
+
+        private async Task LoadSeriesPosterAsync(SeriesContent series)
+        {
+            if (string.IsNullOrEmpty(series.StreamIcon)) return;
+
+            try
+            {
+                await _logoSemaphore.WaitAsync(_cts.Token);
+                try
+                {
+                    // Try to get from cache first, then fallback to direct download if cache fails
+                    var bitmap = await _cacheService.GetImageAsync(series.StreamIcon, _cts.Token);
+                    if (bitmap != null)
+                    {
+                        series.PosterImage = bitmap;
+                        return;
+                    }
+
+                    // Fallback to direct download if cache fails
+                    var imageBytes = await _http.GetByteArrayAsync(series.StreamIcon, _cts.Token);
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        using var stream = new MemoryStream(imageBytes);
+                        var fallbackBitmap = new BitmapImage();
+                        fallbackBitmap.BeginInit();
+                        fallbackBitmap.CacheOption = BitmapCacheOption.OnLoad;
+                        fallbackBitmap.StreamSource = stream;
+                        fallbackBitmap.EndInit();
+                        fallbackBitmap.Freeze();
+                        series.PosterImage = fallbackBitmap;
+                    }, DispatcherPriority.Background, _cts.Token);
+                }
+                finally
+                {
+                    _logoSemaphore.Release();
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                Log($"Failed to load poster for {series.Name}: {ex.Message}\n");
             }
         }
 
@@ -1908,39 +1992,6 @@ namespace DesktopApp.Views
             catch (Exception ex) { Log("ERROR loading series content: " + ex.Message + "\n"); }
         }
 
-        private async Task LoadSeriesPosterAsync(SeriesContent series)
-        {
-            if (string.IsNullOrEmpty(series.StreamIcon)) return;
-
-            try
-            {
-                await _logoSemaphore.WaitAsync(_cts.Token);
-                try
-                {
-                    var imageBytes = await _http.GetByteArrayAsync(series.StreamIcon, _cts.Token);
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        using var stream = new MemoryStream(imageBytes);
-                        var bitmap = new BitmapImage();
-                        bitmap.BeginInit();
-                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        bitmap.StreamSource = stream;
-                        bitmap.EndInit();
-                        bitmap.Freeze();
-                        series.PosterImage = bitmap;
-                    }, DispatcherPriority.Background, _cts.Token);
-                }
-                finally
-                {
-                    _logoSemaphore.Release();
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                Log($"Failed to load poster for {series.Name}: {ex.Message}\n");
-            }
-        }
 
         private async Task LoadSeriesDetailsAsync(SeriesContent series)
         {
@@ -2513,6 +2564,27 @@ namespace DesktopApp.Views
             LoadSettingsPage();
         }
 
+        private void NavigateToLogs(object sender, RoutedEventArgs e)
+        {
+            ShowPage("Logs");
+            SetSelectedNavButton(sender as Button);
+        }
+
+        private void OpenCacheInspector(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var cacheInspector = App.GetRequiredService<CacheInspectorWindow>();
+                cacheInspector.Owner = this;
+                cacheInspector.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Failed to open Cache Inspector: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void ShowPage(string pageName)
         {
             // Hide all pages
@@ -2522,6 +2594,7 @@ namespace DesktopApp.Views
             if (FindName("SchedulerPage") is Grid schedulerPage) schedulerPage.Visibility = Visibility.Collapsed;
             if (FindName("ProfilePage") is Grid profilePage) profilePage.Visibility = Visibility.Collapsed;
             if (FindName("SettingsPage") is Grid settingsPage) settingsPage.Visibility = Visibility.Collapsed;
+            if (FindName("LogsPage") is Grid logsPage) logsPage.Visibility = Visibility.Collapsed;
 
             // Show selected page
             if (FindName($"{pageName}Page") is Grid targetPage)
@@ -2537,6 +2610,7 @@ namespace DesktopApp.Views
             if (FindName("SchedulerNavButton") is Button schedulerBtn) schedulerBtn.Tag = null;
             if (FindName("ProfileNavButton") is Button profileBtn) profileBtn.Tag = null;
             if (FindName("SettingsNavButton") is Button settingsBtn) settingsBtn.Tag = null;
+            if (FindName("LogsNavButton") is Button logsBtn) logsBtn.Tag = null;
 
             // Set selected button
             if (selectedButton != null)
@@ -3775,6 +3849,9 @@ namespace DesktopApp.Views
                 if (FindName("SettingsEpgIntervalTextBox") is TextBox epgInterval)
                     epgInterval.Text = ((int)Session.EpgRefreshInterval.TotalMinutes).ToString();
 
+                if (FindName("SettingsCachingEnabledCheckBox") is CheckBox cachingEnabled)
+                    cachingEnabled.IsChecked = Session.CachingEnabled;
+
                 ValidateAllSettingsFields();
 
                 // Initialize logging display
@@ -4452,6 +4529,58 @@ namespace DesktopApp.Views
                 MessageBox.Show($"Failed to save log: {ex.Message}", "Error",
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private void SettingsCachingEnabledCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (SettingsCachingEnabledCheckBox.IsChecked.HasValue)
+            {
+                Session.CachingEnabled = SettingsCachingEnabledCheckBox.IsChecked.Value;
+                Log($"Caching {(Session.CachingEnabled ? "enabled" : "disabled")}\n");
+            }
+        }
+
+        private async void SettingsClearCache_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var result = MessageBox.Show("Clear all cached data and images? This will remove all cached EPG data, VOD content, and images.",
+                    "Confirm Clear Cache", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    var button = sender as Button;
+                    if (button != null)
+                    {
+                        button.IsEnabled = false;
+                        button.Content = "🧹 Clearing...";
+                    }
+
+                    _cacheService.ClearImageCache();
+                    await _cacheService.ClearAllDataAsync();
+
+                    Log("All cache cleared successfully\n");
+                    MessageBox.Show("Cache cleared successfully!", "Success",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+
+                    if (button != null)
+                    {
+                        button.IsEnabled = true;
+                        button.Content = "Clear All Cache";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to clear cache: {ex.Message}\n");
+                MessageBox.Show($"Failed to clear cache: {ex.Message}", "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SettingsCacheInspector_Click(object sender, RoutedEventArgs e)
+        {
+            OpenCacheInspector(sender, e);
         }
 
         private void ShowLoadingOverlay(string overlayName)

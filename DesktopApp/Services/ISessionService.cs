@@ -12,6 +12,7 @@ public interface ISessionService
     string Username { get; set; }
     string Password { get; set; }
     UserInfo? UserInfo { get; set; }
+    bool CachingEnabled { get; }
 
     List<PlaylistEntry> PlaylistChannels { get; }
     List<VodContent> VodContent { get; }

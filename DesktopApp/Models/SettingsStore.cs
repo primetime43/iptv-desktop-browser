@@ -13,6 +13,7 @@ public sealed class SettingsStore
     public string? RecordingDirectory { get; set; }
     public string? FfmpegArgsTemplate { get; set; }
     public int EpgRefreshIntervalMinutes { get; set; } = 30;
+    public bool CachingEnabled { get; set; } = true;
 
     private static readonly JsonSerializerOptions _jsonOptions = new() { WriteIndented = true }; 
     private static string Folder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IPTVDashboard");
@@ -34,6 +35,7 @@ public sealed class SettingsStore
             if (!string.IsNullOrWhiteSpace(data.FfmpegArgsTemplate)) Session.FfmpegArgsTemplate = data.FfmpegArgsTemplate;
             if (data.EpgRefreshIntervalMinutes > 0 && data.EpgRefreshIntervalMinutes <= 720)
                 Session.EpgRefreshInterval = TimeSpan.FromMinutes(data.EpgRefreshIntervalMinutes);
+            Session.CachingEnabled = data.CachingEnabled;
         }
         catch { }
     }
@@ -51,7 +53,8 @@ public sealed class SettingsStore
                 FfmpegPath = Session.FfmpegPath,
                 RecordingDirectory = Session.RecordingDirectory,
                 FfmpegArgsTemplate = string.IsNullOrWhiteSpace(Session.FfmpegArgsTemplate) ? null : Session.FfmpegArgsTemplate,
-                EpgRefreshIntervalMinutes = (int)Session.EpgRefreshInterval.TotalMinutes
+                EpgRefreshIntervalMinutes = (int)Session.EpgRefreshInterval.TotalMinutes,
+                CachingEnabled = Session.CachingEnabled
             };
             var json = JsonSerializer.Serialize(data, _jsonOptions);
             File.WriteAllText(FilePath, json);

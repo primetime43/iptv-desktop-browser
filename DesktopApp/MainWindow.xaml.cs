@@ -377,7 +377,8 @@ namespace DesktopApp
             if (RememberCheckBox.IsChecked == true)
                 CredentialStore.SaveOrUpdate(serverRaw!, port, ssl, username!, password!);
 
-            var dash = new DashboardWindow { Owner = this };
+            var dash = App.GetRequiredService<DashboardWindow>();
+            dash.Owner = this;
             dash.Show();
             this.Hide();
             LoginButton.IsEnabled = true;
@@ -410,7 +411,8 @@ namespace DesktopApp
                 {
                     _ = Task.Run(async () => await LoadXmltvAsync(xmlPath));
                 }
-                var dash = new DashboardWindow { Owner = this };
+                var dash = App.GetRequiredService<DashboardWindow>();
+                dash.Owner = this;
                 dash.Show();
                 this.Hide();
             }

@@ -42,6 +42,7 @@ public partial class App : Application
             {
                 // Register services
                 services.AddSingleton<ISessionService, SessionService>();
+                services.AddSingleton<ICacheService, PersistentCacheService>();
                 services.AddTransient<IChannelService, ChannelService>();
                 services.AddTransient<IVodService, VodService>();
                 services.AddTransient<IHttpService, HttpService>();
@@ -60,6 +61,7 @@ public partial class App : Application
                 // Register Views
                 services.AddTransient<MainWindow>();
                 services.AddTransient<DashboardWindow>();
+                services.AddTransient<CacheInspectorWindow>();
 
                 // Configure logging
                 services.AddLogging(builder =>

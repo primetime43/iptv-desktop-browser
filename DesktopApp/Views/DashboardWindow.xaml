@@ -381,6 +381,22 @@
                             <TextBlock Text="Settings"/>
                         </StackPanel>
                     </Button>
+
+                    <Button x:Name="LogsNavButton" Style="{StaticResource NavButtonStyle}"
+                            Click="NavigateToLogs">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="📝" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Logs"/>
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="CacheInspectorNavButton" Style="{StaticResource NavButtonStyle}"
+                            Click="OpenCacheInspector">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="💾" FontSize="16" Margin="0,0,12,0"/>
+                            <TextBlock Text="Cache Inspector"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- Bottom Section -->
@@ -2117,6 +2133,91 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Cache Settings Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="💾 Cache Settings" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <CheckBox x:Name="SettingsCachingEnabledCheckBox" Content="Enable Caching"
+                                              Foreground="#8BA1B9" FontSize="14" Margin="0,0,0,8"
+                                              Checked="SettingsCachingEnabledCheckBox_Changed"
+                                              Unchecked="SettingsCachingEnabledCheckBox_Changed">
+                                        <CheckBox.Style>
+                                            <Style TargetType="CheckBox">
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="CheckBox">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Border x:Name="CheckBoxBorder" Width="18" Height="18"
+                                                                        Background="#21262D" BorderBrush="#30363D" BorderThickness="1"
+                                                                        CornerRadius="2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                                    <Path x:Name="CheckMark" Visibility="Collapsed"
+                                                                          Data="M 2 6 L 6 10 L 14 2"
+                                                                          Stroke="#22863A" StrokeThickness="2"
+                                                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                </Border>
+                                                                <ContentPresenter VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsChecked" Value="True">
+                                                                    <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                                                    <Setter TargetName="CheckBoxBorder" Property="Background" Value="#0D1117"/>
+                                                                    <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#22863A"/>
+                                                                </Trigger>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#58A6FF"/>
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </CheckBox.Style>
+                                    </CheckBox>
+                                    <TextBlock Text="Cache EPG data, VOD content, and images to improve performance and reduce network usage."
+                                             Foreground="#657A91" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,0">
+                                        <Button Content="Clear All Cache" Width="120" Height="28" Margin="0,0,8,0"
+                                                Click="SettingsClearCache_Click" Background="#DC3545" Foreground="White" Padding="8,4"/>
+                                        <Button Content="Cache Inspector" Width="120" Height="28"
+                                                Click="SettingsCacheInspector_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Actions -->
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock Text="Actions" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Restore Defaults" Width="140" Height="40" Margin="0,0,12,0"
+                                            Click="SettingsRestoreDefaults_Click" Background="#DC3545" Foreground="White" Padding="12,6"/>
+                                    <Button Content="Save Settings" Width="120" Height="40"
+                                            Click="SettingsSave_Click" Background="#28A745" Foreground="White" Padding="12,6"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Logs Page -->
+            <Grid x:Name="LogsPage" Visibility="Collapsed">
+                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Logs" Style="{StaticResource HeaderTextStyle}"/>
+
+                        <!-- Status bar -->
+                        <Border Background="#1A242F" Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <TextBlock x:Name="LogsStatusText" Text="View and manage application logs and diagnostic information"
+                                       Foreground="#8BA1B9" FontSize="12"/>
+                        </Border>
+
                         <!-- Raw Output Log Section -->
                         <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
                             <StackPanel>
@@ -2151,21 +2252,6 @@
                                                    TextWrapping="Wrap"/>
                                     </ScrollViewer>
                                 </Border>
-                            </StackPanel>
-                        </Border>
-
-                        <!-- Actions -->
-                        <Border Style="{StaticResource CardStyle}">
-                            <StackPanel>
-                                <TextBlock Text="Actions" FontSize="18" FontWeight="Bold"
-                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
-
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="Restore Defaults" Width="140" Height="40" Margin="0,0,12,0"
-                                            Click="SettingsRestoreDefaults_Click" Background="#DC3545" Foreground="White" Padding="12,6"/>
-                                    <Button Content="Save Settings" Width="120" Height="40"
-                                            Click="SettingsSave_Click" Background="#28A745" Foreground="White" Padding="12,6"/>
-                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </StackPanel>
