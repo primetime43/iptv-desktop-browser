@@ -2,9 +2,17 @@
 
 A **lightweight Windows desktop IPTV browser** built with **WPF / .NET 9** for fast, clean, and secure access to IPTV channel lists.
 
-v1.0.1
+v1.06
+<img width="1920" height="1032" alt="Screenshot 2025-09-21 235704" src="https://github.com/user-attachments/assets/0c2eaa27-7071-404f-b843-3233ca513ff8" />
+<img width="1920" height="1032" alt="Screenshot 2025-09-21 235726" src="https://github.com/user-attachments/assets/75c7c5d7-7a4f-45f2-82b5-7b0c8d67e472" />
+
+
+## v1.0.1
+<details>
+<summary>Click to expand screenshots</summary>
 <img width="1186" height="593" alt="image" src="https://github.com/user-attachments/assets/fed90a5e-31d8-4fac-b715-fd1b1514fda7" />
 <img width="1920" height="1032" alt="image" src="https://github.com/user-attachments/assets/dd423c91-dd90-4508-af42-6b285e6c2f82" />
+</details>
 
 
 ---
