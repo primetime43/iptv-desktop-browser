@@ -860,6 +860,7 @@ namespace DesktopApp.Views
             Dispatcher.Invoke(() =>
             {
                 LastEpgUpdateText = DateTime.UtcNow.ToLocalTime().ToString("g");
+                // Use batch update for better performance, but preserve onlyIfEmpty logic
                 foreach (var ch in _channels) UpdateChannelEpgFromXmltv(ch, onlyIfEmpty: ch != SelectedChannel);
                 if (SelectedChannel != null) LoadUpcomingFromXmltv(SelectedChannel);
             });
@@ -877,6 +878,38 @@ namespace DesktopApp.Views
             if (onlyIfEmpty && !string.IsNullOrEmpty(ch.NowTitle)) return;
             ch.NowTitle = current.Title; ch.NowDescription = current.Description; ch.NowTimeRange = $"{current.StartUtc.ToLocalTime():h:mm tt} - {current.EndUtc.ToLocalTime():h:mm tt}";
             if (ReferenceEquals(ch, SelectedChannel)) NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
+        }
+
+        private void UpdateChannelsEpgFromXmltvBatch(IEnumerable<Channel> channels)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            if (Session.Mode != SessionMode.M3u || Session.PlaylistChannels == null) return;
+
+            var channelList = channels.ToList();
+            Log($"PERF: UpdateChannelsEpgFromXmltvBatch starting for {channelList.Count} channels\n");
+
+            // Create lookup dictionary for O(1) access instead of O(N) for each channel
+            sw.Restart();
+            var playlistLookup = Session.PlaylistChannels.ToDictionary(p => p.Id, p => p);
+            Log($"PERF: Playlist dictionary creation took {sw.ElapsedMilliseconds}ms for {Session.PlaylistChannels.Count} entries\n");
+
+            sw.Restart();
+            var nowUtc = DateTime.UtcNow;
+            int processedCount = 0;
+
+            foreach (var ch in channelList)
+            {
+                if (!playlistLookup.TryGetValue(ch.Id, out var pl)) continue;
+                var tvgId = pl.TvgId; if (string.IsNullOrWhiteSpace(tvgId)) continue;
+                if (!Session.M3uEpgByChannel.TryGetValue(tvgId, out var entries) || entries.Count == 0) continue;
+                var current = entries.LastOrDefault(e => e.StartUtc <= nowUtc && e.EndUtc > nowUtc);
+                if (current == null) continue;
+                ch.NowTitle = current.Title; ch.NowDescription = current.Description; ch.NowTimeRange = $"{current.StartUtc.ToLocalTime():h:mm tt} - {current.EndUtc.ToLocalTime():h:mm tt}";
+                if (ReferenceEquals(ch, SelectedChannel)) NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})";
+                processedCount++;
+            }
+
+            Log($"PERF: EPG processing took {sw.ElapsedMilliseconds}ms for {processedCount}/{channelList.Count} channels with EPG data\n");
         }
 
         private void LoadUpcomingFromXmltv(Channel ch)
@@ -1034,6 +1067,9 @@ namespace DesktopApp.Views
         }
         private async Task LoadChannelsForCategoryAsync(Category cat)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Log($"PERF: Starting LoadChannelsForCategoryAsync for '{cat?.Name}'\n");
+
             if (cat == null)
             {
                 Log("Cannot load channels: category is null\n");
@@ -1044,16 +1080,19 @@ namespace DesktopApp.Views
                 return; // avoid overriding global results
 
             ShowLoadingOverlay("ChannelsLoadingOverlay");
+            Log($"PERF: ShowLoadingOverlay took {sw.ElapsedMilliseconds}ms\n");
 
             // Handle special Favorites category
             if (cat.Id == "⭐ Favorites")
             {
                 await LoadFavoritesAsCategoryAsync();
+                Log($"PERF: Total LoadChannelsForCategoryAsync (Favorites) took {sw.ElapsedMilliseconds}ms\n");
                 return;
             }
             if (Session.Mode == SessionMode.M3u)
             {
                 SetGuideLoading(true);
+                Log($"PERF: SetGuideLoading(true) took {sw.ElapsedMilliseconds}ms\n");
                 try
                 {
                     if (Session.PlaylistChannels == null)
@@ -1062,30 +1101,51 @@ namespace DesktopApp.Views
                         return;
                     }
 
+                    var sw2 = System.Diagnostics.Stopwatch.StartNew();
                     var list = Session.PlaylistChannels.Where(p => (string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category) == cat.Id)
                         .Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId }).ToList();
+                    Log($"PERF: Channel filtering/selection took {sw2.ElapsedMilliseconds}ms for {list.Count} channels\n");
+
+                    sw2.Restart();
                     _channels.Clear(); foreach (var c in list) _channels.Add(c);
+                    Log($"PERF: Channel collection update took {sw2.ElapsedMilliseconds}ms\n");
+
+                    sw2.Restart();
                     UpdateChannelsFavoriteStatus();
+                    Log($"PERF: UpdateChannelsFavoriteStatus took {sw2.ElapsedMilliseconds}ms\n");
+
                     ChannelsCountText = _channels.Count.ToString() + " channels";
                     _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
-                    foreach (var c in _channels) UpdateChannelEpgFromXmltv(c);
+
+                    sw2.Restart();
+                    UpdateChannelsEpgFromXmltvBatch(_channels);
+                    Log($"PERF: UpdateChannelsEpgFromXmltvBatch took {sw2.ElapsedMilliseconds}ms\n");
                 }
                 finally { SetGuideLoading(false); }
                 ApplySearch();
+                Log($"PERF: Total LoadChannelsForCategoryAsync (M3U) took {sw.ElapsedMilliseconds}ms\n");
                 return;
             }
             SetGuideLoading(true);
+            Log($"PERF: SetGuideLoading(true) took {sw.ElapsedMilliseconds}ms\n");
             try
             {
                 Log($"Loading channels for category: {cat.Name} using ChannelService...\n");
+                var sw2 = System.Diagnostics.Stopwatch.StartNew();
                 var channels = await _channelService.LoadChannelsForCategoryAsync(cat, _cts.Token);
+                Log($"PERF: ChannelService.LoadChannelsForCategoryAsync took {sw2.ElapsedMilliseconds}ms for {channels.Count} channels\n");
 
+                sw2.Restart();
                 _channels.Clear();
                 foreach (var c in channels)
                 {
                     _channels.Add(c);
                 }
+                Log($"PERF: Channel collection update took {sw2.ElapsedMilliseconds}ms\n");
+
+                sw2.Restart();
                 UpdateChannelsFavoriteStatus();
+                Log($"PERF: UpdateChannelsFavoriteStatus took {sw2.ElapsedMilliseconds}ms\n");
 
                 ChannelsCountText = _channels.Count.ToString() + " channels";
                 Log($"Loaded {channels.Count} channels for category: {cat.Name}\n");
@@ -1103,6 +1163,7 @@ namespace DesktopApp.Views
                 HideLoadingOverlay("ChannelsLoadingOverlay");
             }
             ApplySearch();
+            Log($"PERF: Total LoadChannelsForCategoryAsync (Xtream) took {sw.ElapsedMilliseconds}ms\n");
         }
 
         private async Task LoadFavoritesAsCategoryAsync()
@@ -1172,8 +1233,7 @@ namespace DesktopApp.Views
                 // Update EPG for channels if in M3U mode
                 if (Session.Mode == SessionMode.M3u)
                 {
-                    foreach (var c in _channels)
-                        UpdateChannelEpgFromXmltv(c);
+                    UpdateChannelsEpgFromXmltvBatch(_channels);
                 }
             }
             catch (Exception ex)
@@ -3368,11 +3428,25 @@ namespace DesktopApp.Views
 
         private void UpdateChannelsFavoriteStatus()
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            Log($"PERF: UpdateChannelsFavoriteStatus starting for {_channels.Count} channels\n");
+
+            // Optimize: Get all favorites once instead of reading file for each channel
+            sw.Restart();
+            var favoriteChannels = Session.GetFavoriteChannels();
+            Log($"PERF: Session.GetFavoriteChannels took {sw.ElapsedMilliseconds}ms for {favoriteChannels.Count} favorites\n");
+
+            sw.Restart();
+            var favoriteIds = favoriteChannels.Select(f => f.Id).ToHashSet();
+            Log($"PERF: Creating HashSet took {sw.ElapsedMilliseconds}ms\n");
+
             // Update IsFavorite property for all loaded channels
+            sw.Restart();
             foreach (var channel in _channels)
             {
-                channel.IsFavorite = Session.IsFavoriteChannel(channel.Id);
+                channel.IsFavorite = favoriteIds.Contains(channel.Id);
             }
+            Log($"PERF: Updating channel favorite status took {sw.ElapsedMilliseconds}ms\n");
         }
 
         private void OnFavoritesChanged()
