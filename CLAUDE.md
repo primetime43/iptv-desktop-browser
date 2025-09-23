@@ -17,19 +17,26 @@ This is an IPTV Desktop Browser - a Windows WPF application built with .NET 9 th
 
 - **MainWindow.xaml.cs**: Main login window that handles credential management, API endpoint discovery, and M3U playlist loading
 - **DashboardWindow.xaml.cs**: Primary interface showing categories, channels, EPG data, VOD content, and player controls
+- **VodWindow.xaml.cs**: Dedicated Video on Demand interface with category browsing and poster display
 - **Session.cs**: Static session management with connection details, user info, and global settings
-- **Models/**: Data models for channels, categories, EPG entries, VOD content, credentials, and user info
-- **Views/**: Additional windows like credential manager and settings
+- **Models/**: Data models including Channel, Category, VodContent, EpgEntry, CredentialStore, RecordingManager, and user preferences
+- **Services/**: Business logic layer with HttpService, ChannelService, VodService, CacheService, and SessionService
+- **Views/**: Additional windows including CredentialManagerWindow, SettingsWindow, RecordingStatusWindow, and AboutWindow
+- **ViewModels/**: MVVM pattern implementation for UI data binding and state management
+- **Converters/**: WPF value converters for data transformation in UI binding
 
 ### Key Architectural Patterns
 
 - **Session Management**: Static `Session` class stores connection state, user preferences, and runtime data
+- **Service Layer Architecture**: Dependency injection with IChannelService, IVodService, ICacheService, IHttpService, and ISessionService
+- **MVVM Pattern**: ViewModels handle UI logic and data binding, separating concerns from code-behind
 - **Dual Mode Operation**:
   - Xtream mode: API-based with live EPG fetching
   - M3U mode: File/URL-based with optional XMLTV EPG
-- **Credential Storage**: Uses Windows DPAPI for secure local credential encryption
-- **External Player Integration**: Supports VLC, MPC-HC, MPV, and custom players
-- **Recording**: FFmpeg integration for channel recording
+- **Credential Storage**: Uses Windows DPAPI for secure local credential encryption via CredentialStore
+- **Caching Strategy**: Multi-layer caching with CacheService and PersistentCacheService for performance
+- **External Player Integration**: Supports VLC, MPC-HC, MPV, and custom players via template system
+- **Recording System**: FFmpeg integration with RecordingManager and ScheduledRecording support
 
 ### Data Flow
 
@@ -69,6 +76,7 @@ dotnet run --project DesktopApp/DesktopApp.csproj -c Release
 - Requires Visual Studio 2022+ with .NET 9 SDK
 - Windows 10/11 (x64) target platform
 - WPF application framework
+- No test framework configured - this is a desktop application without unit tests
 
 ## Key Technical Details
 
@@ -122,5 +130,13 @@ dotnet run --project DesktopApp/DesktopApp.csproj -c Release
 
 ### UI State Management
 - Most windows implement `INotifyPropertyChanged` for data binding
+- ViewModels use CommunityToolkit.Mvvm for MVVM pattern implementation
 - Collection views with filtering support for search functionality
 - Async loading patterns with cancellation token support
+- Dependency injection configured in App.xaml.cs with Microsoft.Extensions.DependencyInjection
+
+### Favorites System
+- `FavoritesStore` manages per-account/playlist favorite channels
+- Favorites persist between sessions and maintain EPG data
+- Star button UI for adding/removing favorites in channel lists
+- Dedicated "⭐ Favorites" category in category dropdown
