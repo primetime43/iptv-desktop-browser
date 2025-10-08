@@ -204,8 +204,7 @@ public partial class DashboardViewModel : BaseViewModel
     private bool CategoriesFilter(object item)
     {
         if (item is not Category category) return false;
-        return string.IsNullOrEmpty(SearchText) ||
-               category.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
+        return true; // Don't filter categories based on search text
     }
 
     private bool ChannelsFilter(object item)
@@ -273,7 +272,6 @@ public partial class DashboardViewModel : BaseViewModel
 
     partial void OnSearchTextChanged(string value)
     {
-        CategoriesCollectionView.Refresh();
         ChannelsCollectionView.Refresh();
         VodContentCollectionView.Refresh();
         SeriesContentCollectionView.Refresh();

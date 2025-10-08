@@ -611,10 +611,8 @@ namespace DesktopApp.Views
             if (obj is not Category c)
                 return false;
 
-            if (string.IsNullOrWhiteSpace(SearchQuery))
-                return true;
-
-            return c.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase);
+            // Don't filter categories based on search query
+            return true;
         }
 
         private bool ChannelsFilter(object? obj)
@@ -762,8 +760,7 @@ namespace DesktopApp.Views
                 _ = EnsureAllChannelsIndexAndFilterAsync();
                 return; // filtering will happen async
             }
-            // Non-global: just refresh existing collection views
-            CategoriesCollectionView.Refresh();
+            // Non-global: just refresh existing collection views (but not categories)
             ChannelsCollectionView.Refresh();
             VodContentCollectionView.Refresh();
             SeriesContentCollectionView.Refresh();
