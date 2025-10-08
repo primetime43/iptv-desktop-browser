@@ -9,6 +9,9 @@ public sealed class Channel : INotifyPropertyChanged
     private int _id;
     public int Id { get => _id; set { if (value != _id) { _id = value; OnPropertyChanged(); } } }
 
+    private int _number;
+    public int Number { get => _number; set { if (value != _number) { _number = value; OnPropertyChanged(); } } }
+
     private string _name = string.Empty;
     public string Name { get => _name; set { if (value != _name) { _name = value; OnPropertyChanged(); OnPropertyChanged(nameof(TooltipText)); } } }
 

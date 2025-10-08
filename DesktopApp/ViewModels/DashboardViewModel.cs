@@ -114,8 +114,12 @@ public partial class DashboardViewModel : BaseViewModel
         {
             var channels = await _channelService.LoadChannelsForCategoryAsync(category, cancellationToken);
             Channels.Clear();
+
+            // Assign channel numbers based on position
+            int channelNumber = 1;
             foreach (var channel in channels)
             {
+                channel.Number = channelNumber++;
                 Channels.Add(channel);
             }
 
