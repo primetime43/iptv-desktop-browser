@@ -627,6 +627,10 @@ namespace DesktopApp.Views
             if (string.IsNullOrWhiteSpace(SearchQuery))
                 return true;
 
+            // Check if search query is a number - if so, search by channel number
+            if (int.TryParse(SearchQuery.Trim(), out int searchNumber) && ch.Number == searchNumber)
+                return true;
+
             if (ch.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase))
                 return true;
 
@@ -798,11 +802,25 @@ namespace DesktopApp.Views
                 ChannelsCountText = "0 channels";
                 return; // nothing to show until user types
             }
-            // Simple case-insensitive contains; can extend later
-            var matches = _allChannelsIndex.Where(c => c.Name?.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 || (!string.IsNullOrWhiteSpace(c.NowTitle) && c.NowTitle.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0))
-                                           .Take(1000) // safeguard huge lists
-                                           .ToList();
-            foreach (var m in matches) _channels.Add(m);
+            // Search by channel number if query is numeric, otherwise search by name/title
+            IEnumerable<Channel> filtered;
+            if (int.TryParse(query, out int searchNumber))
+            {
+                // Exact channel number match
+                filtered = _allChannelsIndex.Where(c => c.Number == searchNumber);
+            }
+            else
+            {
+                // Text search: name or current program title
+                filtered = _allChannelsIndex.Where(c => c.Name?.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 || (!string.IsNullOrWhiteSpace(c.NowTitle) && c.NowTitle.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0));
+            }
+            var matches = filtered.Take(1000).ToList(); // safeguard huge lists
+            int channelNumber = 1;
+            foreach (var m in matches)
+            {
+                m.Number = channelNumber++;
+                _channels.Add(m);
+            }
             UpdateChannelsFavoriteStatus();
             ChannelsCountText = matches.Count.ToString() + " channels";
             ChannelsCollectionView.Refresh();
@@ -1082,7 +1100,13 @@ namespace DesktopApp.Views
 
                     var list = Session.PlaylistChannels.Where(p => (string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category) == cat.Id)
                         .Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId }).ToList();
-                    _channels.Clear(); foreach (var c in list) _channels.Add(c);
+                    _channels.Clear();
+                    int channelNumber = 1;
+                    foreach (var c in list)
+                    {
+                        c.Number = channelNumber++;
+                        _channels.Add(c);
+                    }
                     UpdateChannelsFavoriteStatus();
                     ChannelsCountText = _channels.Count.ToString() + " channels";
                     _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
@@ -1099,8 +1123,10 @@ namespace DesktopApp.Views
                 var channels = await _channelService.LoadChannelsForCategoryAsync(cat, _cts.Token);
 
                 _channels.Clear();
+                int channelNumber = 1;
                 foreach (var c in channels)
                 {
+                    c.Number = channelNumber++;
                     _channels.Add(c);
                 }
                 UpdateChannelsFavoriteStatus();
@@ -1176,8 +1202,10 @@ namespace DesktopApp.Views
 
                 // Update UI
                 _channels.Clear();
+                int channelNumber = 1;
                 foreach (var c in channels)
                 {
+                    c.Number = channelNumber++;
                     _channels.Add(c);
                 }
 

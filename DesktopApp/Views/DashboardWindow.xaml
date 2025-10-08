@@ -509,6 +509,14 @@
                                                     <RowDefinition Height="Auto"/>
                                                 </Grid.RowDefinitions>
 
+                                                <!-- Channel Number Badge -->
+                                                <Border Grid.Row="0" Background="#347DFF" CornerRadius="0,0,8,0"
+                                                        HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                        Padding="6,2" MinWidth="24">
+                                                    <TextBlock Text="{Binding Number}" FontSize="11" FontWeight="Bold"
+                                                              Foreground="White" TextAlignment="Center"/>
+                                                </Border>
+
                                                 <!-- Channel Logo/Name -->
                                                 <StackPanel Grid.Row="0" VerticalAlignment="Center">
                                                     <Image Source="{Binding LogoImage}" Width="48" Height="48"
@@ -647,6 +655,7 @@
                                                 MouseEnter="ChannelTile_MouseEnter" Cursor="Hand">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="40"/>
                                                     <ColumnDefinition Width="60"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
@@ -654,8 +663,12 @@
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
 
+                                                <!-- Channel Number -->
+                                                <TextBlock Grid.Column="0" Text="{Binding Number}" FontSize="14" FontWeight="Bold"
+                                                          Foreground="#8BA1B9" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+
                                                 <!-- Channel Logo -->
-                                                <Border Grid.Column="0" Width="48" Height="32" Background="#223247" CornerRadius="4">
+                                                <Border Grid.Column="1" Width="48" Height="32" Background="#223247" CornerRadius="4">
                                                     <Grid>
                                                         <Image Source="{Binding LogoImage}" Stretch="Uniform"
                                                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
@@ -665,7 +678,7 @@
                                                 </Border>
 
                                                 <!-- Channel Info -->
-                                                <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
+                                                <StackPanel Grid.Column="2" Margin="12,0,12,0" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"
                                                               Foreground="#FFDDE6F2" TextTrimming="CharacterEllipsis"/>
                                                     <TextBlock Text="{Binding NowTitle}" FontSize="12"
@@ -675,13 +688,13 @@
                                                 </StackPanel>
 
                                                 <!-- Recording Status -->
-                                                <Border Grid.Column="2" Background="#DC3545" CornerRadius="12" Padding="8,2" Margin="0,0,8,0"
+                                                <Border Grid.Column="3" Background="#DC3545" CornerRadius="12" Padding="8,2" Margin="0,0,8,0"
                                                         Visibility="{Binding IsRecording, Converter={StaticResource BoolToVisibilityConverter}}">
                                                     <TextBlock Text="REC" FontSize="10" FontWeight="Bold" Foreground="White"/>
                                                 </Border>
 
                                                 <!-- Favorite Button -->
-                                                <Button Grid.Column="3" Width="32" Height="24" FontSize="12" Margin="0,0,4,0"
+                                                <Button Grid.Column="4" Width="32" Height="24" FontSize="12" Margin="0,0,4,0"
                                                         Click="ChannelFavoriteButton_Click" Opacity="0.7"
                                                         Background="#FFD700" Foreground="Black" BorderThickness="0">
                                                     <TextBlock>
@@ -711,7 +724,7 @@
                                                 </Button>
 
                                                 <!-- Recording Button -->
-                                                <Button Grid.Column="4" Width="32" Height="24" Content="●" FontSize="12"
+                                                <Button Grid.Column="5" Width="32" Height="24" Content="●" FontSize="12"
                                                         Click="ChannelRecordButton_Click" Opacity="0.7"
                                                         Background="#28A745"
                                                         Foreground="White" BorderThickness="0">
@@ -768,8 +781,8 @@
                                                     Background="#0E1620" Foreground="#DDE6F2" Padding="6,4"
                                                     VerticalContentAlignment="Center"
                                                     Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
-                                                    ToolTip="Search categories or channels"/>
-                                            <TextBlock Text="Search channels..." IsHitTestVisible="False"
+                                                    ToolTip="Search by channel number, name, or program title"/>
+                                            <TextBlock Text="Search by number or name..." IsHitTestVisible="False"
                                                       Foreground="#667788" Margin="6,4,0,4"
                                                       VerticalAlignment="Center">
                                                 <TextBlock.Style>
