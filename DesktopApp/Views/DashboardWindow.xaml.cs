@@ -1470,6 +1470,42 @@ namespace DesktopApp.Views
                 UpdateRecordingPageDisplay(); // Update recording page to reflect any changed settings
             }
         }
+        private DispatcherTimer? _toastTimer;
+
+        private void ShowToast(string title, string message, string colorHex)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    ToastTitle.Text = title;
+                    ToastMessage.Text = message;
+                    ToastColorBar.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colorHex));
+
+                    // Show with fade-in animation
+                    ToastContainer.Visibility = Visibility.Visible;
+                    var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200));
+                    ToastContainer.BeginAnimation(OpacityProperty, fadeIn);
+
+                    // Auto-hide after 3 seconds
+                    _toastTimer?.Stop();
+                    _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+                    _toastTimer.Tick += (s, e) =>
+                    {
+                        _toastTimer.Stop();
+                        var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(200));
+                        fadeOut.Completed += (_, __) => ToastContainer.Visibility = Visibility.Collapsed;
+                        ToastContainer.BeginAnimation(OpacityProperty, fadeOut);
+                    };
+                    _toastTimer.Start();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Toast error: {ex.Message}");
+                }
+            });
+        }
+
         private void Log(string text)
         {
             try
@@ -1641,6 +1677,13 @@ namespace DesktopApp.Views
                 channel.IsFavorite = Session.IsFavoriteChannel(channel.Id);
 
                 Log($"{(channel.IsFavorite ? "Added" : "Removed")} '{channel.Name}' {(channel.IsFavorite ? "to" : "from")} favorites\n");
+
+                // Show toast notification
+                ShowToast(
+                    channel.IsFavorite ? "⭐ Added to Favorites" : "Removed from Favorites",
+                    $"{channel.Name}",
+                    channel.IsFavorite ? "#28A745" : "#6C757D"
+                );
             }
         }
 
@@ -2565,8 +2608,27 @@ namespace DesktopApp.Views
 
                 // Update recording page visual feedback
                 UpdateRecordingPageDisplay();
+
+                // Show toast notification
+                ShowToast(
+                    "⏺️ Recording Started",
+                    $"{SelectedChannel.Name}",
+                    "#DC3545"
+                );
             }
-            else { Log("Failed to start FFmpeg.\n"); _recordProcess.Dispose(); _recordProcess = null; }
+            else
+            {
+                Log("Failed to start FFmpeg.\n");
+                _recordProcess.Dispose();
+                _recordProcess = null;
+
+                // Show error toast
+                ShowToast(
+                    "❌ Recording Failed",
+                    "Failed to start FFmpeg",
+                    "#DC3545"
+                );
+            }
         }
         private void StopRecording()
         {
@@ -2582,11 +2644,19 @@ namespace DesktopApp.Views
             if (FindName("RecordBtnIcon") is TextBlock btnIcon) btnIcon.Text = "⏺️";
             if (FindName("RecordButton") is Button btn) btn.Background = new SolidColorBrush(Color.FromRgb(0x28, 0xA7, 0x45)); // Green color
 
+            var channelName = RecordingManager.Instance.ChannelName ?? "Unknown";
             RecordingManager.Instance.Stop();
             Log("Stopping recording...\n");
 
             // Update recording page visual feedback
             UpdateRecordingPageDisplay();
+
+            // Show toast notification
+            ShowToast(
+                "⏹️ Recording Stopped",
+                channelName,
+                "#28A745"
+            );
 
             // Terminate process on background thread so UI never blocks
             _ = Task.Run(() =>
