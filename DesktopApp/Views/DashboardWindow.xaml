@@ -2342,5 +2342,38 @@
                 </ScrollViewer>
             </Grid>
         </Grid>
+
+        <!-- Toast Notification Container -->
+        <Border x:Name="ToastContainer" Grid.Column="1"
+                VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                Margin="0,0,24,24" MaxWidth="400"
+                Background="#21262D" BorderBrush="#30363D" BorderThickness="1"
+                CornerRadius="8" Padding="16,12"
+                Visibility="Collapsed"
+                Panel.ZIndex="1000">
+            <Border.Effect>
+                <DropShadowEffect Color="Black" Direction="270" ShadowDepth="4" Opacity="0.5" BlurRadius="12"/>
+            </Border.Effect>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Icon/Color Bar -->
+                <Border x:Name="ToastColorBar" Grid.Column="0" Width="4" CornerRadius="2"
+                        Background="#28A745" Margin="0,0,12,0"/>
+
+                <!-- Content -->
+                <StackPanel Grid.Column="1">
+                    <TextBlock x:Name="ToastTitle" Text="Notification"
+                               FontWeight="SemiBold" FontSize="14"
+                               Foreground="#DDE6F2" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ToastMessage" Text="Message"
+                               FontSize="12" Margin="0,4,0,0"
+                               Foreground="#9DB2C7" TextWrapping="Wrap"/>
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </Window>
