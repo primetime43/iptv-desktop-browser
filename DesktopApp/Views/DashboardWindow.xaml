@@ -672,8 +672,6 @@
                                                     <Grid>
                                                         <Image Source="{Binding LogoImage}" Stretch="Uniform"
                                                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                        <TextBlock Text="📺" FontSize="16" Foreground="#4B5E71"
-                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Grid>
                                                 </Border>
 
