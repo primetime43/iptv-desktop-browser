@@ -19,6 +19,7 @@ using System.Windows.Threading;
 using System.Windows.Media;
 using System.Windows.Input;
 using DesktopApp.Services;
+using Microsoft.Win32;
 
 namespace DesktopApp.Views
 {
@@ -1658,6 +1659,85 @@ namespace DesktopApp.Views
             }
         }
         private void Logout_Click(object sender, RoutedEventArgs e) { _logoutRequested = true; _cts.Cancel(); Session.Username = Session.Password = string.Empty; if (Owner is MainWindow mw) { Application.Current.MainWindow = mw; mw.Show(); } Close(); }
+
+        private void ExportFavorites_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var favorites = Session.GetFavoriteChannels();
+                if (favorites == null || favorites.Count == 0)
+                {
+                    MessageBox.Show(this, "You have no favorites to export.", "Export Favorites", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                var saveDialog = new SaveFileDialog
+                {
+                    Filter = "JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                    DefaultExt = "json",
+                    FileName = $"favorites_{DateTime.Now:yyyyMMdd_HHmmss}.json",
+                    Title = "Export Favorites"
+                };
+
+                if (saveDialog.ShowDialog() == true)
+                {
+                    if (Session.ExportFavorites(saveDialog.FileName))
+                    {
+                        Log($"Exported {favorites.Count} favorite(s) to {saveDialog.FileName}\n");
+                        MessageBox.Show(this, $"Successfully exported {favorites.Count} favorite(s) to:\n{saveDialog.FileName}", "Export Favorites", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        Log("Failed to export favorites\n");
+                        MessageBox.Show(this, "Failed to export favorites. Please try again.", "Export Favorites", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Error exporting favorites: {ex.Message}\n");
+                MessageBox.Show(this, $"Error exporting favorites:\n{ex.Message}", "Export Favorites", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ImportFavorites_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var openDialog = new OpenFileDialog
+                {
+                    Filter = "JSON Files (*.json)|*.json|All Files (*.*)|*.*",
+                    DefaultExt = "json",
+                    Title = "Import Favorites"
+                };
+
+                if (openDialog.ShowDialog() == true)
+                {
+                    var result = Session.ImportFavorites(openDialog.FileName);
+
+                    if (result > 0)
+                    {
+                        Log($"Imported {result} new favorite(s) from {openDialog.FileName}\n");
+                        MessageBox.Show(this, $"Successfully imported {result} new favorite(s).\n\nNote: Favorites with duplicate IDs were skipped.", "Import Favorites", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else if (result == 0)
+                    {
+                        MessageBox.Show(this, "No new favorites were imported. All favorites from the file already exist or the file was empty.", "Import Favorites", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                    else
+                    {
+                        Log("Failed to import favorites\n");
+                        MessageBox.Show(this, "Failed to import favorites. Please check the file format and try again.", "Import Favorites", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Error importing favorites: {ex.Message}\n");
+                MessageBox.Show(this, $"Error importing favorites:\n{ex.Message}", "Import Favorites", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         // modify existing OnClosed (search and replace previous implementation) - keep rest of file intact
         protected override void OnClosed(EventArgs e)
         {

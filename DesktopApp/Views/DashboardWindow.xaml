@@ -2336,6 +2336,31 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Favorites Management Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="⭐ Favorites Management" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Export and import your favorite channels across different devices or accounts."
+                                             Foreground="#8BA1B9" FontSize="13" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <Button Content="📤 Export Favorites" Width="150" Height="32" Margin="0,0,8,0"
+                                                Click="ExportFavorites_Click" Background="#238636" Foreground="White" Padding="8,4"
+                                                ToolTip="Export your favorites to a JSON file"/>
+                                        <Button Content="📥 Import Favorites" Width="150" Height="32"
+                                                Click="ImportFavorites_Click" Background="#1F6FEB" Foreground="White" Padding="8,4"
+                                                ToolTip="Import favorites from a JSON file"/>
+                                    </StackPanel>
+
+                                    <TextBlock Text="Favorites are stored per account/playlist. Exported files contain channel information and can be shared between sessions."
+                                             Foreground="#657A91" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                         <!-- Actions -->
                         <Border Style="{StaticResource CardStyle}">
                             <StackPanel>

@@ -137,6 +137,30 @@ public static class Session
         return _cachedFavorites;
     }
 
+    public static bool ExportFavorites(string exportPath)
+    {
+        var store = new FavoritesStore();
+        return store.ExportFavorites(GetCurrentSessionKey(), exportPath);
+    }
+
+    public static int ImportFavorites(string importPath)
+    {
+        var store = new FavoritesStore();
+        var result = store.ImportFavorites(GetCurrentSessionKey(), importPath);
+
+        if (result > 0)
+        {
+            // Invalidate cache to force reload
+            _cachedFavorites = null;
+            _lastSessionKey = null;
+
+            // Notify that favorites have changed
+            FavoritesChanged?.Invoke();
+        }
+
+        return result;
+    }
+
     private static string GetCurrentSessionKey()
     {
         if (Mode == SessionMode.M3u)

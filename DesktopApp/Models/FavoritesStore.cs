@@ -128,4 +128,76 @@ public class FavoritesStore
             // Silently ignore save errors
         }
     }
+
+    /// <summary>
+    /// Exports favorites for the current session to a JSON file.
+    /// </summary>
+    /// <param name="sessionKey">The session key identifying the favorites to export</param>
+    /// <param name="exportPath">The file path to export to</param>
+    /// <returns>True if export succeeded, false otherwise</returns>
+    public bool ExportFavorites(string sessionKey, string exportPath)
+    {
+        try
+        {
+            var favorites = GetForCurrentSession(sessionKey);
+            var json = JsonSerializer.Serialize(favorites, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(exportPath, json);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Imports favorites from a JSON file and merges them with the current session's favorites.
+    /// Existing favorites with the same ID will not be overwritten.
+    /// </summary>
+    /// <param name="sessionKey">The session key to import favorites into</param>
+    /// <param name="importPath">The file path to import from</param>
+    /// <returns>Number of new favorites imported, or -1 on error</returns>
+    public int ImportFavorites(string sessionKey, string importPath)
+    {
+        try
+        {
+            if (!File.Exists(importPath))
+                return -1;
+
+            var json = File.ReadAllText(importPath);
+            var importedFavorites = JsonSerializer.Deserialize<List<FavoriteChannel>>(json);
+
+            if (importedFavorites == null || importedFavorites.Count == 0)
+                return 0;
+
+            var allFavorites = GetAll();
+            if (!allFavorites.TryGetValue(sessionKey, out var existingFavorites))
+            {
+                existingFavorites = new List<FavoriteChannel>();
+                allFavorites[sessionKey] = existingFavorites;
+            }
+
+            int importedCount = 0;
+            foreach (var favorite in importedFavorites)
+            {
+                // Only add if not already in favorites (by ID)
+                if (!existingFavorites.Any(f => f.Id == favorite.Id))
+                {
+                    existingFavorites.Add(favorite);
+                    importedCount++;
+                }
+            }
+
+            if (importedCount > 0)
+            {
+                Save(allFavorites);
+            }
+
+            return importedCount;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
 }
