@@ -2223,8 +2223,13 @@
 
             <!-- Settings Page -->
             <Grid x:Name="SettingsPage" Visibility="Collapsed">
-                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <ScrollViewer Grid.Row="0" Margin="16,16,16,0" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,0,0,16">
                         <TextBlock Text="Settings" Style="{StaticResource HeaderTextStyle}"/>
 
                         <!-- Status bar -->
@@ -2344,8 +2349,10 @@
                                     <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
                                         <Button Content="Browse" Width="110" Height="32" Margin="0,0,8,0"
                                                 Click="SettingsBrowseFfmpeg_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
-                                        <Button x:Name="SettingsAutoDetectFfmpegBtn" Content="Auto-detect" Width="110" Height="32"
+                                        <Button x:Name="SettingsAutoDetectFfmpegBtn" Content="Auto-detect" Width="110" Height="32" Margin="0,0,8,0"
                                                 Click="SettingsAutoDetectFfmpeg_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                        <Button x:Name="SettingsDownloadFfmpegBtn" Content="Download FFmpeg" Width="135" Height="32"
+                                                Click="SettingsDownloadFfmpeg_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
                                     </StackPanel>
                                     <TextBlock x:Name="SettingsFfmpegPathStatus" FontSize="11" Margin="2,4,0,0" TextWrapping="Wrap" Foreground="#22863A"/>
                                 </StackPanel>
@@ -2543,22 +2550,20 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Actions -->
-                        <Border Style="{StaticResource CardStyle}">
-                            <StackPanel>
-                                <TextBlock Text="Actions" FontSize="18" FontWeight="Bold"
-                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
-
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="Restore Defaults" Width="140" Height="40" Margin="0,0,12,0"
-                                            Click="SettingsRestoreDefaults_Click" Background="#DC3545" Foreground="White" Padding="12,6"/>
-                                    <Button Content="Save Settings" Width="120" Height="40"
-                                            Click="SettingsSave_Click" Background="#28A745" Foreground="White" Padding="12,6"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
                     </StackPanel>
                 </ScrollViewer>
+
+                <!-- Fixed Bottom Action Bar -->
+                <Border Grid.Row="1" Background="#131C27" BorderBrush="#30363D" BorderThickness="0,1,0,0" Padding="16,12">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Content="Restore Defaults" Width="140" Height="40" Margin="0,0,12,0"
+                                Click="SettingsRestoreDefaults_Click" Background="#DC3545" Foreground="White" Padding="12,6"
+                                FontWeight="SemiBold" Cursor="Hand"/>
+                        <Button Content="Save Settings" Width="120" Height="40"
+                                Click="SettingsSave_Click" Background="#28A745" Foreground="White" Padding="12,6"
+                                FontWeight="SemiBold" Cursor="Hand"/>
+                    </StackPanel>
+                </Border>
             </Grid>
 
             <!-- Logs Page -->

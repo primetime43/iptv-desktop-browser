@@ -1534,15 +1534,6 @@ namespace DesktopApp.Views
         }
 
         // ===================== Misc UI actions =====================
-        private void OpenSettings_Click(object sender, RoutedEventArgs e)
-        {
-            var settings = new SettingsWindow { Owner = this };
-            if (settings.ShowDialog() == true)
-            {
-                _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
-                UpdateRecordingPageDisplay(); // Update recording page to reflect any changed settings
-            }
-        }
         private DispatcherTimer? _toastTimer;
 
         private void ShowToast(string title, string message, string colorHex)
@@ -5496,6 +5487,25 @@ namespace DesktopApp.Views
             else
             {
                 SetSettingsStatusMessage("Could not auto-detect FFmpeg", true);
+            }
+        }
+
+        private void SettingsDownloadFfmpeg_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var ffmpegUrl = "https://ffmpeg.org/download.html";
+                var psi = new ProcessStartInfo
+                {
+                    FileName = ffmpegUrl,
+                    UseShellExecute = true
+                };
+                Process.Start(psi);
+                SetSettingsStatusMessage("Opened FFmpeg download page in browser");
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error opening browser: {ex.Message}", true);
             }
         }
 
