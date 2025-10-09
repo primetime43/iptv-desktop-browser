@@ -1639,11 +1639,45 @@
                                                               SelectionChanged="ChannelCombo_SelectionChanged"/>
 
                                                     <TextBlock Text="2. Pick a show to record:" Foreground="#9DB2C7" Margin="0,0,0,8"/>
+                                                    <Border Background="#1A2332" BorderBrush="#3B4A5C" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,8">
+                                                        <StackPanel>
+                                                            <TextBlock x:Name="ProgramTimeText" Text="Hover over a show to see air time"
+                                                                       Foreground="#9DB2C7" FontSize="11" TextWrapping="Wrap"/>
+                                                        </StackPanel>
+                                                    </Border>
                                                     <ComboBox x:Name="ProgramCombo" Margin="0,0,0,8"
-                                                              DisplayMemberPath="Title" SelectedValuePath="Id"
-                                                              SelectionChanged="ProgramCombo_SelectionChanged"/>
-                                                    <TextBlock x:Name="ProgramTimeText" Text="" Foreground="#6C757D"
-                                                               FontSize="11"/>
+                                                              SelectionChanged="ProgramCombo_SelectionChanged"
+                                                              PreviewMouseMove="ProgramCombo_PreviewMouseMove">
+                                                        <ComboBox.ItemContainerStyle>
+                                                            <Style TargetType="ComboBoxItem">
+                                                                <EventSetter Event="MouseEnter" Handler="ProgramComboItem_MouseEnter"/>
+                                                                <EventSetter Event="MouseMove" Handler="ProgramComboItem_MouseMove"/>
+                                                                <EventSetter Event="MouseLeave" Handler="ProgramComboItem_MouseLeave"/>
+                                                                <Setter Property="ToolTip">
+                                                                    <Setter.Value>
+                                                                        <ToolTip>
+                                                                            <StackPanel>
+                                                                                <TextBlock Text="{Binding Title, Mode=OneWay}" FontWeight="Bold" Margin="0,0,0,4"/>
+                                                                                <TextBlock>
+                                                                                    <Run Text="📅 " FontSize="12"/>
+                                                                                    <Run Text="{Binding StartTimeLocal, Mode=OneWay, StringFormat='ddd, MMM dd yyyy'}" FontWeight="SemiBold"/>
+                                                                                </TextBlock>
+                                                                                <TextBlock>
+                                                                                    <Run Text="🕐 " FontSize="12"/>
+                                                                                    <Run Text="{Binding TimeRangeLocal, Mode=OneWay}" FontWeight="SemiBold"/>
+                                                                                </TextBlock>
+                                                                            </StackPanel>
+                                                                        </ToolTip>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                            </Style>
+                                                        </ComboBox.ItemContainerStyle>
+                                                        <ComboBox.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding Title, Mode=OneWay}"/>
+                                                            </DataTemplate>
+                                                        </ComboBox.ItemTemplate>
+                                                    </ComboBox>
                                                 </StackPanel>
                                             </Border>
 

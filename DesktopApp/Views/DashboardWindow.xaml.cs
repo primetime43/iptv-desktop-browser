@@ -17,6 +17,7 @@ using System.Diagnostics;
 using System.Windows.Data;
 using System.Windows.Threading;
 using System.Windows.Media;
+using System.Windows.Input;
 using DesktopApp.Services;
 
 namespace DesktopApp.Views
@@ -2555,12 +2556,6 @@ namespace DesktopApp.Views
             }
         }
 
-        private void OpenScheduler_Click(object sender, RoutedEventArgs e)
-        {
-            var schedulerWindow = new RecordingSchedulerWindow { Owner = this };
-            schedulerWindow.Show();
-        }
-
         private void OnRecordingStoppedRequested()
         {
             Dispatcher.Invoke(() => { if (_recordProcess != null) StopRecording(); });
@@ -3122,8 +3117,79 @@ namespace DesktopApp.Views
                     titleBox.Text = cleanTitle;
                 }
                 if (FindName("ProgramTimeText") is TextBlock programTimeText)
-                    programTimeText.Text = program.TimeRangeLocal;
+                {
+                    var startLocal = program.StartUtc.ToLocalTime();
+                    var endLocal = program.EndUtc.ToLocalTime();
+                    var duration = endLocal - startLocal;
+                    programTimeText.Text = $"📅 {startLocal:ddd, MMM dd yyyy}  •  🕐 {program.TimeRangeLocal}  •  ⏱ {duration.Hours}h {duration.Minutes}m";
+                }
                 UpdateOutputFilePath();
+            }
+        }
+        private void ProgramCombo_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (sender is ComboBox comboBox && FindName("ProgramTimeText") is TextBlock programTimeText)
+            {
+                var point = e.GetPosition(comboBox);
+                var element = comboBox.InputHitTest(point) as DependencyObject;
+
+                // Walk up the visual tree to find the ComboBoxItem
+                while (element != null && element is not ComboBoxItem)
+                {
+                    element = VisualTreeHelper.GetParent(element);
+                }
+
+                if (element is ComboBoxItem item && item.Content is EpgEntry program)
+                {
+                    var startLocal = program.StartUtc.ToLocalTime();
+                    var endLocal = program.EndUtc.ToLocalTime();
+                    var duration = endLocal - startLocal;
+                    programTimeText.Text = $"📅 {startLocal:ddd, MMM dd yyyy}  •  🕐 {program.TimeRangeLocal}  •  ⏱ {duration.Hours}h {duration.Minutes}m";
+                }
+            }
+        }
+        private void ProgramComboItem_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (sender is ComboBoxItem item && item.Content is EpgEntry program)
+            {
+                if (FindName("ProgramTimeText") is TextBlock programTimeText)
+                {
+                    var startLocal = program.StartUtc.ToLocalTime();
+                    var endLocal = program.EndUtc.ToLocalTime();
+                    var duration = endLocal - startLocal;
+                    programTimeText.Text = $"📅 {startLocal:ddd, MMM dd yyyy}  •  🕐 {program.TimeRangeLocal}  •  ⏱ {duration.Hours}h {duration.Minutes}m";
+                }
+            }
+        }
+        private void ProgramComboItem_MouseEnter(object sender, MouseEventArgs e)
+        {
+            if (sender is ComboBoxItem item && item.Content is EpgEntry program)
+            {
+                if (FindName("ProgramTimeText") is TextBlock programTimeText)
+                {
+                    var startLocal = program.StartUtc.ToLocalTime();
+                    var endLocal = program.EndUtc.ToLocalTime();
+                    var duration = endLocal - startLocal;
+                    programTimeText.Text = $"📅 {startLocal:ddd, MMM dd yyyy}  •  🕐 {program.TimeRangeLocal}  •  ⏱ {duration.Hours}h {duration.Minutes}m";
+                }
+            }
+        }
+        private void ProgramComboItem_MouseLeave(object sender, MouseEventArgs e)
+        {
+            if (FindName("ProgramTimeText") is TextBlock programTimeText)
+            {
+                // Restore to selected item's info or default message
+                if (_schedulerSelectedProgram != null)
+                {
+                    var startLocal = _schedulerSelectedProgram.StartUtc.ToLocalTime();
+                    var endLocal = _schedulerSelectedProgram.EndUtc.ToLocalTime();
+                    var duration = endLocal - startLocal;
+                    programTimeText.Text = $"📅 {startLocal:ddd, MMM dd yyyy}  •  🕐 {_schedulerSelectedProgram.TimeRangeLocal}  •  ⏱ {duration.Hours}h {duration.Minutes}m";
+                }
+                else
+                {
+                    programTimeText.Text = "Hover over a show to see air time";
+                }
             }
         }
         private void CustomChannelCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
