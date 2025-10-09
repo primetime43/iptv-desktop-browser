@@ -176,11 +176,12 @@
                         <RowDefinition/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
-                            <RadioButton x:Name="ModeXtreamRadio" Content="Xtream" GroupName="LoginMode" IsChecked="True" Foreground="#DDE6F2" Checked="ModeRadio_Checked" Margin="0 0 16 0"/>
-                            <RadioButton x:Name="ModeM3uRadio" Content="M3U" GroupName="LoginMode" Foreground="#DDE6F2" Checked="ModeRadio_Checked"/>
-                        </StackPanel>
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
+                                <RadioButton x:Name="ModeXtreamRadio" Content="Xtream" GroupName="LoginMode" IsChecked="True" Foreground="#DDE6F2" Checked="ModeRadio_Checked" Margin="0 0 16 0"/>
+                                <RadioButton x:Name="ModeM3uRadio" Content="M3U" GroupName="LoginMode" Foreground="#DDE6F2" Checked="ModeRadio_Checked"/>
+                            </StackPanel>
                         <!-- Xtream panel -->
                         <StackPanel x:Name="XtreamPanel">
                             <TextBlock Text="Portal / Server" Foreground="#8BA1B9" FontSize="12" Margin="2 0 0 0"/>
@@ -230,7 +231,7 @@
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
                                 <DockPanel LastChildFill="True">
                                     <StackPanel Orientation="Horizontal" Margin="0 0 0 6">
@@ -238,10 +239,11 @@
                                         <Button Content="Clear" Width="70" Height="26" Click="ClearDiagnostics_Click"/>
                                     </StackPanel>
                                 </DockPanel>
-                                <TextBox Grid.Row="1" x:Name="DiagnosticsText" Margin="0" FontFamily="Consolas,Menlo,Monaco" FontSize="12" TextWrapping="NoWrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" IsReadOnly="True" Background="#0E1620" Foreground="#C8D3E0"/>
+                                <TextBox Grid.Row="1" x:Name="DiagnosticsText" Margin="0" MaxHeight="200" FontFamily="Consolas,Menlo,Monaco" FontSize="12" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" IsReadOnly="True" Background="#0E1620" Foreground="#C8D3E0"/>
                             </Grid>
                         </Expander>
-                    </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
                     <Border Grid.Row="1" Margin="0 28 0 0" Background="#182230" CornerRadius="12" Padding="22 18">
                         <StackPanel>
                             <TextBlock x:Name="HelpHeader" Text="What is Xtream Codes?" Foreground="#A4B6C7" FontWeight="SemiBold"/>
