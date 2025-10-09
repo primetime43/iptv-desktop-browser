@@ -17,6 +17,7 @@ public class RecordingScheduler : INotifyPropertyChanged
     public event Action<ScheduledRecording>? RecordingStarted;
     public event Action<ScheduledRecording>? RecordingStopped;
     public event Action<ScheduledRecording>? RecordingFailed;
+    public event Action<SeriesRecording>? EpgRefreshNeeded;
 
     private static RecordingScheduler? _instance;
     public static RecordingScheduler Instance => _instance ??= new RecordingScheduler();
@@ -28,6 +29,7 @@ public class RecordingScheduler : INotifyPropertyChanged
     public ObservableCollection<SeriesRecording> SeriesRecordings => _seriesRecordings;
 
     private readonly Timer _schedulerTimer;
+    private readonly Timer _epgRefreshTimer;
     private readonly string _scheduleFilePath;
     private readonly string _seriesFilePath;
     private readonly object _lockObject = new();
@@ -44,6 +46,11 @@ public class RecordingScheduler : INotifyPropertyChanged
 
         // Check for scheduled recordings every 30 seconds for better accuracy
         _schedulerTimer = new Timer(CheckScheduledRecordings, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
+
+        // Refresh EPG for series recordings every 6 hours
+        // Start after 5 minutes to avoid startup load, then repeat every 6 hours
+        _epgRefreshTimer = new Timer(RefreshSeriesEpg, null, TimeSpan.FromMinutes(5), TimeSpan.FromHours(6));
+        Log("EPG auto-refresh initialized: will check for new episodes every 6 hours");
     }
 
     protected virtual void OnPropertyChanged(string propertyName)
@@ -922,6 +929,39 @@ public class RecordingScheduler : INotifyPropertyChanged
         }
     }
 
+    /// <summary>
+    /// Triggers EPG refresh for all active series recordings.
+    /// This method is called periodically by the timer to find new episodes.
+    /// </summary>
+    private void RefreshSeriesEpg(object? state)
+    {
+        try
+        {
+            lock (_lockObject)
+            {
+                var activeSeries = _seriesRecordings.Where(s => s.IsActive).ToList();
+
+                if (!activeSeries.Any())
+                {
+                    Log("EPG refresh: No active series recordings");
+                    return;
+                }
+
+                Log($"EPG refresh: Checking {activeSeries.Count} active series recording(s) for new episodes");
+
+                foreach (var series in activeSeries)
+                {
+                    // Fire event to request EPG data from DashboardWindow
+                    EpgRefreshNeeded?.Invoke(series);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Error during EPG refresh: {ex.Message}");
+        }
+    }
+
     private static void Log(string message)
     {
         // Log to both debug output and UI
@@ -954,5 +994,6 @@ public class RecordingScheduler : INotifyPropertyChanged
     public void Dispose()
     {
         _schedulerTimer?.Dispose();
+        _epgRefreshTimer?.Dispose();
     }
 }

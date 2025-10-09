@@ -569,6 +569,9 @@ namespace DesktopApp.Views
             // Subscribe to favorites changes
             Session.FavoritesChanged += OnFavoritesChanged;
 
+            // Subscribe to EPG refresh for series recordings
+            _scheduler.EpgRefreshNeeded += OnEpgRefreshNeeded;
+
             CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
             ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
             VodContentCollectionView = CollectionViewSource.GetDefaultView(_vodContent);
@@ -4354,6 +4357,40 @@ namespace DesktopApp.Views
                     MessageBox.Show($"Error loading schedule: {ex.Message}", "Error",
                         MessageBoxButton.OK, MessageBoxImage.Error);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Event handler called when the RecordingScheduler timer fires to refresh EPG data.
+        /// This ensures series recordings continue to find new episodes automatically.
+        /// </summary>
+        private async void OnEpgRefreshNeeded(SeriesRecording series)
+        {
+            try
+            {
+                Log($"[Auto-refresh] Loading EPG for '{series.SeriesName}' on {series.ChannelName}...\n");
+
+                var channel = new Channel
+                {
+                    Id = series.ChannelId,
+                    Name = series.ChannelName
+                };
+
+                var epgData = await LoadEpgEntriesForChannel(channel);
+
+                if (epgData.Any())
+                {
+                    _scheduler.CheckForNewEpisodes(series.ChannelId, epgData);
+                    Log($"[Auto-refresh] Checked for new episodes of '{series.SeriesName}'\n");
+                }
+                else
+                {
+                    Log($"[Auto-refresh] No EPG data available for {series.ChannelName}\n");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"[Auto-refresh] Error for '{series.SeriesName}': {ex.Message}\n");
             }
         }
 
