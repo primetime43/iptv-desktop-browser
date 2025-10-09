@@ -2072,6 +2072,94 @@
                                     </StackPanel>
                                 </ScrollViewer>
                             </TabItem>
+
+                            <!-- Series Recordings Tab -->
+                            <TabItem Style="{StaticResource SchedulerTabItemStyle}">
+                                <TabItem.Header>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="●" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#FFC107"/>
+                                        <TextBlock Text="Series Recordings" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </TabItem.Header>
+                                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16">
+                                    <StackPanel>
+                                        <!-- Info Section -->
+                                        <Border Background="#161B22" CornerRadius="6" Padding="16" Margin="0,0,0,16"
+                                                BorderBrush="#30363D" BorderThickness="1">
+                                            <StackPanel>
+                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                    <TextBlock Text="►" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#FFC107"/>
+                                                    <TextBlock Text="Automatic Series Recording" FontSize="16" FontWeight="SemiBold"
+                                                               Foreground="#DDE6F2" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Set up rules to automatically record new episodes of your favorite shows. The system will monitor EPG data and schedule recordings when matching programs are detected."
+                                                           Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Add New Series Recording Button -->
+                                        <Border Background="#223247" CornerRadius="6" Padding="16" Margin="0,0,0,16"
+                                                BorderBrush="#30363D" BorderThickness="1">
+                                            <Button Background="#28A745" Foreground="White"
+                                                    BorderThickness="0" Padding="16,10"
+                                                    Click="AddSeriesRecording_Click" HorizontalAlignment="Left">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="+" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White" FontWeight="Bold"/>
+                                                    <TextBlock Text="Add Series Recording" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </Border>
+
+                                        <!-- Series Recordings List -->
+                                        <Border Style="{StaticResource CardStyle}">
+                                            <DataGrid x:Name="SeriesGrid" AutoGenerateColumns="False"
+                                                      Background="Transparent" Foreground="#DDE6F2"
+                                                      GridLinesVisibility="Horizontal" HeadersVisibility="Column"
+                                                      RowBackground="Transparent" AlternatingRowBackground="#182433"
+                                                      BorderThickness="0" CanUserAddRows="False">
+                                                <DataGrid.ColumnHeaderStyle>
+                                                    <Style TargetType="DataGridColumnHeader">
+                                                        <Setter Property="Background" Value="#223247"/>
+                                                        <Setter Property="Foreground" Value="#DDE6F2"/>
+                                                        <Setter Property="BorderBrush" Value="#30363D"/>
+                                                        <Setter Property="Padding" Value="12,8"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </Style>
+                                                </DataGrid.ColumnHeaderStyle>
+
+                                                <DataGrid.Columns>
+                                                    <DataGridTextColumn Header="Series Name" Binding="{Binding SeriesName}" Width="*"/>
+                                                    <DataGridTextColumn Header="Channel" Binding="{Binding ChannelName}" Width="140"/>
+                                                    <DataGridTextColumn Header="Next Recording" Binding="{Binding NextRecordingDisplay, Mode=OneWay}" Width="150" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="Frequency" Binding="{Binding RecurrencePattern, Mode=OneWay}" Width="120" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="Match Mode" Binding="{Binding MatchMode}" Width="100"/>
+                                                    <DataGridCheckBoxColumn Header="New Only" Binding="{Binding OnlyNewEpisodes}" Width="80" IsReadOnly="True"/>
+                                                    <DataGridTextColumn Header="Status" Binding="{Binding StatusText, Mode=OneWay}" Width="80" IsReadOnly="True"/>
+                                                    <DataGridTemplateColumn Header="Actions" Width="240">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <Button Content="Schedule" Background="#0D6EFD"
+                                                                            BorderThickness="0" Padding="8,4" Margin="0,0,4,0"
+                                                                            FontSize="9"
+                                                                            Click="ViewSeriesSchedule_Click"/>
+                                                                    <Button Content="Edit" Background="#6C757D"
+                                                                            BorderThickness="0" Padding="8,4" Margin="0,0,4,0"
+                                                                            FontSize="9"
+                                                                            Click="EditSeriesRecording_Click"/>
+                                                                    <Button Content="Delete" Background="#DC3545"
+                                                                            BorderThickness="0" Padding="8,4" FontSize="9"
+                                                                            Click="DeleteSeriesRecording_Click"/>
+                                                                </StackPanel>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
+                                                </DataGrid.Columns>
+                                            </DataGrid>
+                                        </Border>
+                                    </StackPanel>
+                                </ScrollViewer>
+                            </TabItem>
                         </TabControl>
                     </StackPanel>
                 </ScrollViewer>
