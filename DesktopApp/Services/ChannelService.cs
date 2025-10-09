@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using DesktopApp.Configuration;
 using DesktopApp.Models;
 using Microsoft.Extensions.Logging;
 
@@ -11,18 +12,33 @@ public class ChannelService : IChannelService
     private readonly IHttpService _httpService;
     private readonly ICacheService _cacheService;
     private readonly ILogger<ChannelService> _logger;
+    private readonly ApiSettings _apiSettings;
+    private readonly CacheSettings _cacheSettings;
+    private readonly BatchProcessingSettings _batchSettings;
+    private readonly M3uSettings _m3uSettings;
+    private readonly EpgSettings _epgSettings;
     private Action<string>? _rawOutputLogger;
 
     public ChannelService(
         ISessionService sessionService,
         IHttpService httpService,
         ICacheService cacheService,
-        ILogger<ChannelService> logger)
+        ILogger<ChannelService> logger,
+        ApiSettings apiSettings,
+        CacheSettings cacheSettings,
+        BatchProcessingSettings batchSettings,
+        M3uSettings m3uSettings,
+        EpgSettings epgSettings)
     {
         _sessionService = sessionService;
         _httpService = httpService;
         _cacheService = cacheService;
         _logger = logger;
+        _apiSettings = apiSettings;
+        _cacheSettings = cacheSettings;
+        _batchSettings = batchSettings;
+        _m3uSettings = m3uSettings;
+        _epgSettings = epgSettings;
     }
 
     public void SetRawOutputLogger(Action<string>? logger)
@@ -44,7 +60,7 @@ public class ChannelService : IChannelService
             // Check cache first (only if caching is enabled)
             if (_sessionService.CachingEnabled)
             {
-                var cacheKey = $"live_categories_{_sessionService.Host}_{_sessionService.Username}";
+                var cacheKey = $"{_cacheSettings.KeyPrefixes.LiveCategories}_{_sessionService.Host}_{_sessionService.Username}";
                 _logger.LogInformation("🔍 Checking cache with key: {CacheKey}", cacheKey);
                 var cachedCategories = await _cacheService.GetDataAsync<List<Category>>(cacheKey, cancellationToken);
                 if (cachedCategories != null)
@@ -59,7 +75,7 @@ public class ChannelService : IChannelService
                 _rawOutputLogger?.Invoke(cacheMissMsg + "\n");
             }
 
-            var url = _sessionService.BuildApi("get_live_categories");
+            var url = _sessionService.BuildApi(_apiSettings.Actions.GetLiveCategories);
             var response = await _httpService.GetStringAsync(url, cancellationToken);
 
             var categories = new List<Category>();
@@ -89,8 +105,8 @@ public class ChannelService : IChannelService
             // Cache the results (only if caching is enabled)
             if (_sessionService.CachingEnabled)
             {
-                var cacheKey = $"live_categories_{_sessionService.Host}_{_sessionService.Username}";
-                await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(2), cancellationToken);
+                var cacheKey = $"{_cacheSettings.KeyPrefixes.LiveCategories}_{_sessionService.Host}_{_sessionService.Username}";
+                await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(_cacheSettings.Durations.CategoriesHours), cancellationToken);
             }
 
             _logger.LogInformation("✅ API SUCCESS: Loaded {Count} categories from API and cached for future use", categories.Count);
@@ -117,7 +133,7 @@ public class ChannelService : IChannelService
             // Check cache first (only if caching is enabled)
             if (_sessionService.CachingEnabled)
             {
-                var cacheKey = $"channels_{_sessionService.Host}_{_sessionService.Username}_{category.Id}";
+                var cacheKey = $"{_cacheSettings.KeyPrefixes.Channels}_{_sessionService.Host}_{_sessionService.Username}_{category.Id}";
                 _logger.LogInformation("🔍 Checking channels cache with key: {CacheKey}", cacheKey);
                 var cachedChannels = await _cacheService.GetDataAsync<List<Channel>>(cacheKey, cancellationToken);
                 if (cachedChannels != null)
@@ -132,7 +148,7 @@ public class ChannelService : IChannelService
                 _rawOutputLogger?.Invoke(cacheMissMsg + "\n");
             }
 
-            var url = _sessionService.BuildApi("get_live_streams", ("category_id", category.Id));
+            var url = _sessionService.BuildApi(_apiSettings.Actions.GetLiveStreams, ("category_id", category.Id));
             var response = await _httpService.GetStringAsync(url, cancellationToken);
 
             var channels = new List<Channel>();
@@ -163,8 +179,8 @@ public class ChannelService : IChannelService
             // Cache the results (only if caching is enabled)
             if (_sessionService.CachingEnabled)
             {
-                var cacheKey = $"channels_{_sessionService.Host}_{_sessionService.Username}_{category.Id}";
-                await _cacheService.SetDataAsync(cacheKey, channels, TimeSpan.FromMinutes(30), cancellationToken);
+                var cacheKey = $"{_cacheSettings.KeyPrefixes.Channels}_{_sessionService.Host}_{_sessionService.Username}_{category.Id}";
+                await _cacheService.SetDataAsync(cacheKey, channels, TimeSpan.FromMinutes(_cacheSettings.Durations.ChannelsMinutes), cancellationToken);
             }
 
             _logger.LogInformation("✅ API SUCCESS: Loaded {Count} channels from API for category {CategoryName} and cached for future use", channels.Count, category.Name);
@@ -195,7 +211,7 @@ public class ChannelService : IChannelService
             // Check cache first (only if caching is enabled)
             if (_sessionService.CachingEnabled)
             {
-                var cacheKey = $"epg_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
+                var cacheKey = $"{_cacheSettings.KeyPrefixes.Epg}_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
                 var cachedEpg = await _cacheService.GetDataAsync<EpgData>(cacheKey, cancellationToken);
                 if (cachedEpg != null && cachedEpg.IsStillValid())
                 {
@@ -214,7 +230,7 @@ public class ChannelService : IChannelService
                 _rawOutputLogger?.Invoke(epgCacheMissMsg + "\n");
             }
 
-            var url = _sessionService.BuildApi("get_simple_data_table", ("stream_id", channel.Id.ToString()));
+            var url = _sessionService.BuildApi(_apiSettings.Actions.GetSimpleDataTable, ("stream_id", channel.Id.ToString()));
             var response = await _httpService.GetStringAsync(url, cancellationToken);
 
             // Parse EPG data and update channel properties
@@ -301,28 +317,28 @@ public class ChannelService : IChannelService
                         // Convert UTC time to local time for expiration calculation
                         var latestShowEndLocal = epgData.LatestShowEndUtc.Value.ToLocalTime();
 
-                        // Expire 5 minutes before the last show ends (to fetch next batch)
-                        var smartExpirationTimeLocal = latestShowEndLocal.AddMinutes(-5);
+                        // Expire N minutes before the last show ends (to fetch next batch)
+                        var smartExpirationTimeLocal = latestShowEndLocal.AddMinutes(-_epgSettings.SmartCacheExpirationMinutesBeforeShowEnd);
                         var timeUntilExpiration = smartExpirationTimeLocal - DateTime.Now;
 
-                        // Ensure minimum validity of 30 minutes and maximum of 24 hours
-                        if (timeUntilExpiration < TimeSpan.FromMinutes(30))
-                            cacheExpiration = TimeSpan.FromMinutes(30);
-                        else if (timeUntilExpiration > TimeSpan.FromHours(24))
-                            cacheExpiration = TimeSpan.FromHours(24);
+                        // Ensure minimum and maximum validity times from config
+                        if (timeUntilExpiration < TimeSpan.FromMinutes(_epgSettings.MinCacheValidityMinutes))
+                            cacheExpiration = TimeSpan.FromMinutes(_epgSettings.MinCacheValidityMinutes);
+                        else if (timeUntilExpiration > TimeSpan.FromHours(_epgSettings.MaxCacheValidityHours))
+                            cacheExpiration = TimeSpan.FromHours(_epgSettings.MaxCacheValidityHours);
                         else
                             cacheExpiration = timeUntilExpiration;
                     }
                     else
                     {
-                        // Fallback: 30-minute expiration if no show end time available
-                        cacheExpiration = TimeSpan.FromMinutes(30);
+                        // Fallback: minimum expiration from config if no show end time available
+                        cacheExpiration = TimeSpan.FromMinutes(_epgSettings.MinCacheValidityMinutes);
                     }
 
                     // Cache the results (only if caching is enabled)
                     if (_sessionService.CachingEnabled)
                     {
-                        var cacheKey = $"epg_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
+                        var cacheKey = $"{_cacheSettings.KeyPrefixes.Epg}_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
                         await _cacheService.SetDataAsync(cacheKey, epgData, cacheExpiration, cancellationToken);
 
                         var expirationInfo = epgData.LatestShowEndUtc.HasValue
@@ -357,8 +373,7 @@ public class ChannelService : IChannelService
         _logger.LogInformation("Loading EPG for {Count} channels", channelList.Count);
 
         // Process in batches to avoid overwhelming the API
-        const int batchSize = 10;
-        var batches = channelList.Chunk(batchSize);
+        var batches = channelList.Chunk(_batchSettings.EpgBatchSize);
 
         foreach (var batch in batches)
         {
@@ -368,7 +383,7 @@ public class ChannelService : IChannelService
             await Task.WhenAll(tasks);
 
             // Small delay between batches
-            await Task.Delay(100, cancellationToken);
+            await Task.Delay(_batchSettings.DelayBetweenBatchesMilliseconds, cancellationToken);
         }
     }
 
@@ -393,7 +408,7 @@ public class ChannelService : IChannelService
 
         if (!categories.Any())
         {
-            categories.Add(new Category { Id = "all", Name = "All Channels" });
+            categories.Add(new Category { Id = _m3uSettings.DefaultCategories.AllId, Name = _m3uSettings.DefaultCategories.AllName });
         }
 
         return categories;
@@ -402,7 +417,7 @@ public class ChannelService : IChannelService
     private List<Channel> LoadM3uChannelsForCategory(Category category)
     {
         var channels = new List<Channel>();
-        var playlistChannels = category.Id == "all"
+        var playlistChannels = category.Id == _m3uSettings.DefaultCategories.AllId
             ? _sessionService.PlaylistChannels
             : _sessionService.PlaylistChannels.Where(c => c.Category == category.Id);
 

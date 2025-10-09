@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Collections.Generic;
+using DesktopApp.Configuration;
 using DesktopApp.Models;
 using System.IO;
 
@@ -8,6 +9,24 @@ namespace DesktopApp.Models;
 
 public static class Session
 {
+    // Configuration settings - initialized by App.xaml.cs
+    private static ApiSettings? _apiConfig;
+    private static PlayerSettings? _playerConfig;
+    private static RecordingSettings? _recordingConfig;
+    private static EpgSettings? _epgConfig;
+    private static M3uSettings? _m3uConfig;
+    private static NetworkSettings? _networkConfig;
+
+    public static void InitializeConfiguration(ApiSettings apiConfig, PlayerSettings playerConfig, RecordingSettings recordingConfig, EpgSettings epgConfig, M3uSettings m3uConfig, NetworkSettings networkConfig)
+    {
+        _apiConfig = apiConfig ?? throw new ArgumentNullException(nameof(apiConfig));
+        _playerConfig = playerConfig ?? throw new ArgumentNullException(nameof(playerConfig));
+        _recordingConfig = recordingConfig ?? throw new ArgumentNullException(nameof(recordingConfig));
+        _epgConfig = epgConfig ?? throw new ArgumentNullException(nameof(epgConfig));
+        _m3uConfig = m3uConfig ?? throw new ArgumentNullException(nameof(m3uConfig));
+        _networkConfig = networkConfig ?? throw new ArgumentNullException(nameof(networkConfig));
+    }
+
     public static SessionMode Mode { get; set; } = SessionMode.Xtream; // default existing behavior
 
     public static string Host { get; set; } = string.Empty;
@@ -69,7 +88,14 @@ public static class Session
 
     // EPG refresh tracking (only meaningful for Xtream mode currently)
     public static DateTime? LastEpgUpdateUtc { get; set; }
-    public static TimeSpan EpgRefreshInterval { get; set; } = TimeSpan.FromMinutes(30);
+    private static TimeSpan? _epgRefreshIntervalOverride = null;
+    public static TimeSpan EpgRefreshInterval
+    {
+        get => _epgRefreshIntervalOverride ?? (_epgConfig != null
+            ? TimeSpan.FromMinutes(_epgConfig.RefreshIntervalMinutes)
+            : TimeSpan.FromMinutes(30));
+        set => _epgRefreshIntervalOverride = value;
+    }
     public static event Action? EpgRefreshRequested;
     public static void RaiseEpgRefreshRequested()
     {
@@ -78,7 +104,16 @@ public static class Session
         try { EpgRefreshRequested?.Invoke(); } catch { }
     }
 
-    public static string BaseUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}";
+    public static string BaseUrl
+    {
+        get
+        {
+            var scheme = UseSsl
+                ? (_networkConfig?.Schemes.Https ?? "https")
+                : (_networkConfig?.Schemes.Http ?? "http");
+            return $"{scheme}://{Host}:{Port}";
+        }
+    }
 
     // Favorites methods
     public static bool IsFavoriteChannel(int channelId)
@@ -165,7 +200,8 @@ public static class Session
     {
         if (Mode == SessionMode.M3u)
         {
-            return $"m3u_{Environment.UserName}";
+            var prefix = _m3uConfig?.SessionKeyPrefix ?? "m3u_";
+            return $"{prefix}{Environment.UserName}";
         }
         else
         {
@@ -175,19 +211,32 @@ public static class Session
 
     public static string BuildApi(string? action = null)
     {
-        var core = $"{BaseUrl}/player_api.php?username={Uri.EscapeDataString(Username)}&password={Uri.EscapeDataString(Password)}";
+        var playerApiEndpoint = _apiConfig?.Endpoints.PlayerApi ?? "player_api.php";
+        var core = $"{BaseUrl}/{playerApiEndpoint}?username={Uri.EscapeDataString(Username)}&password={Uri.EscapeDataString(Password)}";
         if (!string.IsNullOrWhiteSpace(action)) core += "&action=" + action;
         return core;
     }
 
-    public static string BuildStreamUrl(int streamId, string extension = "ts")
-        => $"{BaseUrl}/live/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{extension}";
+    public static string BuildStreamUrl(int streamId, string? extension = null)
+    {
+        var ext = extension ?? _apiConfig?.DefaultExtensions.LiveStream ?? "ts";
+        var livePath = _apiConfig?.StreamPaths.Live ?? "live";
+        return $"{BaseUrl}/{livePath}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{ext}";
+    }
 
-    public static string BuildVodStreamUrl(int streamId, string extension = "mp4")
-        => $"{BaseUrl}/movie/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{extension}";
+    public static string BuildVodStreamUrl(int streamId, string? extension = null)
+    {
+        var ext = extension ?? _apiConfig?.DefaultExtensions.VodStream ?? "mp4";
+        var moviePath = _apiConfig?.StreamPaths.Movie ?? "movie";
+        return $"{BaseUrl}/{moviePath}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{ext}";
+    }
 
-    public static string BuildSeriesStreamUrl(int streamId, string extension = "mp4")
-        => $"{BaseUrl}/series/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{extension}";
+    public static string BuildSeriesStreamUrl(int streamId, string? extension = null)
+    {
+        var ext = extension ?? _apiConfig?.DefaultExtensions.SeriesStream ?? "mp4";
+        var seriesPath = _apiConfig?.StreamPaths.Series ?? "series";
+        return $"{BaseUrl}/{seriesPath}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{ext}";
+    }
 
     public static ProcessStartInfo BuildPlayerProcess(string streamUrl, string title)
     {
@@ -197,20 +246,36 @@ public static class Session
         switch (player)
         {
             case PlayerKind.VLC:
-                exe = string.IsNullOrWhiteSpace(PlayerExePath) ? (string.IsNullOrWhiteSpace(VlcPath) ? "vlc" : VlcPath!) : PlayerExePath!;
-                argsTemplate = string.IsNullOrWhiteSpace(PlayerArgsTemplate) ? "\"{url}\" --meta-title=\"{title}\"" : PlayerArgsTemplate;
+                exe = string.IsNullOrWhiteSpace(PlayerExePath)
+                    ? (string.IsNullOrWhiteSpace(VlcPath)
+                        ? (_playerConfig?.VLC.DefaultExecutable ?? "vlc")
+                        : VlcPath!)
+                    : PlayerExePath!;
+                argsTemplate = string.IsNullOrWhiteSpace(PlayerArgsTemplate)
+                    ? (_playerConfig?.VLC.DefaultArguments ?? "\"{url}\" --meta-title=\"{title}\"")
+                    : PlayerArgsTemplate;
                 break;
             case PlayerKind.MPCHC:
-                exe = string.IsNullOrWhiteSpace(PlayerExePath) ? "mpc-hc64.exe" : PlayerExePath!;
-                argsTemplate = string.IsNullOrWhiteSpace(PlayerArgsTemplate) ? "\"{url}\" /play" : PlayerArgsTemplate;
+                exe = string.IsNullOrWhiteSpace(PlayerExePath)
+                    ? (_playerConfig?.MPCHC.DefaultExecutable ?? "mpc-hc64.exe")
+                    : PlayerExePath!;
+                argsTemplate = string.IsNullOrWhiteSpace(PlayerArgsTemplate)
+                    ? (_playerConfig?.MPCHC.DefaultArguments ?? "\"{url}\" /play")
+                    : PlayerArgsTemplate;
                 break;
             case PlayerKind.MPV:
-                exe = string.IsNullOrWhiteSpace(PlayerExePath) ? "mpv" : PlayerExePath!;
-                argsTemplate = string.IsNullOrWhiteSpace(PlayerArgsTemplate) ? "--force-media-title=\"{title}\" \"{url}\"" : PlayerArgsTemplate;
+                exe = string.IsNullOrWhiteSpace(PlayerExePath)
+                    ? (_playerConfig?.MPV.DefaultExecutable ?? "mpv")
+                    : PlayerExePath!;
+                argsTemplate = string.IsNullOrWhiteSpace(PlayerArgsTemplate)
+                    ? (_playerConfig?.MPV.DefaultArguments ?? "--force-media-title=\"{title}\" \"{url}\"")
+                    : PlayerArgsTemplate;
                 break;
             case PlayerKind.Custom:
             default:
-                exe = string.IsNullOrWhiteSpace(PlayerExePath) ? "" : PlayerExePath!;
+                exe = string.IsNullOrWhiteSpace(PlayerExePath)
+                    ? (_playerConfig?.Custom.DefaultExecutable ?? "")
+                    : PlayerExePath!;
                 argsTemplate = PlayerArgsTemplate;
                 break;
         }
@@ -232,7 +297,9 @@ public static class Session
     {
         if (string.IsNullOrWhiteSpace(FfmpegPath) || !File.Exists(FfmpegPath)) return null;
         var safeTitle = (title ?? string.Empty).Replace("\"", "'");
-        var argsTemplate = string.IsNullOrWhiteSpace(FfmpegArgsTemplate) ? "-i \"{url}\" -c copy -f mpegts \"{output}\"" : FfmpegArgsTemplate;
+        var argsTemplate = string.IsNullOrWhiteSpace(FfmpegArgsTemplate)
+            ? (_recordingConfig?.FFmpeg.DefaultArguments ?? "-i \"{url}\" -c copy -f mpegts \"{output}\"")
+            : FfmpegArgsTemplate;
         var args = argsTemplate.Replace("{url}", streamUrl).Replace("{title}", safeTitle).Replace("{output}", outputPath);
         return new ProcessStartInfo
         {
