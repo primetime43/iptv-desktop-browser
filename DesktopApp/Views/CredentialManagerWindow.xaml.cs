@@ -61,6 +61,7 @@ namespace DesktopApp.Views
                     PortBox.Text = full.Port.ToString();
                     UserBox.Text = full.Username;
                     PassBox.Password = full.Password;
+                    PassTextBox.Text = full.Password; // sync to text box
                     SslBox.IsChecked = full.UseSsl;
                     StatusText.Text = "Loaded";
                 }
@@ -77,6 +78,46 @@ namespace DesktopApp.Views
                     StatusText.Text = "Applied";
                 }
             }
+        }
+
+        private bool _isPasswordVisible = false;
+        private bool _isUpdatingPassword = false;
+
+        private void TogglePassButton_Click(object sender, RoutedEventArgs e)
+        {
+            _isPasswordVisible = !_isPasswordVisible;
+            if (_isPasswordVisible)
+            {
+                // Show password as plain text
+                PassTextBox.Text = PassBox.Password;
+                PassTextBox.Visibility = Visibility.Visible;
+                PassBox.Visibility = Visibility.Collapsed;
+                TogglePassIcon.Text = "🙈"; // closed eye
+            }
+            else
+            {
+                // Hide password
+                PassBox.Password = PassTextBox.Text;
+                PassBox.Visibility = Visibility.Visible;
+                PassTextBox.Visibility = Visibility.Collapsed;
+                TogglePassIcon.Text = "👁"; // open eye
+            }
+        }
+
+        private void PassBox_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            if (_isUpdatingPassword) return;
+            _isUpdatingPassword = true;
+            PassTextBox.Text = PassBox.Password;
+            _isUpdatingPassword = false;
+        }
+
+        private void PassTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (_isUpdatingPassword) return;
+            _isUpdatingPassword = true;
+            PassBox.Password = PassTextBox.Text;
+            _isUpdatingPassword = false;
         }
     }
 }
