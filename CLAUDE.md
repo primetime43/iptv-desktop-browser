@@ -21,7 +21,7 @@ This is an IPTV Desktop Browser - a Windows WPF application built with .NET 9 th
 - **Session.cs**: Static session management with connection details, user info, and global settings
 - **Models/**: Data models including Channel, Category, VodContent, EpgEntry, CredentialStore, RecordingManager, and user preferences
 - **Services/**: Business logic layer with HttpService, ChannelService, VodService, CacheService, and SessionService
-- **Views/**: Additional windows including CredentialManagerWindow, SettingsWindow, RecordingStatusWindow, and AboutWindow
+- **Views/**: Additional windows including CredentialManagerWindow, RecordingStatusWindow, and AboutWindow. Settings are integrated within DashboardWindow as SettingsPage.
 - **ViewModels/**: MVVM pattern implementation for UI data binding and state management
 - **Converters/**: WPF value converters for data transformation in UI binding
 
