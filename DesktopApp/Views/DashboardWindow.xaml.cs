@@ -1147,7 +1147,11 @@ namespace DesktopApp.Views
                     _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
                     UpdateChannelsEpgFromXmltvBatch(_channels);
                 }
-                finally { SetGuideLoading(false); }
+                finally
+                {
+                    SetGuideLoading(false);
+                    HideLoadingOverlay("ChannelsLoadingOverlay");
+                }
                 ApplySearch();
                 return;
             }
