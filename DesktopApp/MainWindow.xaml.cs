@@ -160,6 +160,14 @@ namespace DesktopApp
             SetStatus($"Loaded {profile.Username}@{profile.Server}", BrushInfo);
         }
 
+        public void ApplyM3uProfile(M3uProfile profile)
+        {
+            M3uUrlTextBox.Text = profile.PlaylistUrl;
+            XmltvUrlTextBox.Text = profile.XmltvUrl ?? string.Empty;
+            RememberM3uCheckBox.IsChecked = true;
+            SetStatus($"Loaded playlist: {profile.Display}", BrushInfo);
+        }
+
         private void OpenCredentialManager_Click(object sender, RoutedEventArgs e)
         {
             var mgr = new CredentialManagerWindow { Owner = this };
@@ -168,6 +176,7 @@ namespace DesktopApp
 
         private void TryLoadStoredCredentials()
         {
+            // Try loading Xtream credentials first
             if (CredentialStore.TryLoad(out var server, out var port, out var useSsl, out var user, out var pass))
             {
                 ServerTextBox.Text = server;
@@ -178,6 +187,19 @@ namespace DesktopApp
                 PasswordTextBoxInput.Text = pass; // sync to text box
                 RememberCheckBox.IsChecked = true;
                 SetStatus("Loaded saved credentials.", BrushInfo);
+            }
+
+            // Also try loading M3U playlist
+            if (CredentialStore.TryLoadM3u(out var playlistUrl, out var xmltvUrl))
+            {
+                M3uUrlTextBox.Text = playlistUrl;
+                XmltvUrlTextBox.Text = xmltvUrl ?? string.Empty;
+                RememberM3uCheckBox.IsChecked = true;
+                // Don't override status if Xtream credentials were already loaded
+                if (string.IsNullOrEmpty(StatusText.Text))
+                {
+                    SetStatus("Loaded saved playlist.", BrushInfo);
+                }
             }
         }
 
@@ -413,6 +435,13 @@ namespace DesktopApp
                 {
                     _ = Task.Run(async () => await LoadXmltvAsync(xmlPath));
                 }
+
+                // Save M3U playlist if remember is checked
+                if (RememberM3uCheckBox.IsChecked == true)
+                {
+                    CredentialStore.SaveOrUpdateM3u(playlistPath, string.IsNullOrWhiteSpace(xmlPath) ? null : xmlPath);
+                }
+
                 var dash = App.GetRequiredService<DashboardWindow>();
                 dash.Owner = this;
                 dash.Show();
