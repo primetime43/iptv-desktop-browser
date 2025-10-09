@@ -25,7 +25,6 @@ namespace DesktopApp.Views
     public partial class DashboardWindow : Window, INotifyPropertyChanged
     {
         private RecordingStatusWindow? _recordingWindow;
-        private VodWindow? _vodWindow; // new separate VOD window
         // NOTE: Duplicate recording fields and OnClosed removed. This is the consolidated file.
         // Collections / state
         private readonly HttpClient _http = new();
@@ -50,6 +49,34 @@ namespace DesktopApp.Views
                 if (value != _hasVodAccess)
                 {
                     _hasVodAccess = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private bool _isLoadingVodContent = false;
+        public bool IsLoadingVodContent
+        {
+            get => _isLoadingVodContent;
+            set
+            {
+                if (value != _isLoadingVodContent)
+                {
+                    _isLoadingVodContent = value;
+                    OnPropertyChanged();
+                }
+            }
+        }
+
+        private bool _isLoadingSeriesContent = false;
+        public bool IsLoadingSeriesContent
+        {
+            get => _isLoadingSeriesContent;
+            set
+            {
+                if (value != _isLoadingSeriesContent)
+                {
+                    _isLoadingSeriesContent = value;
                     OnPropertyChanged();
                 }
             }
@@ -1635,7 +1662,6 @@ namespace DesktopApp.Views
         protected override void OnClosed(EventArgs e)
         {
             try { StopRecording(); } catch { }
-            try { if (_vodWindow != null) { _vodWindow.Close(); _vodWindow = null; } } catch { }
             CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; Session.FavoritesChanged -= OnFavoritesChanged; RecordingManager.Instance.PropertyChanged -= OnRecordingManagerChanged; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
         }
 
@@ -1938,6 +1964,12 @@ namespace DesktopApp.Views
         {
             if (Session.Mode != SessionMode.Xtream || string.IsNullOrEmpty(categoryId)) return;
 
+            // Set loading state
+            IsLoadingVodContent = true;
+
+            // Show toast notification
+            ShowToast("📽️ Loading Movies", "Fetching movie list...", "#347DFF");
+
             // Show appropriate loading overlay based on current view
             if (FindName("MoviesViewBtn") is Button moviesBtn && moviesBtn.Background.ToString().Contains("223247"))
             {
@@ -2026,11 +2058,19 @@ namespace DesktopApp.Views
                 VodContentCollectionView.Refresh();
                 var filteredVodCount = _vodContent.Count(v => VodContentFilter(v));
                 VodCountText = $"{filteredVodCount} movies";
+
+                // Show success toast
+                ShowToast("✅ Movies Loaded", $"Loaded {filteredVodCount} movie{(filteredVodCount != 1 ? "s" : "")}", "#28A745");
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { Log("ERROR loading VOD content: " + ex.Message + "\n"); }
+            catch (Exception ex)
+            {
+                Log("ERROR loading VOD content: " + ex.Message + "\n");
+                ShowToast("❌ Loading Failed", "Failed to load movies", "#DC3545");
+            }
             finally
             {
+                IsLoadingVodContent = false;
                 HideLoadingOverlay("MoviesLoadingOverlay");
                 HideLoadingOverlay("SeriesLoadingOverlay");
             }
@@ -2149,6 +2189,12 @@ namespace DesktopApp.Views
 
         private async Task LoadSeriesContentAsync(string categoryId)
         {
+            // Set loading state
+            IsLoadingSeriesContent = true;
+
+            // Show toast notification
+            ShowToast("📺 Loading TV Shows", "Fetching series list...", "#347DFF");
+
             try
             {
                 var url = Session.BuildApi("get_series") + "&category_id=" + Uri.EscapeDataString(categoryId);
@@ -2195,9 +2241,20 @@ namespace DesktopApp.Views
                 {
                     _ = LoadSeriesPosterAsync(series);
                 }
+
+                // Show success toast
+                ShowToast("✅ TV Shows Loaded", $"Loaded {filteredSeriesCount} series", "#28A745");
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { Log("ERROR loading series content: " + ex.Message + "\n"); }
+            catch (Exception ex)
+            {
+                Log("ERROR loading series content: " + ex.Message + "\n");
+                ShowToast("❌ Loading Failed", "Failed to load TV shows", "#DC3545");
+            }
+            finally
+            {
+                IsLoadingSeriesContent = false;
+            }
         }
 
 
@@ -2477,21 +2534,26 @@ namespace DesktopApp.Views
 
         private void TryLaunchSeriesInPlayer(SeriesContent series)
         {
-            // For series, we typically want to show episodes rather than launch directly
-            // This could open a series episodes window or launch first episode
+            // Series episodes are now shown inline in the VodPage
+            // This method will load the series details and switch to the series view
             try
             {
-                Log($"Opening series: {series.Name}\n");
+                Log($"Loading series: {series.Name}\n");
 
-                // For now, this could open a separate series episodes window
-                // or we could implement inline episode browsing
-                var seriesWindow = new VodWindow(series) { Owner = this };
-                seriesWindow.Show();
+                // Switch to VOD page and series view
+                ShowPage("Vod");
+                SetSelectedNavButton(FindName("VodNavBtn") as Button);
+
+                // Switch to series view if not already there
+                ShowSeriesView_Click(null!, null!);
+
+                // Select the series - this will trigger episode loading
+                SelectedSeriesContent = series;
             }
             catch (Exception ex)
             {
-                Log("Failed to open series: " + ex.Message + "\n");
-                MessageBox.Show(this, "Unable to open series details.",
+                Log("Failed to load series: " + ex.Message + "\n");
+                MessageBox.Show(this, "Unable to load series details.",
                     "Series Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
