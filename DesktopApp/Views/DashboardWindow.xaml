@@ -635,12 +635,12 @@
 
                                                 <!-- Favorite Button (appears on hover) -->
                                                 <Button x:Name="FavoriteButton" Grid.Row="0"
-                                                        Background="#FFD700" Width="32" Height="32"
+                                                        Width="32" Height="32"
                                                         HorizontalAlignment="Left" VerticalAlignment="Top"
                                                         Margin="8,8,0,0" BorderThickness="0"
                                                         Click="ChannelFavoriteButton_Click"
                                                         Opacity="0" Cursor="Hand">
-                                                    <TextBlock FontSize="14" Foreground="Black">
+                                                    <TextBlock FontSize="14" Foreground="White">
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
                                                                 <Setter Property="Text" Value="☆"/>
@@ -648,12 +648,16 @@
                                                                     <DataTrigger Binding="{Binding IsFavorite}" Value="True">
                                                                         <Setter Property="Text" Value="⭐"/>
                                                                     </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsFavorite}" Value="False">
+                                                                        <Setter Property="Foreground" Value="Black"/>
+                                                                    </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
                                                         </TextBlock.Style>
                                                     </TextBlock>
                                                     <Button.Style>
                                                         <Style TargetType="Button">
+                                                            <Setter Property="Background" Value="#FFD700"/>
                                                             <Setter Property="Template">
                                                                 <Setter.Value>
                                                                     <ControlTemplate TargetType="Button">
@@ -668,6 +672,7 @@
                                                             </Setter>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsFavorite}" Value="True">
+                                                                    <Setter Property="Background" Value="#8B5CF6"/>
                                                                     <Setter Property="ToolTip" Value="Remove from Favorites"/>
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsFavorite}" Value="False">
@@ -788,7 +793,7 @@
                                                 <!-- Favorite Button -->
                                                 <Button Grid.Column="4" Width="32" Height="24" FontSize="12" Margin="0,0,4,0"
                                                         Click="ChannelFavoriteButton_Click" Opacity="0.7"
-                                                        Background="#FFD700" Foreground="Black" BorderThickness="0">
+                                                        Foreground="White" BorderThickness="0">
                                                     <TextBlock>
                                                         <TextBlock.Style>
                                                             <Style TargetType="TextBlock">
@@ -797,14 +802,19 @@
                                                                     <DataTrigger Binding="{Binding IsFavorite}" Value="True">
                                                                         <Setter Property="Text" Value="⭐"/>
                                                                     </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsFavorite}" Value="False">
+                                                                        <Setter Property="Foreground" Value="Black"/>
+                                                                    </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>
                                                         </TextBlock.Style>
                                                     </TextBlock>
                                                     <Button.Style>
                                                         <Style TargetType="Button">
+                                                            <Setter Property="Background" Value="#FFD700"/>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsFavorite}" Value="True">
+                                                                    <Setter Property="Background" Value="#8B5CF6"/>
                                                                     <Setter Property="ToolTip" Value="Remove from Favorites"/>
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding IsFavorite}" Value="False">
