@@ -155,6 +155,7 @@ namespace DesktopApp
             SslCheckBox.IsChecked = profile.UseSsl;
             UsernameTextBox.Text = profile.Username;
             PasswordBoxInput.Password = profile.Password; // password is filled from TryGet
+            PasswordTextBoxInput.Text = profile.Password; // sync to text box
             RememberCheckBox.IsChecked = true;
             SetStatus($"Loaded {profile.Username}@{profile.Server}", BrushInfo);
         }
@@ -174,6 +175,7 @@ namespace DesktopApp
                 SslCheckBox.IsChecked = useSsl;
                 UsernameTextBox.Text = user;
                 PasswordBoxInput.Password = pass;
+                PasswordTextBoxInput.Text = pass; // sync to text box
                 RememberCheckBox.IsChecked = true;
                 SetStatus("Loaded saved credentials.", BrushInfo);
             }
@@ -612,5 +614,45 @@ namespace DesktopApp
         }
         private void ClearDiagnostics_Click(object sender, RoutedEventArgs e) { DiagnosticsText.Clear(); }
         private void ClearDiagnosticsIfHidden() { if (DiagnosticsExpander.Visibility != Visibility.Visible) DiagnosticsText.Clear(); }
+
+        private bool _isPasswordVisible = false;
+        private bool _isUpdatingPassword = false;
+
+        private void TogglePasswordButton_Click(object sender, RoutedEventArgs e)
+        {
+            _isPasswordVisible = !_isPasswordVisible;
+            if (_isPasswordVisible)
+            {
+                // Show password as plain text
+                PasswordTextBoxInput.Text = PasswordBoxInput.Password;
+                PasswordTextBoxInput.Visibility = Visibility.Visible;
+                PasswordBoxInput.Visibility = Visibility.Collapsed;
+                TogglePasswordIcon.Text = "🙈"; // closed eye
+            }
+            else
+            {
+                // Hide password
+                PasswordBoxInput.Password = PasswordTextBoxInput.Text;
+                PasswordBoxInput.Visibility = Visibility.Visible;
+                PasswordTextBoxInput.Visibility = Visibility.Collapsed;
+                TogglePasswordIcon.Text = "👁"; // open eye
+            }
+        }
+
+        private void PasswordBoxInput_PasswordChanged(object sender, RoutedEventArgs e)
+        {
+            if (_isUpdatingPassword) return;
+            _isUpdatingPassword = true;
+            PasswordTextBoxInput.Text = PasswordBoxInput.Password;
+            _isUpdatingPassword = false;
+        }
+
+        private void PasswordTextBoxInput_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (_isUpdatingPassword) return;
+            _isUpdatingPassword = true;
+            PasswordBoxInput.Password = PasswordTextBoxInput.Text;
+            _isUpdatingPassword = false;
+        }
     }
 }
