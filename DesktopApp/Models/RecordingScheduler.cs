@@ -465,7 +465,15 @@ public class RecordingScheduler : INotifyPropertyChanged
     {
         try
         {
-            var json = JsonSerializer.Serialize(_scheduledRecordings, new JsonSerializerOptions
+            // Load all scheduled recordings from file (for all accounts)
+            var allScheduled = LoadAllScheduledRecordings();
+
+            // Update the current session's scheduled recordings
+            var currentSessionKey = GetCurrentSessionKey();
+            allScheduled[currentSessionKey] = _scheduledRecordings.ToList();
+
+            // Save all accounts back to file
+            var json = JsonSerializer.Serialize(allScheduled, new JsonSerializerOptions
             {
                 WriteIndented = true
             });
@@ -477,34 +485,87 @@ public class RecordingScheduler : INotifyPropertyChanged
         }
     }
 
-    private void LoadScheduledRecordings()
+    private Dictionary<string, List<ScheduledRecording>> LoadAllScheduledRecordings()
     {
         try
         {
             if (File.Exists(_scheduleFilePath))
             {
                 var json = File.ReadAllText(_scheduleFilePath);
-                var recordings = JsonSerializer.Deserialize<List<ScheduledRecording>>(json);
+                if (string.IsNullOrWhiteSpace(json))
+                    return new Dictionary<string, List<ScheduledRecording>>();
 
-                if (recordings != null)
+                // Check if JSON starts with '[' (array/old format) or '{' (object/new format)
+                var trimmed = json.TrimStart();
+                if (trimmed.StartsWith("{"))
                 {
-                    _scheduledRecordings.Clear();
-                    foreach (var recording in recordings)
+                    // New per-account format
+                    var perAccount = JsonSerializer.Deserialize<Dictionary<string, List<ScheduledRecording>>>(json);
+                    if (perAccount != null)
+                        return perAccount;
+                }
+                else if (trimmed.StartsWith("["))
+                {
+                    // Old format - migrate
+                    var oldFormat = JsonSerializer.Deserialize<List<ScheduledRecording>>(json);
+                    if (oldFormat != null && oldFormat.Any())
                     {
-                        // Skip recordings that are already completed or too old
-                        if (recording.Status == RecordingScheduleStatus.Completed ||
-                            recording.Status == RecordingScheduleStatus.Failed ||
-                            recording.Status == RecordingScheduleStatus.Cancelled ||
-                            recording.EndTime < DateTime.UtcNow.AddDays(-7))
-                        {
-                            continue;
-                        }
+                        var currentSessionKey = GetCurrentSessionKey();
+                        Log($"Migrating {oldFormat.Count} scheduled recordings from old format to new per-account format");
 
-                        _scheduledRecordings.Add(recording);
+                        // Save in new format immediately
+                        var migrated = new Dictionary<string, List<ScheduledRecording>>
+                        {
+                            [currentSessionKey] = oldFormat
+                        };
+
+                        // Save migrated data back to file
+                        var newJson = JsonSerializer.Serialize(migrated, new JsonSerializerOptions { WriteIndented = true });
+                        File.WriteAllText(_scheduleFilePath, newJson);
+
+                        return migrated;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Error loading all scheduled recordings: {ex.Message}");
+        }
+
+        return new Dictionary<string, List<ScheduledRecording>>();
+    }
+
+    private void LoadScheduledRecordings()
+    {
+        try
+        {
+            var allScheduled = LoadAllScheduledRecordings();
+            var currentSessionKey = GetCurrentSessionKey();
+
+            _scheduledRecordings.Clear();
+
+            if (allScheduled.TryGetValue(currentSessionKey, out var sessionRecordings))
+            {
+                foreach (var recording in sessionRecordings)
+                {
+                    // Skip recordings that are already completed or too old
+                    if (recording.Status == RecordingScheduleStatus.Completed ||
+                        recording.Status == RecordingScheduleStatus.Failed ||
+                        recording.Status == RecordingScheduleStatus.Cancelled ||
+                        recording.EndTime < DateTime.UtcNow.AddDays(-7))
+                    {
+                        continue;
                     }
 
-                    Log($"Loaded {_scheduledRecordings.Count} scheduled recordings");
+                    _scheduledRecordings.Add(recording);
                 }
+
+                Log($"Loaded {_scheduledRecordings.Count} scheduled recordings for current session");
+            }
+            else
+            {
+                Log($"No scheduled recordings found for current session");
             }
         }
         catch (Exception ex)
@@ -883,11 +944,49 @@ public class RecordingScheduler : INotifyPropertyChanged
         return false;
     }
 
+    /// <summary>
+    /// Gets a unique session key for the current account/profile.
+    /// This ensures series recordings are isolated per account.
+    /// </summary>
+    private static string GetCurrentSessionKey()
+    {
+        if (Session.Mode == SessionMode.M3u)
+        {
+            return $"m3u_{Environment.UserName}";
+        }
+        else
+        {
+            return $"{Environment.UserName}_{Session.Host}_{Session.Port}_{Session.Username}";
+        }
+    }
+
+    /// <summary>
+    /// Reloads both series recordings and scheduled recordings for the current session.
+    /// Call this when switching accounts/profiles to ensure correct data is displayed.
+    /// </summary>
+    public void ReloadForCurrentSession()
+    {
+        lock (_lockObject)
+        {
+            LoadScheduledRecordings();
+            LoadSeriesRecordings();
+            Log($"Reloaded recordings for current session");
+        }
+    }
+
     private void SaveSeriesRecordings()
     {
         try
         {
-            var json = JsonSerializer.Serialize(_seriesRecordings, new JsonSerializerOptions
+            // Load all series recordings from file (for all accounts)
+            var allSeries = LoadAllSeriesRecordings();
+
+            // Update the current session's series recordings
+            var currentSessionKey = GetCurrentSessionKey();
+            allSeries[currentSessionKey] = _seriesRecordings.ToList();
+
+            // Save all accounts back to file
+            var json = JsonSerializer.Serialize(allSeries, new JsonSerializerOptions
             {
                 WriteIndented = true
             });
@@ -899,28 +998,81 @@ public class RecordingScheduler : INotifyPropertyChanged
         }
     }
 
-    private void LoadSeriesRecordings()
+    private Dictionary<string, List<SeriesRecording>> LoadAllSeriesRecordings()
     {
         try
         {
             if (File.Exists(_seriesFilePath))
             {
                 var json = File.ReadAllText(_seriesFilePath);
-                var seriesRecordings = JsonSerializer.Deserialize<List<SeriesRecording>>(json);
+                if (string.IsNullOrWhiteSpace(json))
+                    return new Dictionary<string, List<SeriesRecording>>();
 
-                if (seriesRecordings != null)
+                // Check if JSON starts with '[' (array/old format) or '{' (object/new format)
+                var trimmed = json.TrimStart();
+                if (trimmed.StartsWith("{"))
                 {
-                    _seriesRecordings.Clear();
-                    foreach (var series in seriesRecordings)
-                    {
-                        _seriesRecordings.Add(series);
-                    }
-
-                    Log($"Loaded {_seriesRecordings.Count} series recordings");
-
-                    // Update next recording info for all loaded series
-                    UpdateAllSeriesRecordingInfo();
+                    // New per-account format
+                    var perAccount = JsonSerializer.Deserialize<Dictionary<string, List<SeriesRecording>>>(json);
+                    if (perAccount != null)
+                        return perAccount;
                 }
+                else if (trimmed.StartsWith("["))
+                {
+                    // Old format - migrate
+                    var oldFormat = JsonSerializer.Deserialize<List<SeriesRecording>>(json);
+                    if (oldFormat != null && oldFormat.Any())
+                    {
+                        var currentSessionKey = GetCurrentSessionKey();
+                        Log($"Migrating {oldFormat.Count} series recordings from old format to new per-account format");
+
+                        // Save in new format immediately
+                        var migrated = new Dictionary<string, List<SeriesRecording>>
+                        {
+                            [currentSessionKey] = oldFormat
+                        };
+
+                        // Save migrated data back to file
+                        var newJson = JsonSerializer.Serialize(migrated, new JsonSerializerOptions { WriteIndented = true });
+                        File.WriteAllText(_seriesFilePath, newJson);
+
+                        return migrated;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Error loading all series recordings: {ex.Message}");
+        }
+
+        return new Dictionary<string, List<SeriesRecording>>();
+    }
+
+    private void LoadSeriesRecordings()
+    {
+        try
+        {
+            var allSeries = LoadAllSeriesRecordings();
+            var currentSessionKey = GetCurrentSessionKey();
+
+            _seriesRecordings.Clear();
+
+            if (allSeries.TryGetValue(currentSessionKey, out var sessionSeries))
+            {
+                foreach (var series in sessionSeries)
+                {
+                    _seriesRecordings.Add(series);
+                }
+
+                Log($"Loaded {_seriesRecordings.Count} series recordings for current session");
+
+                // Update next recording info for all loaded series
+                UpdateAllSeriesRecordingInfo();
+            }
+            else
+            {
+                Log($"No series recordings found for current session");
             }
         }
         catch (Exception ex)

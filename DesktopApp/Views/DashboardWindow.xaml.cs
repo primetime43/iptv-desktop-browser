@@ -602,6 +602,9 @@ namespace DesktopApp.Views
             {
                 Session.EpgRefreshRequested += OnEpgRefreshRequested;
 
+                // Reload series recordings for the current account/session
+                _scheduler.ReloadForCurrentSession();
+
                 if (Session.Mode == SessionMode.Xtream)
                 {
                     _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
