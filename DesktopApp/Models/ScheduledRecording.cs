@@ -103,6 +103,10 @@ public class ScheduledRecording : INotifyPropertyChanged
     public bool IsEpgBased { get; set; }
     public string? EpgProgramId { get; set; }
 
+    // Series recording properties
+    public bool IsSeriesRecording { get; set; }
+    public Guid? SeriesRecordingId { get; set; }
+
     // Pre-buffer and post-buffer (in minutes)
     public int PreBufferMinutes { get; set; } = 2;
     public int PostBufferMinutes { get; set; } = 5;
