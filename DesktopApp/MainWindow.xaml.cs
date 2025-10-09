@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Net;
 using System.Text;
 using System.Windows.Media;
+using DesktopApp.Configuration;
 using DesktopApp.Models;
 using DesktopApp.Views;
 using System.IO;
@@ -24,21 +25,38 @@ namespace DesktopApp
     public partial class MainWindow : Window
     {
         private readonly HttpClient _http = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false });
-        private static readonly SolidColorBrush BrushInfo = new(Color.FromRgb(0x6C, 0x82, 0x98));
-        private static readonly SolidColorBrush BrushSuccess = new(Color.FromRgb(0x4C, 0xD1, 0x64));
-        private static readonly SolidColorBrush BrushError = new(Color.FromRgb(0xE5, 0x60, 0x60));
-        private const string RepoOwner = "primetime43";
-        private const string RepoName = "iptv-desktop-browser";
-        private const string GitHubLatestApi = "https://api.github.com/repos/" + RepoOwner + "/" + RepoName + "/releases/latest";
+        private readonly GitHubSettings _githubSettings;
+        private readonly HttpSettings _httpSettings;
+        private readonly NetworkSettings _networkSettings;
+        private readonly UISettings _uiSettings;
+        private readonly ApiSettings _apiSettings;
+        private readonly SolidColorBrush _brushInfo;
+        private readonly SolidColorBrush _brushSuccess;
+        private readonly SolidColorBrush _brushError;
         private string? _latestTag;
         private string? _latestHtmlUrl;
 
-        public MainWindow()
+        public MainWindow(GitHubSettings githubSettings, HttpSettings httpSettings, NetworkSettings networkSettings, UISettings uiSettings, ApiSettings apiSettings)
         {
+            _githubSettings = githubSettings;
+            _httpSettings = httpSettings;
+            _networkSettings = networkSettings;
+            _uiSettings = uiSettings;
+            _apiSettings = apiSettings;
+
+            // Initialize color brushes from configuration
+            _brushInfo = new SolidColorBrush(Color.FromRgb(_uiSettings.Colors.Info.R, _uiSettings.Colors.Info.G, _uiSettings.Colors.Info.B));
+            _brushSuccess = new SolidColorBrush(Color.FromRgb(_uiSettings.Colors.Success.R, _uiSettings.Colors.Success.G, _uiSettings.Colors.Success.B));
+            _brushError = new SolidColorBrush(Color.FromRgb(_uiSettings.Colors.Error.R, _uiSettings.Colors.Error.G, _uiSettings.Colors.Error.B));
+
             InitializeComponent();
             TryLoadStoredCredentials();
             VersionText.Text = $"Version: {GetCurrentVersion()}";
-            _ = CheckForUpdatesAsync();
+
+            if (_githubSettings.CheckForUpdates)
+            {
+                _ = CheckForUpdatesAsync();
+            }
         }
 
         private string GetCurrentVersion()
@@ -59,8 +77,8 @@ namespace DesktopApp
         {
             try
             {
-                using var req = new HttpRequestMessage(HttpMethod.Get, GitHubLatestApi);
-                req.Headers.UserAgent.ParseAdd("iptv-desktop-browser-app");
+                using var req = new HttpRequestMessage(HttpMethod.Get, _githubSettings.ApiUrl);
+                req.Headers.UserAgent.ParseAdd(_httpSettings.UserAgent);
                 using var resp = await _http.SendAsync(req);
                 if (!resp.IsSuccessStatusCode) return;
                 var json = await resp.Content.ReadAsStringAsync();
@@ -131,17 +149,17 @@ namespace DesktopApp
             {
                 XtreamPanel.Visibility = Visibility.Visible;
                 M3uPanel.Visibility = Visibility.Collapsed;
-                ModeHeaderText.Text = "Xtream Login";
-                HelpHeader.Text = "What is Xtream Codes?";
-                HelpText.Text = "Enter the portal URL (or IP), your account username & password provided by your IPTV provider. SSL will prefix https:// and default port 443 if selected.";
+                ModeHeaderText.Text = _uiSettings.Text.XtreamMode.Header;
+                HelpHeader.Text = _uiSettings.Text.XtreamMode.HelpHeader;
+                HelpText.Text = _uiSettings.Text.XtreamMode.HelpText;
             }
             else
             {
                 XtreamPanel.Visibility = Visibility.Collapsed;
                 M3uPanel.Visibility = Visibility.Visible;
-                ModeHeaderText.Text = "M3U Playlist";
-                HelpHeader.Text = "What is M3U?";
-                HelpText.Text = "Provide a remote URL or local file path to an .m3u / .m3u8 playlist. Optionally supply XMLTV URL for EPG.";
+                ModeHeaderText.Text = _uiSettings.Text.M3uMode.Header;
+                HelpHeader.Text = _uiSettings.Text.M3uMode.HelpHeader;
+                HelpText.Text = _uiSettings.Text.M3uMode.HelpText;
             }
             StatusText.Text = string.Empty;
             DiagnosticsText.Clear();
@@ -157,7 +175,7 @@ namespace DesktopApp
             PasswordBoxInput.Password = profile.Password; // password is filled from TryGet
             PasswordTextBoxInput.Text = profile.Password; // sync to text box
             RememberCheckBox.IsChecked = true;
-            SetStatus($"Loaded {profile.Username}@{profile.Server}", BrushInfo);
+            SetStatus($"Loaded {profile.Username}@{profile.Server}", _brushInfo);
         }
 
         public void ApplyM3uProfile(M3uProfile profile)
@@ -165,7 +183,7 @@ namespace DesktopApp
             M3uUrlTextBox.Text = profile.PlaylistUrl;
             XmltvUrlTextBox.Text = profile.XmltvUrl ?? string.Empty;
             RememberM3uCheckBox.IsChecked = true;
-            SetStatus($"Loaded playlist: {profile.Display}", BrushInfo);
+            SetStatus($"Loaded playlist: {profile.Display}", _brushInfo);
         }
 
         private void OpenCredentialManager_Click(object sender, RoutedEventArgs e)
@@ -186,7 +204,7 @@ namespace DesktopApp
                 PasswordBoxInput.Password = pass;
                 PasswordTextBoxInput.Text = pass; // sync to text box
                 RememberCheckBox.IsChecked = true;
-                SetStatus("Loaded saved credentials.", BrushInfo);
+                SetStatus("Loaded saved credentials.", _brushInfo);
             }
 
             // Also try loading M3U playlist
@@ -198,7 +216,7 @@ namespace DesktopApp
                 // Don't override status if Xtream credentials were already loaded
                 if (string.IsNullOrEmpty(StatusText.Text))
                 {
-                    SetStatus("Loaded saved playlist.", BrushInfo);
+                    SetStatus("Loaded saved playlist.", _brushInfo);
                 }
             }
         }
@@ -207,7 +225,7 @@ namespace DesktopApp
         {
             if (CurrentMode != SessionMode.Xtream)
             {
-                SetStatus("Switch to Xtream mode to login with credentials.", BrushInfo);
+                SetStatus("Switch to Xtream mode to login with credentials.", _brushInfo);
                 return;
             }
             ClearDiagnosticsIfHidden();
@@ -216,11 +234,11 @@ namespace DesktopApp
             var password = PasswordBoxInput.Password?.Trim();
             var portText = PortTextBox.Text?.Trim();
             var ssl = SslCheckBox.IsChecked == true;
-            SetStatus("Validating...", BrushInfo);
+            SetStatus("Validating...", _brushInfo);
             LoginButton.IsEnabled = false;
             if (string.IsNullOrWhiteSpace(serverRaw) || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
             {
-                SetStatus("Missing required fields.", BrushError);
+                SetStatus("Missing required fields.", _brushError);
                 LoginButton.IsEnabled = true;
                 return;
             }
@@ -232,12 +250,12 @@ namespace DesktopApp
             try
             {
                 // If input missing scheme, prepend http:// for parsing
-                string test = serverRaw.Contains("://", StringComparison.OrdinalIgnoreCase) ? serverRaw : "http://" + serverRaw;
+                string test = serverRaw.Contains("://", StringComparison.OrdinalIgnoreCase) ? serverRaw : _networkSettings.Schemes.Http + "://" + serverRaw;
                 if (Uri.TryCreate(test, UriKind.Absolute, out var uri))
                 {
                     normalizedHost = uri.Host; // exclude port
                     embeddedPort = uri.Port; // captures even default ports (80/443) if explicitly present
-                    embeddedSsl = string.Equals(uri.Scheme, "https", StringComparison.OrdinalIgnoreCase);
+                    embeddedSsl = string.Equals(uri.Scheme, _networkSettings.Schemes.Https, StringComparison.OrdinalIgnoreCase);
                 }
             }
             catch { }
@@ -257,7 +275,7 @@ namespace DesktopApp
             }
             else
             {
-                SetStatus("Port must be numeric (or specify in URL).", BrushError);
+                SetStatus("Port must be numeric (or specify in URL).", _brushError);
                 LoginButton.IsEnabled = true;
                 return;
             }
@@ -269,19 +287,19 @@ namespace DesktopApp
                 SslCheckBox.IsChecked = true; // reflect to UI
             }
 
-            if (ssl && (portText == "80" || port == 80)) { port = 443; }
-            if (!ssl && port == 0) port = 80;
-            if (ssl && port == 0) port = 443;
+            if (ssl && (portText == _networkSettings.DefaultPorts.Http.ToString() || port == _networkSettings.DefaultPorts.Http)) { port = _networkSettings.DefaultPorts.Https; }
+            if (!ssl && port == 0) port = _networkSettings.DefaultPorts.Http;
+            if (ssl && port == 0) port = _networkSettings.DefaultPorts.Https;
 
             string host = normalizedHost;
-            var scheme = ssl ? "https" : "http";
+            var scheme = ssl ? _networkSettings.Schemes.Https : _networkSettings.Schemes.Http;
             var baseUrl = $"{scheme}://{host}:{port}";
             var candidateUrls = new[]
             {
-                $"{baseUrl}/player_api.php?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}",
-                (port == 80 || port == 443) ? $"{scheme}://{host}/player_api.php?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}" : null,
-                $"{baseUrl}/panel_api.php?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}",
-                $"{baseUrl}/get.php?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}&type=m3u"
+                $"{baseUrl}/{_apiSettings.Endpoints.PlayerApi}?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}",
+                (port == _networkSettings.DefaultPorts.Http || port == _networkSettings.DefaultPorts.Https) ? $"{scheme}://{host}/{_apiSettings.Endpoints.PlayerApi}?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}" : null,
+                $"{baseUrl}/{_apiSettings.Endpoints.PanelApi}?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}",
+                $"{baseUrl}/{_apiSettings.Endpoints.GetPlaylist}?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}&type=m3u"
             };
             var sw = Stopwatch.StartNew();
             var diag = new StringBuilder();
@@ -299,7 +317,7 @@ namespace DesktopApp
                 HttpResponseMessage? resp = null;
                 try
                 {
-                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(12));
+                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(_httpSettings.Timeouts.LoginRequestSeconds));
                     resp = await _http.GetAsync(url, cts.Token);
                     var elapsed = sw.ElapsedMilliseconds;
                     diag.AppendLine($"Response: HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}  ({elapsed} ms)");
@@ -343,7 +361,7 @@ namespace DesktopApp
                                             created_at = ui.TryGetProperty("created_at", out var ca) && ca.ValueKind == JsonValueKind.String ? ca.GetString() : null,
                                             message = ui.TryGetProperty("message", out var msgp) && msgp.ValueKind == JsonValueKind.String ? msgp.GetString() : null
                                         };
-                                        SetStatus(BuildSuccessStatus(successUserInfo, sw.ElapsedMilliseconds), BrushSuccess);
+                                        SetStatus(BuildSuccessStatus(successUserInfo, sw.ElapsedMilliseconds), _brushSuccess);
                                         break;
                                     }
                                     else
@@ -387,7 +405,7 @@ namespace DesktopApp
             if (!authed) DiagnosticsExpander.IsExpanded = true;
             if (!authed)
             {
-                SetStatus((lastError is null ? "Login failed (unknown)." : lastError) + $" ({sw.ElapsedMilliseconds} ms)", BrushError);
+                SetStatus((lastError is null ? "Login failed (unknown)." : lastError) + $" ({sw.ElapsedMilliseconds} ms)", _brushError);
                 LoginButton.IsEnabled = true;
                 return;
             }
@@ -412,9 +430,9 @@ namespace DesktopApp
         {
             if (CurrentMode != SessionMode.M3u) return;
             var playlistPath = M3uUrlTextBox.Text?.Trim();
-            if (string.IsNullOrWhiteSpace(playlistPath)) { SetStatus("Enter a playlist URL or file path.", BrushError); return; }
+            if (string.IsNullOrWhiteSpace(playlistPath)) { SetStatus("Enter a playlist URL or file path.", _brushError); return; }
             var xmlPath = XmltvUrlTextBox.Text?.Trim();
-            SetStatus("Loading playlist...", BrushInfo);
+            SetStatus("Loading playlist...", _brushInfo);
             LoadM3uButton.IsEnabled = false;
             try
             {
@@ -422,15 +440,15 @@ namespace DesktopApp
                 if (File.Exists(playlistPath)) playlistContent = await File.ReadAllTextAsync(playlistPath);
                 else
                 {
-                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(_httpSettings.Timeouts.M3uLoadSeconds));
                     playlistContent = await _http.GetStringAsync(playlistPath, cts.Token);
                 }
                 var entries = ParseM3u(playlistContent).ToList();
-                if (entries.Count == 0) { SetStatus("No channels found.", BrushError); return; }
+                if (entries.Count == 0) { SetStatus("No channels found.", _brushError); return; }
                 Session.Mode = SessionMode.M3u;
                 Session.ResetM3u();
                 Session.PlaylistChannels.AddRange(entries);
-                SetStatus($"Loaded {entries.Count} channels. Parsing EPG...", BrushSuccess);
+                SetStatus($"Loaded {entries.Count} channels. Parsing EPG...", _brushSuccess);
                 if (!string.IsNullOrWhiteSpace(xmlPath))
                 {
                     _ = Task.Run(async () => await LoadXmltvAsync(xmlPath));
@@ -447,7 +465,7 @@ namespace DesktopApp
                 dash.Show();
                 this.Hide();
             }
-            catch (Exception ex) { SetStatus("Failed: " + ex.Message, BrushError); }
+            catch (Exception ex) { SetStatus("Failed: " + ex.Message, _brushError); }
             finally { LoadM3uButton.IsEnabled = true; }
         }
 
@@ -459,7 +477,7 @@ namespace DesktopApp
                 if (File.Exists(source)) xml = await File.ReadAllTextAsync(source);
                 else
                 {
-                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(40));
+                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(_httpSettings.Timeouts.XmltvLoadSeconds));
                     xml = await _http.GetStringAsync(source, cts.Token);
                 }
                 ParseXmltv(xml);
@@ -604,8 +622,8 @@ namespace DesktopApp
         private string NormalizeHost(string serverRaw)
         {
             string host = serverRaw;
-            if (host.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) host = host[7..];
-            if (host.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) host = host[8..];
+            if (host.StartsWith(_networkSettings.Schemes.Http + "://", StringComparison.OrdinalIgnoreCase)) host = host[(_networkSettings.Schemes.Http.Length + 3)..];
+            if (host.StartsWith(_networkSettings.Schemes.Https + "://", StringComparison.OrdinalIgnoreCase)) host = host[(_networkSettings.Schemes.Https.Length + 3)..];
             host = host.TrimEnd('/');
             // If user still has :port in host (because parsing failed), strip it here to avoid duplicating
             var colon = host.LastIndexOf(':');

@@ -1,8 +1,11 @@
 using System.Windows;
+using System.IO;
+using DesktopApp.Configuration;
 using DesktopApp.Models;
 using DesktopApp.Services;
 using DesktopApp.ViewModels;
 using DesktopApp.Views;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,6 +20,16 @@ public partial class App : Application
     {
         // Configure dependency injection
         _host = CreateHostBuilder().Build();
+
+        // Initialize Session with configuration settings
+        var apiSettings = _host.Services.GetRequiredService<ApiSettings>();
+        var playerSettings = _host.Services.GetRequiredService<PlayerSettings>();
+        var recordingSettings = _host.Services.GetRequiredService<RecordingSettings>();
+        var epgSettings = _host.Services.GetRequiredService<EpgSettings>();
+        var m3uSettings = _host.Services.GetRequiredService<M3uSettings>();
+        var networkSettings = _host.Services.GetRequiredService<NetworkSettings>();
+
+        Session.InitializeConfiguration(apiSettings, playerSettings, recordingSettings, epgSettings, m3uSettings, networkSettings);
 
         // Load settings
         SettingsStore.LoadIntoSession();
@@ -38,8 +51,36 @@ public partial class App : Application
     private static IHostBuilder CreateHostBuilder()
     {
         return Host.CreateDefaultBuilder()
+            .ConfigureAppConfiguration((context, config) =>
+            {
+                // Get the base directory where the executable is located
+                var basePath = AppDomain.CurrentDomain.BaseDirectory;
+
+                // Build configuration from appsettings.json
+                config.SetBasePath(basePath)
+                      .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+            })
             .ConfigureServices((context, services) =>
             {
+                // Bind and register strongly-typed configuration
+                var appConfig = new AppConfiguration();
+                context.Configuration.Bind(appConfig);
+                services.AddSingleton(appConfig);
+
+                // Register individual configuration sections for easier injection
+                services.AddSingleton(appConfig.AppSettings);
+                services.AddSingleton(appConfig.GitHub);
+                services.AddSingleton(appConfig.Api);
+                services.AddSingleton(appConfig.Http);
+                services.AddSingleton(appConfig.Network);
+                services.AddSingleton(appConfig.UI);
+                services.AddSingleton(appConfig.Players);
+                services.AddSingleton(appConfig.Recording);
+                services.AddSingleton(appConfig.Epg);
+                services.AddSingleton(appConfig.Cache);
+                services.AddSingleton(appConfig.BatchProcessing);
+                services.AddSingleton(appConfig.M3u);
+
                 // Register services
                 services.AddSingleton<ISessionService, SessionService>();
                 services.AddSingleton<ICacheService, PersistentCacheService>();
@@ -47,11 +88,12 @@ public partial class App : Application
                 services.AddTransient<IVodService, VodService>();
                 services.AddTransient<IHttpService, HttpService>();
 
-                // Register HTTP client
-                services.AddHttpClient<IHttpService, HttpService>(client =>
+                // Register HTTP client with configuration
+                services.AddHttpClient<IHttpService, HttpService>((serviceProvider, client) =>
                 {
-                    client.Timeout = TimeSpan.FromSeconds(30);
-                    client.DefaultRequestHeaders.Add("User-Agent", "IPTV-Desktop-Browser/1.0.5");
+                    var httpSettings = serviceProvider.GetRequiredService<HttpSettings>();
+                    client.Timeout = TimeSpan.FromSeconds(httpSettings.DefaultTimeoutSeconds);
+                    client.DefaultRequestHeaders.Add("User-Agent", httpSettings.UserAgent);
                 });
 
                 // Register ViewModels
@@ -63,7 +105,7 @@ public partial class App : Application
                 services.AddTransient<DashboardWindow>();
                 services.AddTransient<CacheInspectorWindow>();
 
-                // Configure logging
+                // Configure logging from configuration
                 services.AddLogging(builder =>
                 {
                     builder.AddConsole();
