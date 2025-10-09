@@ -16,6 +16,46 @@ public sealed class CredentialProfile
     public string Username { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty; // plain only when returned to caller, never persisted
     public string Display => $"{Username}@{Server}:{Port}{(UseSsl ? "+ssl" : string.Empty)}";
+    public string Type => "Xtream";
+}
+
+public sealed class M3uProfile
+{
+    public string PlaylistUrl { get; set; } = string.Empty;
+    public string? XmltvUrl { get; set; }
+    public DateTime SavedUtc { get; set; }
+    public string Display => GetDisplayName();
+    public string Type => "M3U";
+
+    private string GetDisplayName()
+    {
+        if (string.IsNullOrWhiteSpace(PlaylistUrl)) return "Unknown Playlist";
+
+        // Extract filename from URL or path
+        try
+        {
+            if (Uri.TryCreate(PlaylistUrl, UriKind.Absolute, out var uri))
+            {
+                var segments = uri.Segments;
+                if (segments.Length > 0)
+                {
+                    var lastSegment = segments[^1].Trim('/');
+                    if (!string.IsNullOrEmpty(lastSegment))
+                        return lastSegment;
+                }
+                return uri.Host;
+            }
+            else
+            {
+                // Local file path
+                return System.IO.Path.GetFileName(PlaylistUrl);
+            }
+        }
+        catch
+        {
+            return PlaylistUrl.Length > 50 ? PlaylistUrl[..50] + "..." : PlaylistUrl;
+        }
+    }
 }
 
 public static class CredentialStore
@@ -30,9 +70,17 @@ public static class CredentialStore
         public DateTime SavedUtc { get; set; }
     }
 
+    private sealed class M3uPersistedModel
+    {
+        public string? PlaylistUrl { get; set; }
+        public string? XmltvUrl { get; set; }
+        public DateTime SavedUtc { get; set; }
+    }
+
     private sealed class PersistedCollection
     {
         public List<PersistedModel> Profiles { get; set; } = new();
+        public List<M3uPersistedModel> M3uPlaylists { get; set; } = new();
     }
 
     private static readonly string FilePath = Path.Combine(
@@ -173,6 +221,66 @@ public static class CredentialStore
         try { if (File.Exists(FilePath)) File.Delete(FilePath); } catch { }
     }
 
+    // ===== M3U Playlist Management =====
+    public static IReadOnlyList<M3uProfile> GetAllM3u()
+    {
+        var col = LoadCollection();
+        return col.M3uPlaylists
+            .OrderByDescending(p => p.SavedUtc)
+            .Select(p => new M3uProfile
+            {
+                PlaylistUrl = p.PlaylistUrl ?? string.Empty,
+                XmltvUrl = p.XmltvUrl,
+                SavedUtc = p.SavedUtc
+            })
+            .ToList();
+    }
+
+    public static bool TryGetM3u(string playlistUrl, out M3uProfile profile)
+    {
+        profile = new M3uProfile();
+        var col = LoadCollection();
+        var match = col.M3uPlaylists.FirstOrDefault(p => string.Equals(p.PlaylistUrl, playlistUrl, StringComparison.OrdinalIgnoreCase));
+        if (match == null) return false;
+
+        profile = new M3uProfile
+        {
+            PlaylistUrl = match.PlaylistUrl ?? string.Empty,
+            XmltvUrl = match.XmltvUrl,
+            SavedUtc = match.SavedUtc
+        };
+        return true;
+    }
+
+    public static void SaveOrUpdateM3u(string playlistUrl, string? xmltvUrl)
+    {
+        try
+        {
+            var col = LoadCollection();
+            var existing = col.M3uPlaylists.FirstOrDefault(p => string.Equals(p.PlaylistUrl, playlistUrl, StringComparison.OrdinalIgnoreCase));
+            if (existing == null)
+            {
+                existing = new M3uPersistedModel { PlaylistUrl = playlistUrl };
+                col.M3uPlaylists.Add(existing);
+            }
+            existing.XmltvUrl = xmltvUrl;
+            existing.SavedUtc = DateTime.UtcNow;
+            SaveCollection(col);
+        }
+        catch { }
+    }
+
+    public static void DeleteM3u(string playlistUrl)
+    {
+        try
+        {
+            var col = LoadCollection();
+            col.M3uPlaylists.RemoveAll(p => string.Equals(p.PlaylistUrl, playlistUrl, StringComparison.OrdinalIgnoreCase));
+            SaveCollection(col);
+        }
+        catch { }
+    }
+
     // Backwards compatible single-profile helpers (still used by MainWindow existing flow)
     public static void Save(string server, int port, bool useSsl, string username, string password) => SaveOrUpdate(server, port, useSsl, username, password);
     public static bool TryLoad(out string server, out int port, out bool useSsl, out string username, out string password)
@@ -185,5 +293,15 @@ public static class CredentialStore
             server = prof.Server; port = prof.Port; useSsl = prof.UseSsl; username = prof.Username; password = prof.Password; return true;
         }
         return false;
+    }
+
+    public static bool TryLoadM3u(out string playlistUrl, out string? xmltvUrl)
+    {
+        playlistUrl = string.Empty; xmltvUrl = null;
+        var first = GetAllM3u().FirstOrDefault();
+        if (first == null) return false;
+        playlistUrl = first.PlaylistUrl;
+        xmltvUrl = first.XmltvUrl;
+        return true;
     }
 }

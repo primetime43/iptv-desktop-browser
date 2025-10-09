@@ -224,6 +224,10 @@
                             <TextBox x:Name="M3uUrlTextBox" Style="{StaticResource InputTextBox}" Tag="http(s):// or c:\path\playlist.m3u"/>
                             <TextBlock Text="(Optional) XMLTV EPG URL or file path" Foreground="#8BA1B9" FontSize="12" Margin="2 6 0 0"/>
                             <TextBox x:Name="XmltvUrlTextBox" Style="{StaticResource InputTextBox}" Tag="http(s):// or c:\path\guide.xml"/>
+                            <DockPanel Margin="0 0 0 10">
+                                <CheckBox x:Name="RememberM3uCheckBox" Content="Remember this playlist" Foreground="#DDE6F2"/>
+                                <TextBlock DockPanel.Dock="Right" Text="Manage" Foreground="#5A82FF" Cursor="Hand" MouseLeftButtonUp="OpenCredentialManager_Click" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="8 0 0 0"/>
+                            </DockPanel>
                             <Button x:Name="LoadM3uButton" Style="{StaticResource PrimaryButton}" Content="Load Playlist" Height="46" Click="LoadM3uButton_Click"/>
                         </StackPanel>
                         <TextBlock x:Name="StatusText" Margin="4 14 0 4" Foreground="#6C8298" FontSize="12" TextWrapping="Wrap"/>
