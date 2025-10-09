@@ -35,7 +35,10 @@ public static class CredentialStore
         public List<PersistedModel> Profiles { get; set; } = new();
     }
 
-    private static readonly string FilePath = Path.Combine(AppContext.BaseDirectory, "credentials.json");
+    private static readonly string FilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "IPTV-Desktop-Browser",
+        "credentials.json");
 
     // Backwards compatibility: legacy single-object file
     private static bool TryMigrateLegacyFormat(string jsonText, out PersistedCollection migrated)
@@ -89,6 +92,11 @@ public static class CredentialStore
     {
         try
         {
+            var directory = Path.GetDirectoryName(FilePath);
+            if (directory != null && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
             var json = JsonSerializer.Serialize(collection, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(FilePath, json);
         }
