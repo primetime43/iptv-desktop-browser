@@ -4286,6 +4286,14 @@ namespace DesktopApp.Views
                 if (FindName("SettingsCachingEnabledCheckBox") is CheckBox cachingEnabled)
                     cachingEnabled.IsChecked = Session.CachingEnabled;
 
+                // Set credentials folder path
+                if (FindName("SettingsCredentialsFolderTextBox") is TextBox credentialsFolder)
+                {
+                    credentialsFolder.Text = Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                        "IPTV-Desktop-Browser");
+                }
+
                 ValidateAllSettingsFields();
 
                 // Initialize logging display
@@ -5015,6 +5023,38 @@ namespace DesktopApp.Views
         private void SettingsCacheInspector_Click(object sender, RoutedEventArgs e)
         {
             OpenCacheInspector(sender, e);
+        }
+
+        private void SettingsOpenCredentialsFolder_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var credentialsFolder = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "IPTV-Desktop-Browser");
+
+                // Create the folder if it doesn't exist
+                if (!Directory.Exists(credentialsFolder))
+                {
+                    Directory.CreateDirectory(credentialsFolder);
+                }
+
+                // Open the folder in Windows Explorer
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = credentialsFolder,
+                    UseShellExecute = true,
+                    Verb = "open"
+                });
+
+                SetSettingsStatusMessage("Credentials folder opened in Explorer");
+            }
+            catch (Exception ex)
+            {
+                SetSettingsStatusMessage($"Error opening folder: {ex.Message}", true);
+                MessageBox.Show(this, $"Failed to open credentials folder: {ex.Message}",
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void ShowLoadingOverlay(string overlayName)

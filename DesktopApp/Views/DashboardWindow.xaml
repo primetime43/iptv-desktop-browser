@@ -2283,6 +2283,25 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- Data Storage Section -->
+                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="📂 Data Storage" FontSize="18" FontWeight="Bold"
+                                         Foreground="#F0F6FC" Margin="0,0,0,16"/>
+
+                                <StackPanel Margin="0,0,0,12">
+                                    <TextBlock Text="Credentials Folder" Foreground="#8BA1B9" FontSize="13" Margin="0,0,0,8"/>
+                                    <TextBox x:Name="SettingsCredentialsFolderTextBox" IsReadOnly="True"
+                                             Background="#161B22" Foreground="#C9D1D9" BorderBrush="#30363D"
+                                             Padding="8,6" Height="32" Margin="0,0,0,8"/>
+                                    <Button Content="Open Folder" Width="120" Height="28" Margin="0,0,0,8"
+                                            Click="SettingsOpenCredentialsFolder_Click" Background="#6C757D" Foreground="White" Padding="8,4"/>
+                                    <TextBlock Text="Stored credentials are encrypted using Windows DPAPI for security."
+                                             Foreground="#657A91" FontSize="11" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
                         <!-- Actions -->
                         <Border Style="{StaticResource CardStyle}">
                             <StackPanel>
