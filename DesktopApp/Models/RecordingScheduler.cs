@@ -114,7 +114,7 @@ public class RecordingScheduler : INotifyPropertyChanged
                 }
 
                 // Update status on UI thread to ensure proper binding updates
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     recording.Status = RecordingScheduleStatus.Cancelled;
                 });
@@ -133,7 +133,7 @@ public class RecordingScheduler : INotifyPropertyChanged
             if (existingRecording != null && existingRecording.CanEdit)
             {
                 // Update on UI thread to ensure proper binding updates
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     var index = _scheduledRecordings.IndexOf(existingRecording);
                     _scheduledRecordings[index] = updatedRecording;
@@ -158,7 +158,7 @@ public class RecordingScheduler : INotifyPropertyChanged
             if (toRemove.Any())
             {
                 // Remove items on UI thread to ensure proper binding updates
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
                 {
                     foreach (var recording in toRemove)
                     {
@@ -228,7 +228,7 @@ public class RecordingScheduler : INotifyPropertyChanged
 
                         // Reset channel indicator and UI
                         RecordingManager.Instance.StopRecording();
-                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
                         {
                             // Find the dashboard window and reset button text
                             foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
@@ -346,7 +346,7 @@ public class RecordingScheduler : INotifyPropertyChanged
             recording.RecordingProcess = process;
 
             // Update UI to show scheduled recording is active
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
             {
                 if (System.Windows.Application.Current.MainWindow is MainWindow mainWindow)
                 {
@@ -404,7 +404,7 @@ public class RecordingScheduler : INotifyPropertyChanged
             RecordingManager.Instance.StopRecording();
 
             // Update UI to show recording is no longer active
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
             {
                 // Find the dashboard window and reset button text
                 foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
@@ -1122,7 +1122,7 @@ public class RecordingScheduler : INotifyPropertyChanged
         // Also log to the UI Logs tab
         try
         {
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
             {
                 foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
                 {

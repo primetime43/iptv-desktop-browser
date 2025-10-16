@@ -102,6 +102,9 @@ namespace DesktopApp.Views
         public ICollectionView SeriesContentCollectionView { get; }
         public ICollectionView SeriesCategoriesCollectionView { get; }
 
+        // Expose RecordingManager singleton for XAML binding
+        public RecordingManager RecordingManager => RecordingManager.Instance;
+
         // Search
         private CancellationTokenSource? _searchDebounceCts;
         private static readonly TimeSpan GlobalSearchDebounce = TimeSpan.FromSeconds(3);
@@ -517,7 +520,7 @@ namespace DesktopApp.Views
         }
 
         // View selection
-        private string _currentViewKey = "categories";
+        private string _currentViewKey = "LiveTv";
         public string CurrentViewKey
         {
             get => _currentViewKey;
@@ -600,26 +603,37 @@ namespace DesktopApp.Views
 
             Loaded += async (_, __) =>
             {
-                Session.EpgRefreshRequested += OnEpgRefreshRequested;
-
-                // Reload series recordings for the current account/session
-                _scheduler.ReloadForCurrentSession();
-
-                if (Session.Mode == SessionMode.Xtream)
+                try
                 {
-                    _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
-                    _ = RunEpgSchedulerLoopAsync();
-                    await LoadCategoriesAsync();
-                    // VOD and Series categories will be loaded on-demand when user navigates to those sections
-                }
-                else
-                {
-                    LoadCategoriesFromPlaylist();
-                    BuildPlaylistAllChannelsIndex();
-                }
+                    // Always show UI first, then load data in background
+                    UpdateViewVisibility();
+                    UpdateNavButtons();
 
-                UpdateViewVisibility();
-                UpdateNavButtons();
+                    Session.EpgRefreshRequested += OnEpgRefreshRequested;
+
+                    // Reload series recordings for the current account/session
+                    _scheduler.ReloadForCurrentSession();
+
+                    if (Session.Mode == SessionMode.Xtream)
+                    {
+                        _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
+                        _ = RunEpgSchedulerLoopAsync();
+                        await LoadCategoriesAsync();
+                        // VOD and Series categories will be loaded on-demand when user navigates to those sections
+                    }
+                    else
+                    {
+                        LoadCategoriesFromPlaylist();
+                        BuildPlaylistAllChannelsIndex();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log($"ERROR during window load: {ex.Message}\n{ex.StackTrace}");
+                    // Ensure UI is visible even if loading fails
+                    UpdateViewVisibility();
+                    UpdateNavButtons();
+                }
             };
 
             // Subscribe to recording manager events for channel indicators
@@ -985,6 +999,7 @@ namespace DesktopApp.Views
         {
             // View visibility is now handled by the new navigation system
             // ShowPage method handles page switching
+            ShowPage(_currentViewKey);
         }
         private void NavCategories_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "categories"; if (!IsGlobalSearchActive) { /* restore category view list remains as-is */ } }
         private void NavGuide_Click(object sender, RoutedEventArgs e) { CurrentViewKey = "guide"; ApplySearch(); }
