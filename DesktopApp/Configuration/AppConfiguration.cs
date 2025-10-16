@@ -19,7 +19,14 @@ public class AppConfiguration
 public class AppSettings
 {
     public string ApplicationName { get; set; } = "IPTV Desktop Browser";
-    public string Version { get; set; } = "2.0.0";
+    public string Version { get; set; } = GetDefaultVersion();
+
+    private static string GetDefaultVersion()
+    {
+        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+        var version = assembly.GetName().Version;
+        return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.0";
+    }
 }
 
 public class GitHubSettings
@@ -72,8 +79,16 @@ public class DefaultExtensions
 public class HttpSettings
 {
     public int DefaultTimeoutSeconds { get; set; } = 30;
-    public string UserAgent { get; set; } = "IPTV-Desktop-Browser/2.0.0";
+    public string UserAgent { get; set; } = GetDefaultUserAgent();
     public TimeoutSettings Timeouts { get; set; } = new();
+
+    private static string GetDefaultUserAgent()
+    {
+        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+        var version = assembly.GetName().Version;
+        var versionString = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.0";
+        return $"IPTV-Desktop-Browser/{versionString}";
+    }
 }
 
 public class TimeoutSettings

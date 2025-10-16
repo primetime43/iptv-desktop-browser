@@ -9,6 +9,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Serilog;
+using System.Windows.Threading;
 
 namespace DesktopApp;
 
@@ -16,35 +18,145 @@ public partial class App : Application
 {
     private IHost? _host;
 
+    public App()
+    {
+        // Set up global exception handlers
+        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
-        // Configure dependency injection
-        _host = CreateHostBuilder().Build();
+        try
+        {
+            // Initialize logging first
+            var logPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "IPTV-Desktop-Browser",
+                "Logs",
+                "app-.log"
+            );
 
-        // Initialize Session with configuration settings
-        var apiSettings = _host.Services.GetRequiredService<ApiSettings>();
-        var playerSettings = _host.Services.GetRequiredService<PlayerSettings>();
-        var recordingSettings = _host.Services.GetRequiredService<RecordingSettings>();
-        var epgSettings = _host.Services.GetRequiredService<EpgSettings>();
-        var m3uSettings = _host.Services.GetRequiredService<M3uSettings>();
-        var networkSettings = _host.Services.GetRequiredService<NetworkSettings>();
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .WriteTo.File(
+                    logPath,
+                    rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 7,
+                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}"
+                )
+                .CreateLogger();
 
-        Session.InitializeConfiguration(apiSettings, playerSettings, recordingSettings, epgSettings, m3uSettings, networkSettings);
+            Log.Information("=== Application Starting ===");
+            Log.Information("Version: {Version}", "2.1.0");
+            Log.Information("OS: {OS}", Environment.OSVersion);
+            Log.Information(".NET Version: {DotNetVersion}", Environment.Version);
 
-        // Load settings
-        SettingsStore.LoadIntoSession();
+            // Configure dependency injection
+            _host = CreateHostBuilder().Build();
 
-        // Start with main window
-        var mainWindow = _host.Services.GetRequiredService<MainWindow>();
-        mainWindow.Show();
+            // Initialize Session with configuration settings
+            var apiSettings = _host.Services.GetRequiredService<ApiSettings>();
+            var playerSettings = _host.Services.GetRequiredService<PlayerSettings>();
+            var recordingSettings = _host.Services.GetRequiredService<RecordingSettings>();
+            var epgSettings = _host.Services.GetRequiredService<EpgSettings>();
+            var m3uSettings = _host.Services.GetRequiredService<M3uSettings>();
+            var networkSettings = _host.Services.GetRequiredService<NetworkSettings>();
 
-        base.OnStartup(e);
+            Session.InitializeConfiguration(apiSettings, playerSettings, recordingSettings, epgSettings, m3uSettings, networkSettings);
+
+            // Load settings
+            SettingsStore.LoadIntoSession();
+
+            Log.Information("Configuration loaded successfully");
+
+            // Start with main window
+            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+            mainWindow.Show();
+
+            Log.Information("Main window displayed");
+
+            base.OnStartup(e);
+        }
+        catch (Exception ex)
+        {
+            Log.Fatal(ex, "Fatal error during application startup");
+            MessageBox.Show(
+                $"A fatal error occurred during startup:\n\n{ex.Message}\n\nPlease check the log file at:\n{GetLogDirectory()}",
+                "Application Startup Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
+            Log.CloseAndFlush();
+            Shutdown(1);
+        }
+    }
+
+    private void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        var exception = e.ExceptionObject as Exception;
+        Log.Fatal(exception, "Unhandled exception in AppDomain");
+
+        if (e.IsTerminating)
+        {
+            MessageBox.Show(
+                $"A fatal error occurred:\n\n{exception?.Message}\n\nThe application will now close.\n\nLog location: {GetLogDirectory()}",
+                "Fatal Error",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error
+            );
+            Log.CloseAndFlush();
+        }
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        Log.Error(e.Exception, "Unhandled dispatcher exception");
+
+        MessageBox.Show(
+            $"An error occurred:\n\n{e.Exception.Message}\n\nLog location: {GetLogDirectory()}",
+            "Error",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error
+        );
+
+        // Mark as handled to prevent application crash
+        e.Handled = true;
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        Log.Error(e.Exception, "Unobserved task exception");
+        e.SetObserved();
+    }
+
+    private static string GetLogDirectory()
+    {
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "IPTV-Desktop-Browser",
+            "Logs"
+        );
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        SettingsStore.SaveFromSession();
-        _host?.Dispose();
+        try
+        {
+            Log.Information("Application shutting down");
+            SettingsStore.SaveFromSession();
+            _host?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error during application shutdown");
+        }
+        finally
+        {
+            Log.CloseAndFlush();
+        }
+
         base.OnExit(e);
     }
 
@@ -53,12 +165,24 @@ public partial class App : Application
         return Host.CreateDefaultBuilder()
             .ConfigureAppConfiguration((context, config) =>
             {
-                // Get the base directory where the executable is located
-                var basePath = AppDomain.CurrentDomain.BaseDirectory;
+                // Get configuration path from AppData (auto-creates if missing)
+                var configPath = Configuration.ConfigurationManager.GetConfigurationPath();
+                var configDir = Path.GetDirectoryName(configPath) ?? AppDomain.CurrentDomain.BaseDirectory;
 
-                // Build configuration from appsettings.json
-                config.SetBasePath(basePath)
-                      .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                Log.Information("Loading configuration from: {ConfigPath}", configPath);
+
+                // Build configuration from appsettings.json in AppData
+                config.SetBasePath(configDir)
+                      .AddJsonFile(Path.GetFileName(configPath), optional: true, reloadOnChange: true);
+
+                if (File.Exists(configPath))
+                {
+                    Log.Information("Configuration file loaded successfully from AppData");
+                }
+                else
+                {
+                    Log.Warning("Configuration file not found, using default values");
+                }
             })
             .ConfigureServices((context, services) =>
             {
@@ -105,17 +229,11 @@ public partial class App : Application
                 services.AddTransient<DashboardWindow>();
                 services.AddTransient<CacheInspectorWindow>();
 
-                // Configure logging from configuration
+                // Configure logging with Serilog
                 services.AddLogging(builder =>
                 {
-                    builder.AddConsole();
-                    builder.AddDebug();
-                    builder.SetMinimumLevel(LogLevel.Warning);
-                    // Reduce HTTP client logging noise
-                    builder.AddFilter("System.Net.Http", LogLevel.Warning);
-                    builder.AddFilter("Microsoft.Extensions.Http", LogLevel.Warning);
-                    // Reduce service logging noise
-                    builder.AddFilter("DesktopApp.Services", LogLevel.Warning);
+                    builder.ClearProviders();
+                    builder.AddSerilog(dispose: true);
                 });
             });
     }
