@@ -25,7 +25,7 @@ public class AppSettings
     {
         var assembly = System.Reflection.Assembly.GetExecutingAssembly();
         var version = assembly.GetName().Version;
-        return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.0";
+        return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.1";
     }
 }
 
@@ -86,7 +86,7 @@ public class HttpSettings
     {
         var assembly = System.Reflection.Assembly.GetExecutingAssembly();
         var version = assembly.GetName().Version;
-        var versionString = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.0";
+        var versionString = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.1";
         return $"IPTV-Desktop-Browser/{versionString}";
     }
 }

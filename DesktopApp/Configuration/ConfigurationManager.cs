@@ -270,6 +270,6 @@ public static class ConfigurationManager
     {
         var assembly = Assembly.GetExecutingAssembly();
         var version = assembly.GetName().Version;
-        return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.0";
+        return version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "2.1.1";
     }
 }
