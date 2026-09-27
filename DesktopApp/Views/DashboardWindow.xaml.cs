@@ -574,6 +574,7 @@ namespace DesktopApp.Views
 
             // Subscribe to EPG refresh for series recordings
             _scheduler.EpgRefreshNeeded += OnEpgRefreshNeeded;
+            _scheduler.RecordingFailed += OnScheduledRecordingFailed;
 
             CategoriesCollectionView = CollectionViewSource.GetDefaultView(_categories);
             ChannelsCollectionView = CollectionViewSource.GetDefaultView(_channels);
@@ -1764,6 +1765,7 @@ namespace DesktopApp.Views
         // modify existing OnClosed (search and replace previous implementation) - keep rest of file intact
         protected override void OnClosed(EventArgs e)
         {
+            _scheduler.RecordingFailed -= OnScheduledRecordingFailed;
             try { StopRecording(); } catch { }
             CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; Session.FavoritesChanged -= OnFavoritesChanged; RecordingManager.Instance.PropertyChanged -= OnRecordingManagerChanged; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
         }
@@ -3562,12 +3564,28 @@ namespace DesktopApp.Views
                             $"Output File: {recording.OutputFilePath}\n" +
                             $"Stream URL: {DesktopApp.Security.DiagnosticRedactor.Redact(recording.StreamUrl)}\n";
 
+            if (recording.ExitCode.HasValue)
+                properties += $"FFmpeg exit code: {recording.ExitCode}\n";
+            if (!string.IsNullOrWhiteSpace(recording.FailureReason))
+                properties += $"Failure details: {recording.FailureReason}\n";
+
             if (!string.IsNullOrEmpty(recording.Description))
             {
                 properties += $"Description: {recording.Description}\n";
             }
 
             MessageBox.Show(properties, "Recording Properties", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void OnScheduledRecordingFailed(ScheduledRecording recording)
+        {
+            if (Dispatcher.HasShutdownStarted) return;
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (_isClosing) return;
+                var summary = recording.FailureReason?.Split('\n')[0] ?? "Open recording properties for details.";
+                ShowToast("Recording failed", $"{recording.Title}: {summary}", "#DC3545");
+            });
         }
         private void EditRecording_Click(object sender, RoutedEventArgs e)
         {

@@ -75,6 +75,11 @@ v1.06/v2.0.0
 - Favorites are saved per account/playlist and persist between sessions.
 - Favorite channels maintain all EPG data and functionality.
 
+### Scheduled recording failures
+- Failed or prematurely ended recordings show **Failed** immediately, with a notification.
+- Hover over the status or open **Props** to see the FFmpeg exit code and recent error output. Error details redact credentials and remain available after restarting the app.
+- Scheduled stops let FFmpeg finalize the output. Forced termination is reported as a failure; user cancellation remains **Cancelled**.
+
 ---
 
 ## 🔒 Security & Privacy
@@ -102,7 +107,8 @@ cd iptv-desktop-browser
 dotnet build
 ```
 
-Run the Windows security regression checks (also run in CI):
+Run the Windows regression checks (also run in CI):
 ```bash
 dotnet run --project Tests/SecurityRegressionTests/SecurityRegressionTests.csproj -c Release
+dotnet run --project Tests/RecordingRegressionTests/RecordingRegressionTests.csproj -c Release
 ```

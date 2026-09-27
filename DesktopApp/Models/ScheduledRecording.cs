@@ -99,6 +99,20 @@ public class ScheduledRecording : INotifyPropertyChanged
 
     public string OutputFilePath { get; set; } = string.Empty;
 
+    private string? _failureReason;
+    public string? FailureReason
+    {
+        get => _failureReason;
+        set { if (_failureReason != value) { _failureReason = value; OnPropertyChanged(); } }
+    }
+
+    private int? _exitCode;
+    public int? ExitCode
+    {
+        get => _exitCode;
+        set { if (_exitCode != value) { _exitCode = value; OnPropertyChanged(); } }
+    }
+
     // EPG-based scheduling properties
     public bool IsEpgBased { get; set; }
     public string? EpgProgramId { get; set; }

@@ -9,10 +9,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using DesktopApp.Views;
 using DesktopApp.Security;
+using System.Diagnostics;
 
 namespace DesktopApp.Models;
 
-public class RecordingScheduler : INotifyPropertyChanged
+public partial class RecordingScheduler : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
     public event Action<ScheduledRecording>? RecordingStarted;
@@ -29,21 +30,43 @@ public class RecordingScheduler : INotifyPropertyChanged
     private readonly ObservableCollection<SeriesRecording> _seriesRecordings = new();
     public ObservableCollection<SeriesRecording> SeriesRecordings => _seriesRecordings;
 
-    private readonly Timer _schedulerTimer;
-    private readonly Timer _epgRefreshTimer;
+    private readonly Timer? _schedulerTimer;
+    private readonly Timer? _epgRefreshTimer;
     private readonly string _scheduleFilePath;
     private readonly string _seriesFilePath;
     private readonly object _lockObject = new();
+    private readonly Dictionary<Guid, RecordingRun> _activeRecordings = new();
 
-    private RecordingScheduler()
+    private sealed class RecordingRun(ScheduledRecording recording)
     {
-        var appDataPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IPTV-Desktop-Browser");
+        public ScheduledRecording Recording { get; } = recording;
+        public Process? Process { get; set; }
+        public bool StopRequested { get; set; }
+        public bool CancelRequested { get; set; }
+        public bool ForcedStop { get; set; }
+        public string? StopError { get; set; }
+        public Task? StopTask { get; set; }
+        public Queue<string> ErrorLines { get; } = new();
+        public string[] Secrets { get; } = [Session.Username, Session.Password, recording.StreamUrl];
+    }
+
+    private RecordingScheduler() : this(Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IPTV-Desktop-Browser"), true)
+    {
+    }
+
+    // An isolated storage location and manual ticks allow process regression tests
+    // without touching the user's schedules or starting background timers.
+    internal RecordingScheduler(string appDataPath, bool startTimers = false)
+    {
         Directory.CreateDirectory(appDataPath);
         _scheduleFilePath = Path.Combine(appDataPath, "scheduled_recordings.json");
         _seriesFilePath = Path.Combine(appDataPath, "series_recordings.json");
 
         LoadScheduledRecordings();
         LoadSeriesRecordings();
+
+        if (!startTimers) return;
 
         // Check for scheduled recordings every 30 seconds for better accuracy
         _schedulerTimer = new Timer(CheckScheduledRecordings, null, TimeSpan.Zero, TimeSpan.FromSeconds(30));
@@ -92,11 +115,7 @@ public class RecordingScheduler : INotifyPropertyChanged
             if (timeDiff.TotalMinutes <= 1)
             {
                 Log($"Recording scheduled to start immediately: {recording.Title}");
-                Task.Run(() =>
-                {
-                    StartRecording(recording);
-                    SaveScheduledRecordings(); // Save status after starting
-                });
+                StartRecording(recording);
             }
         }
     }
@@ -111,17 +130,15 @@ public class RecordingScheduler : INotifyPropertyChanged
                 // If currently recording, stop the recording process
                 if (recording.Status == RecordingScheduleStatus.Recording)
                 {
-                    StopRecording(recording);
+                    StopRecording(recording, cancelled: true);
                 }
-
-                // Update status on UI thread to ensure proper binding updates
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+                else
                 {
                     recording.Status = RecordingScheduleStatus.Cancelled;
-                });
+                }
 
                 SaveScheduledRecordings();
-                Log($"Cancelled recording: {recording.Title}");
+                Log($"Cancellation requested: {recording.Title}");
             }
         }
     }
@@ -173,14 +190,12 @@ public class RecordingScheduler : INotifyPropertyChanged
         }
     }
 
-    private void CheckScheduledRecordings(object? state)
+    internal void CheckScheduledRecordings(object? state = null)
     {
         try
         {
             lock (_lockObject)
             {
-                var now = DateTime.UtcNow;
-
                 foreach (var recording in _scheduledRecordings.ToList())
                 {
                     // Check for missed recordings
@@ -204,45 +219,6 @@ public class RecordingScheduler : INotifyPropertyChanged
                         Log($"Stopping recording: {recording.Title} (scheduled end: {recording.EndTimeLocal}, now: {DateTime.Now:MM/dd/yyyy hh:mm:ss tt})");
                         StopRecording(recording);
                     }
-
-                    // Check if recording has exceeded its end time (cleanup for missed stops)
-                    if (recording.Status == RecordingScheduleStatus.Recording &&
-                        DateTime.UtcNow > recording.EndTime.AddMinutes(recording.PostBufferMinutes + 5))
-                    {
-                        Log($"Force stopping overdue recording: {recording.Title}");
-                        recording.Status = RecordingScheduleStatus.Completed;
-
-                        // Clean up the recording process
-                        if (recording.RecordingProcess != null && !recording.RecordingProcess.HasExited)
-                        {
-                            try
-                            {
-                                recording.RecordingProcess.Kill();
-                                recording.RecordingProcess.Dispose();
-                                recording.RecordingProcess = null;
-                            }
-                            catch (Exception ex)
-                            {
-                                Log($"Error force stopping process for {recording.Title}: {ex.Message}");
-                            }
-                        }
-
-                        // Reset channel indicator and UI
-                        RecordingManager.Instance.StopRecording();
-                        System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
-                        {
-                            // Find the dashboard window and reset button text
-                            foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
-                            {
-                                if (window is DashboardWindow dashboard)
-                                {
-                                    if (dashboard.FindName("RecordBtnText") is System.Windows.Controls.TextBlock btnText)
-                                        btnText.Text = "Record";
-                                    break;
-                                }
-                            }
-                        });
-                    }
                 }
 
                 SaveScheduledRecordings();
@@ -251,184 +227,6 @@ public class RecordingScheduler : INotifyPropertyChanged
         catch (Exception ex)
         {
             Log($"Error in recording scheduler: {ex.Message}");
-        }
-    }
-
-    private void StartRecording(ScheduledRecording recording)
-    {
-        try
-        {
-            recording.Status = RecordingScheduleStatus.Recording;
-            Log($"Starting scheduled recording: {recording.Title}");
-
-            // Start the actual FFmpeg recording process
-            Task.Run(() =>
-            {
-                try
-                {
-                    StartFfmpegRecording(recording);
-                    RecordingStarted?.Invoke(recording);
-                }
-                catch (Exception ex)
-                {
-                    recording.Status = RecordingScheduleStatus.Failed;
-                    Log($"Failed to start recording {recording.Title}: {ex.Message}");
-                    RecordingFailed?.Invoke(recording);
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            recording.Status = RecordingScheduleStatus.Failed;
-            Log($"Error starting recording {recording.Title}: {ex.Message}");
-            RecordingFailed?.Invoke(recording);
-        }
-    }
-
-    private void StartFfmpegRecording(ScheduledRecording recording)
-    {
-        // Validate FFmpeg path
-        if (string.IsNullOrWhiteSpace(Session.FfmpegPath) || !System.IO.File.Exists(Session.FfmpegPath))
-        {
-            throw new InvalidOperationException("FFmpeg path not set or file not found. Please configure FFmpeg path in Settings.");
-        }
-
-        // Ensure output directory exists
-        var outputDir = System.IO.Path.GetDirectoryName(recording.OutputFilePath);
-        if (!string.IsNullOrEmpty(outputDir))
-        {
-            System.IO.Directory.CreateDirectory(outputDir);
-        }
-
-        // Build FFmpeg process
-        var psi = Session.BuildFfmpegRecordProcess(recording.StreamUrl, recording.Title, recording.OutputFilePath);
-        if (psi == null)
-        {
-            throw new InvalidOperationException("Unable to build FFmpeg process configuration.");
-        }
-
-        // Start FFmpeg process
-        var process = new System.Diagnostics.Process
-        {
-            StartInfo = psi,
-            EnableRaisingEvents = true
-        };
-
-        process.OutputDataReceived += (s, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-                Log($"FFMPEG [{recording.Title}]: {e.Data}");
-        };
-
-        process.ErrorDataReceived += (s, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-                Log($"FFMPEG [{recording.Title}]: {e.Data}");
-        };
-
-        process.Exited += (s, e) =>
-        {
-            Log($"FFmpeg process exited for recording: {recording.Title}");
-        };
-
-        if (process.Start())
-        {
-            try
-            {
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-            }
-            catch { }
-
-            // Update RecordingManager only for channel indicator (separate from status)
-            RecordingManager.Instance.StartRecording(recording.StreamUrl, recording.OutputFilePath, recording.Title, recording.ChannelId);
-
-            // Store process reference for stopping later
-            recording.RecordingProcess = process;
-
-            // Update UI to show scheduled recording is active
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
-            {
-                if (System.Windows.Application.Current.MainWindow is MainWindow mainWindow)
-                {
-                    // Find the dashboard window and update button text
-                    foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
-                    {
-                        if (window is DashboardWindow dashboard)
-                        {
-                            if (dashboard.FindName("RecordBtnText") is System.Windows.Controls.TextBlock btnText)
-                                btnText.Text = "Scheduled";
-                            break;
-                        }
-                    }
-                }
-            });
-
-            Log($"Started FFmpeg recording process for: {recording.Title} -> {recording.OutputFilePath}");
-        }
-        else
-        {
-            process.Dispose();
-            throw new InvalidOperationException($"Failed to start FFmpeg process for recording: {recording.Title}");
-        }
-    }
-
-    private void StopRecording(ScheduledRecording recording)
-    {
-        try
-        {
-            Log($"Stopping scheduled recording: {recording.Title}");
-
-            // Stop the FFmpeg process if it exists
-            if (recording.RecordingProcess != null && !recording.RecordingProcess.HasExited)
-            {
-                try
-                {
-                    recording.RecordingProcess.CloseMainWindow();
-                    if (!recording.RecordingProcess.WaitForExit(5000)) // Wait 5 seconds
-                    {
-                        recording.RecordingProcess.Kill(); // Force kill if it doesn't stop gracefully
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log($"Error stopping FFmpeg process for {recording.Title}: {ex.Message}");
-                }
-                finally
-                {
-                    recording.RecordingProcess?.Dispose();
-                    recording.RecordingProcess = null;
-                }
-            }
-
-            // Update RecordingManager only for channel indicator (separate from status)
-            RecordingManager.Instance.StopRecording();
-
-            // Update UI to show recording is no longer active
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
-            {
-                // Find the dashboard window and reset button text
-                foreach (System.Windows.Window window in System.Windows.Application.Current.Windows)
-                {
-                    if (window is DashboardWindow dashboard)
-                    {
-                        if (dashboard.FindName("RecordBtnText") is System.Windows.Controls.TextBlock btnText)
-                            btnText.Text = "Record";
-                        break;
-                    }
-                }
-            });
-
-            recording.Status = RecordingScheduleStatus.Completed;
-            RecordingStopped?.Invoke(recording);
-
-            Log($"Completed recording: {recording.Title} -> {recording.OutputFilePath}");
-        }
-        catch (Exception ex)
-        {
-            recording.Status = RecordingScheduleStatus.Failed;
-            Log($"Error stopping recording {recording.Title}: {ex.Message}");
-            RecordingFailed?.Invoke(recording);
         }
     }
 
@@ -550,19 +348,33 @@ public class RecordingScheduler : INotifyPropertyChanged
 
             if (allScheduled.TryGetValue(currentSessionKey, out var sessionRecordings))
             {
+                bool recoveredInterruptedRecording = false;
                 foreach (var recording in sessionRecordings)
                 {
                     // Skip recordings that are already completed or too old
                     if (recording.Status == RecordingScheduleStatus.Completed ||
-                        recording.Status == RecordingScheduleStatus.Failed ||
                         recording.Status == RecordingScheduleStatus.Cancelled ||
                         recording.EndTime < DateTime.UtcNow.AddDays(-7))
                     {
                         continue;
                     }
 
+                    if (_activeRecordings.TryGetValue(recording.Id, out var active))
+                    {
+                        _scheduledRecordings.Add(active.Recording);
+                        continue;
+                    }
+                    if (recording.Status == RecordingScheduleStatus.Recording)
+                    {
+                        recording.FailureReason = "The app stopped before this recording finished. Its completion could not be verified.";
+                        recording.ExitCode = null;
+                        recording.Status = RecordingScheduleStatus.Failed;
+                        recoveredInterruptedRecording = true;
+                    }
                     _scheduledRecordings.Add(recording);
                 }
+
+                if (recoveredInterruptedRecording) SaveScheduledRecordings();
 
                 Log($"Loaded {_scheduledRecordings.Count} scheduled recordings for current session");
             }

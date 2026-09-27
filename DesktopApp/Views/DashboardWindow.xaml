@@ -2055,7 +2055,14 @@
                                                     <DataGridTextColumn Header="Start Time" Binding="{Binding StartTimeLocal}" Width="140"/>
                                                     <DataGridTextColumn Header="End Time" Binding="{Binding EndTimeLocal}" Width="140"/>
                                                     <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="80"/>
-                                                    <DataGridTextColumn Header="Status" Binding="{Binding StatusText}" Width="100"/>
+                                                    <DataGridTemplateColumn Header="Status" Width="100">
+                                                        <DataGridTemplateColumn.CellTemplate>
+                                                            <DataTemplate>
+                                                                <TextBlock Text="{Binding StatusText}" ToolTip="{Binding FailureReason}"
+                                                                           ToolTipService.ShowDuration="30000"/>
+                                                            </DataTemplate>
+                                                        </DataGridTemplateColumn.CellTemplate>
+                                                    </DataGridTemplateColumn>
                                                     <DataGridTemplateColumn Header="Actions" Width="180">
                                                         <DataGridTemplateColumn.CellTemplate>
                                                             <DataTemplate>
