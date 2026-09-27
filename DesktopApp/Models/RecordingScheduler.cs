@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using DesktopApp.Views;
+using DesktopApp.Security;
 
 namespace DesktopApp.Models;
 
@@ -477,7 +478,7 @@ public class RecordingScheduler : INotifyPropertyChanged
             {
                 WriteIndented = true
             });
-            File.WriteAllText(_scheduleFilePath, json);
+            ProtectedRecordingFile.WriteAllText(_scheduleFilePath, json);
         }
         catch (Exception ex)
         {
@@ -491,7 +492,7 @@ public class RecordingScheduler : INotifyPropertyChanged
         {
             if (File.Exists(_scheduleFilePath))
             {
-                var json = File.ReadAllText(_scheduleFilePath);
+                var json = ProtectedRecordingFile.ReadAllText(_scheduleFilePath);
                 if (string.IsNullOrWhiteSpace(json))
                     return new Dictionary<string, List<ScheduledRecording>>();
 
@@ -521,7 +522,7 @@ public class RecordingScheduler : INotifyPropertyChanged
 
                         // Save migrated data back to file
                         var newJson = JsonSerializer.Serialize(migrated, new JsonSerializerOptions { WriteIndented = true });
-                        File.WriteAllText(_scheduleFilePath, newJson);
+                        ProtectedRecordingFile.WriteAllText(_scheduleFilePath, newJson);
 
                         return migrated;
                     }
@@ -531,6 +532,8 @@ public class RecordingScheduler : INotifyPropertyChanged
         catch (Exception ex)
         {
             Log($"Error loading all scheduled recordings: {ex.Message}");
+            // Never let a failed decrypt/read turn into an empty schedule on the next save.
+            throw;
         }
 
         return new Dictionary<string, List<ScheduledRecording>>();
@@ -990,7 +993,7 @@ public class RecordingScheduler : INotifyPropertyChanged
             {
                 WriteIndented = true
             });
-            File.WriteAllText(_seriesFilePath, json);
+            ProtectedRecordingFile.WriteAllText(_seriesFilePath, json);
         }
         catch (Exception ex)
         {
@@ -1004,7 +1007,7 @@ public class RecordingScheduler : INotifyPropertyChanged
         {
             if (File.Exists(_seriesFilePath))
             {
-                var json = File.ReadAllText(_seriesFilePath);
+                var json = ProtectedRecordingFile.ReadAllText(_seriesFilePath);
                 if (string.IsNullOrWhiteSpace(json))
                     return new Dictionary<string, List<SeriesRecording>>();
 
@@ -1034,7 +1037,7 @@ public class RecordingScheduler : INotifyPropertyChanged
 
                         // Save migrated data back to file
                         var newJson = JsonSerializer.Serialize(migrated, new JsonSerializerOptions { WriteIndented = true });
-                        File.WriteAllText(_seriesFilePath, newJson);
+                        ProtectedRecordingFile.WriteAllText(_seriesFilePath, newJson);
 
                         return migrated;
                     }
@@ -1044,6 +1047,7 @@ public class RecordingScheduler : INotifyPropertyChanged
         catch (Exception ex)
         {
             Log($"Error loading all series recordings: {ex.Message}");
+            throw;
         }
 
         return new Dictionary<string, List<SeriesRecording>>();
@@ -1116,6 +1120,7 @@ public class RecordingScheduler : INotifyPropertyChanged
 
     private static void Log(string message)
     {
+        message = DiagnosticRedactor.Redact(message, Session.Username, Session.Password);
         // Log to both debug output and UI
         System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] {DateTime.Now:HH:mm:ss} {message}");
 

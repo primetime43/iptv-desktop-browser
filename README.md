@@ -79,8 +79,9 @@ v1.06/v2.0.0
 
 ## 🔒 Security & Privacy
 
-- Credentials are saved **only if you choose to remember them**.
-- Passwords are **encrypted locally** using Windows DPAPI (per-user).
+- Login profile passwords are saved **only if you choose to remember them**, encrypted using Windows DPAPI (per-user).
+- Scheduled and series recordings retain the stream URLs needed to record. Their files are encrypted with Windows DPAPI and can only be decrypted by the same Windows user. Existing plaintext recording files are migrated when first loaded, including records for other IPTV accounts.
+- Diagnostics redact URLs and credentials; login response bodies and headers are omitted. Previously saved or exported logs are not modified.
 - No telemetry, no analytics.  
   Network traffic is limited to:
   - Your IPTV endpoints
@@ -99,3 +100,9 @@ v1.06/v2.0.0
 git clone https://github.com/primetime43/iptv-desktop-browser.git
 cd iptv-desktop-browser
 dotnet build
+```
+
+Run the Windows security regression checks (also run in CI):
+```bash
+dotnet run --project Tests/SecurityRegressionTests/SecurityRegressionTests.csproj -c Release
+```

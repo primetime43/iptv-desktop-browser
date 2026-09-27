@@ -10,6 +10,7 @@ using System.Text;
 using System.Windows.Media;
 using DesktopApp.Configuration;
 using DesktopApp.Models;
+using DesktopApp.Security;
 using DesktopApp.Views;
 using System.IO;
 using System.Linq;
@@ -313,7 +314,7 @@ namespace DesktopApp
             foreach (var url in candidateUrls)
             {
                 if (url is null) continue;
-                diag.AppendLine($"REQUEST => GET {url}");
+                diag.AppendLine($"REQUEST => GET {DiagnosticRedactor.Redact(url)}");
                 HttpResponseMessage? resp = null;
                 try
                 {
@@ -321,11 +322,9 @@ namespace DesktopApp
                     resp = await _http.GetAsync(url, cts.Token);
                     var elapsed = sw.ElapsedMilliseconds;
                     diag.AppendLine($"Response: HTTP {(int)resp.StatusCode} {resp.ReasonPhrase}  ({elapsed} ms)");
-                    foreach (var h in resp.Headers) diag.AppendLine($"  H: {h.Key}: {string.Join(",", h.Value)}");
-                    foreach (var h in resp.Content.Headers) diag.AppendLine($"  CH: {h.Key}: {string.Join(",", h.Value)}");
                     var body = await resp.Content.ReadAsStringAsync();
-                    var snippet = body.Length > 4000 ? body[..4000] + "...<truncated>" : body;
-                    diag.AppendLine("---- BODY START ----\n" + snippet + "\n---- BODY END ----");
+                    // Authentication responses and headers can contain credentials or cookies.
+                    diag.AppendLine($"Response body: {body.Length} characters (omitted for privacy)");
                     if (resp.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(body))
                     {
                         if (body.TrimStart().StartsWith("{"))
@@ -400,12 +399,12 @@ namespace DesktopApp
                 finally { resp?.Dispose(); diag.AppendLine(); }
             }
             sw.Stop();
-            DiagnosticsText.Text = diag.ToString();
+            DiagnosticsText.Text = DiagnosticRedactor.Redact(diag.ToString(), username, password);
             DiagnosticsExpander.Visibility = Visibility.Visible;
             if (!authed) DiagnosticsExpander.IsExpanded = true;
             if (!authed)
             {
-                SetStatus((lastError is null ? "Login failed (unknown)." : lastError) + $" ({sw.ElapsedMilliseconds} ms)", _brushError);
+                SetStatus(DiagnosticRedactor.Redact((lastError is null ? "Login failed (unknown)." : lastError) + $" ({sw.ElapsedMilliseconds} ms)", username, password), _brushError);
                 LoginButton.IsEnabled = true;
                 return;
             }

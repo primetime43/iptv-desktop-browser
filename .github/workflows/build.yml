@@ -46,6 +46,9 @@ jobs:
       - name: Build
         run: dotnet build $env:PROJECT -c $env:CONFIG -f $env:FRAMEWORK --no-restore
 
+      - name: Security regression checks
+        run: dotnet run --project Tests/SecurityRegressionTests/SecurityRegressionTests.csproj -c $env:CONFIG
+
       - name: Publish (framework-dependent win-x64 single-file)
         run: >-
           dotnet publish $env:PROJECT -c $env:CONFIG -f $env:FRAMEWORK

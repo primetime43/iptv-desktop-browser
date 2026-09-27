@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
+using DesktopApp.Security;
 using System.Windows.Threading;
 
 namespace DesktopApp;
@@ -41,10 +42,10 @@ public partial class App : Application
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Information()
                 .WriteTo.File(
+                    new RedactingLogFormatter(),
                     logPath,
                     rollingInterval: RollingInterval.Day,
-                    retainedFileCountLimit: 7,
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}"
+                    retainedFileCountLimit: 7
                 )
                 .CreateLogger();
 

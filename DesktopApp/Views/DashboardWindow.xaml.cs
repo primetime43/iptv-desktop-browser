@@ -1031,7 +1031,7 @@ namespace DesktopApp.Views
                 catch { }
             }
             ProfileMaxConnections = ui.max_connections ?? string.Empty; ProfileActiveConnections = ui.active_cons ?? string.Empty;
-            try { ProfileRawJson = JsonSerializer.Serialize(ui, new JsonSerializerOptions { WriteIndented = true }); } catch { }
+            try { ProfileRawJson = DesktopApp.Security.DiagnosticRedactor.Redact(JsonSerializer.Serialize(ui, new JsonSerializerOptions { WriteIndented = true })); } catch { }
         }
 
         // ===================== EPG scheduler (Xtream) =====================
@@ -1587,6 +1587,7 @@ namespace DesktopApp.Views
 
         private void Log(string text)
         {
+            text = DesktopApp.Security.DiagnosticRedactor.Redact(text, Session.Username, Session.Password);
             try
             {
                 if (_isClosing)
@@ -3559,7 +3560,7 @@ namespace DesktopApp.Views
                             $"Post-buffer: {recording.PostBufferMinutes} minutes\n" +
                             $"EPG-based: {(recording.IsEpgBased ? "Yes" : "No")}\n" +
                             $"Output File: {recording.OutputFilePath}\n" +
-                            $"Stream URL: {recording.StreamUrl}\n";
+                            $"Stream URL: {DesktopApp.Security.DiagnosticRedactor.Redact(recording.StreamUrl)}\n";
 
             if (!string.IsNullOrEmpty(recording.Description))
             {
@@ -4722,7 +4723,7 @@ namespace DesktopApp.Views
                     using var http = new System.Net.Http.HttpClient();
                     var url = Session.BuildApi("get_simple_data_table") + "&stream_id=" + channel.Id;
 
-                    System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Fetching EPG for channel {channel.Name}: {url}");
+                    Log($"[RecordingScheduler] Fetching EPG for channel {channel.Name}: {url}\n");
 
                     using var resp = await http.GetAsync(url);
                     var json = await resp.Content.ReadAsStringAsync();
@@ -4776,7 +4777,7 @@ namespace DesktopApp.Views
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[RecordingScheduler] Error loading EPG for channel {channel.Name}: {ex.Message}");
+                    Log($"[RecordingScheduler] Error loading EPG for channel {channel.Name}: {ex.Message}\n");
                 }
             }
 
