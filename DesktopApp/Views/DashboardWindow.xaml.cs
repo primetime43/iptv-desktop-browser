@@ -3098,10 +3098,10 @@ namespace DesktopApp.Views
             if (sender is ComboBox combo && combo.SelectedValue is string categoryId)
             {
                 // Load content based on current view (Movies or Series)
-                bool isMoviesVisible = (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridViewer && moviesGridViewer.Visibility == Visibility.Visible) ||
-                                     (FindName("MoviesListScrollViewer") is ScrollViewer moviesListViewer && moviesListViewer.Visibility == Visibility.Visible);
-                bool isSeriesVisible = (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridViewer && seriesGridViewer.Visibility == Visibility.Visible) ||
-                                     (FindName("SeriesListScrollViewer") is ScrollViewer seriesListViewer && seriesListViewer.Visibility == Visibility.Visible);
+                bool isMoviesVisible = (FindName("MoviesGridView") is ItemsControl moviesGridViewer && moviesGridViewer.Visibility == Visibility.Visible) ||
+                                     (FindName("MoviesListView") is ItemsControl moviesListViewer && moviesListViewer.Visibility == Visibility.Visible);
+                bool isSeriesVisible = (FindName("SeriesGridView") is ItemsControl seriesGridViewer && seriesGridViewer.Visibility == Visibility.Visible) ||
+                                     (FindName("SeriesListView") is ItemsControl seriesListViewer && seriesListViewer.Visibility == Visibility.Visible);
 
                 if (isMoviesVisible)
                 {
@@ -3117,13 +3117,13 @@ namespace DesktopApp.Views
         private void ShowMoviesView_Click(object sender, RoutedEventArgs e)
         {
             // Show movies and hide series based on current view mode
-            if (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridViewer)
+            if (FindName("MoviesGridView") is ItemsControl moviesGridViewer)
                 moviesGridViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
-            if (FindName("MoviesListScrollViewer") is ScrollViewer moviesListViewer)
+            if (FindName("MoviesListView") is ItemsControl moviesListViewer)
                 moviesListViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
-            if (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridViewer)
+            if (FindName("SeriesGridView") is ItemsControl seriesGridViewer)
                 seriesGridViewer.Visibility = Visibility.Collapsed;
-            if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListViewer)
+            if (FindName("SeriesListView") is ItemsControl seriesListViewer)
                 seriesListViewer.Visibility = Visibility.Collapsed;
 
             // Update button states
@@ -3153,13 +3153,13 @@ namespace DesktopApp.Views
         private void ShowSeriesView_Click(object sender, RoutedEventArgs e)
         {
             // Show series and hide movies based on current view mode
-            if (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridViewer)
+            if (FindName("MoviesGridView") is ItemsControl moviesGridViewer)
                 moviesGridViewer.Visibility = Visibility.Collapsed;
-            if (FindName("MoviesListScrollViewer") is ScrollViewer moviesListViewer)
+            if (FindName("MoviesListView") is ItemsControl moviesListViewer)
                 moviesListViewer.Visibility = Visibility.Collapsed;
-            if (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridViewer)
+            if (FindName("SeriesGridView") is ItemsControl seriesGridViewer)
                 seriesGridViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
-            if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListViewer)
+            if (FindName("SeriesListView") is ItemsControl seriesListViewer)
                 seriesListViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
 
             // Update button states
@@ -6201,24 +6201,24 @@ namespace DesktopApp.Views
 
         private void UpdateChannelsViewVisibility()
         {
-            if (FindName("ChannelsGridScrollViewer") is ScrollViewer gridScrollViewer)
+            if (FindName("ChannelsGridView") is ItemsControl gridScrollViewer)
                 gridScrollViewer.Visibility = IsChannelsGridView ? Visibility.Visible : Visibility.Collapsed;
-            if (FindName("ChannelsListScrollViewer") is ScrollViewer listScrollViewer)
+            if (FindName("ChannelsListView") is ItemsControl listScrollViewer)
                 listScrollViewer.Visibility = IsChannelsListView ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void UpdateVodViewVisibility()
         {
             // Update Movies view visibility
-            if (FindName("MoviesGridScrollViewer") is ScrollViewer moviesGridScrollViewer)
+            if (FindName("MoviesGridView") is ItemsControl moviesGridScrollViewer)
                 moviesGridScrollViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
-            if (FindName("MoviesListScrollViewer") is ScrollViewer moviesListScrollViewer)
+            if (FindName("MoviesListView") is ItemsControl moviesListScrollViewer)
                 moviesListScrollViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
 
             // Update Series view visibility
-            if (FindName("SeriesGridScrollViewer") is ScrollViewer seriesGridScrollViewer)
+            if (FindName("SeriesGridView") is ItemsControl seriesGridScrollViewer)
                 seriesGridScrollViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
-            if (FindName("SeriesListScrollViewer") is ScrollViewer seriesListScrollViewer)
+            if (FindName("SeriesListView") is ItemsControl seriesListScrollViewer)
                 seriesListScrollViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
         }
 

@@ -5,6 +5,10 @@
         Background="#0D1117" WindowStartupLocation="CenterScreen">
 
     <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="../Controls/CatalogStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
         <!-- Converters -->
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
 
@@ -406,6 +410,7 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="Margin" Value="0,8,0,0"/>
         </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid>
@@ -557,13 +562,7 @@
                     <!-- Main Content Area -->
                     <Grid Grid.Column="0" Margin="0,0,16,0">
                         <!-- Channels Grid View -->
-                        <ScrollViewer x:Name="ChannelsGridScrollViewer" Visibility="Visible">
-                            <ItemsControl x:Name="ChannelsGridItemsControl" ItemsSource="{Binding ChannelsCollectionView}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
+                        <ItemsControl x:Name="ChannelsGridView" Visibility="Visible" Style="{StaticResource ChannelGridCatalogStyle}" ItemsSource="{Binding ChannelsCollectionView}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource CardStyle}"
@@ -692,7 +691,7 @@
                                                         Opacity="0" Cursor="Hand"
                                                         ToolTip="Start/Stop Recording">
                                                     <StackPanel Orientation="Horizontal">
-                                                        <TextBlock x:Name="RecordingButtonIcon" Text="⏺️" FontSize="14" Foreground="White">
+                                                        <TextBlock Text="⏺️" FontSize="14" Foreground="White">
                                                             <TextBlock.Style>
                                                                 <Style TargetType="TextBlock">
                                                                     <Setter Property="Text" Value="⏺️"/>
@@ -737,16 +736,9 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </ScrollViewer>
 
                         <!-- Channels List View -->
-                        <ScrollViewer x:Name="ChannelsListScrollViewer" Visibility="Collapsed">
-                            <ItemsControl x:Name="ChannelsListItemsControl" ItemsSource="{Binding ChannelsCollectionView}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Vertical"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
+                        <ItemsControl x:Name="ChannelsListView" Visibility="Collapsed" Style="{StaticResource CatalogListStyle}" ItemsSource="{Binding ChannelsCollectionView}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8" Padding="12"
@@ -850,7 +842,6 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </ScrollViewer>
 
                         <!-- Channels Loading Overlay -->
                         <Grid x:Name="ChannelsLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
@@ -1070,13 +1061,7 @@
                     <!-- Left: VOD Grid -->
                     <Grid Grid.Column="0">
                         <!-- Movies Grid View -->
-                        <ScrollViewer x:Name="MoviesGridScrollViewer" Visibility="Visible">
-                            <ItemsControl ItemsSource="{Binding VodContentCollectionView}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
+                        <ItemsControl x:Name="MoviesGridView" Visibility="Visible" Style="{StaticResource PosterGridCatalogStyle}" ItemsSource="{Binding VodContentCollectionView}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource CardStyle}"
@@ -1112,16 +1097,9 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </ScrollViewer>
 
                         <!-- Movies List View -->
-                        <ScrollViewer x:Name="MoviesListScrollViewer" Visibility="Collapsed">
-                            <ItemsControl ItemsSource="{Binding VodContentCollectionView}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Vertical"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
+                        <ItemsControl x:Name="MoviesListView" Visibility="Collapsed" Style="{StaticResource CatalogListStyle}" ItemsSource="{Binding VodContentCollectionView}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8" Padding="12"
@@ -1163,7 +1141,6 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </ScrollViewer>
 
                         <!-- Movies Loading Overlay -->
                         <Grid x:Name="MoviesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
@@ -1183,13 +1160,7 @@
                         </Grid>
 
                         <!-- Series Grid View -->
-                        <ScrollViewer x:Name="SeriesGridScrollViewer" Visibility="Collapsed">
-                            <ItemsControl ItemsSource="{Binding SeriesContentCollectionView}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel Orientation="Horizontal"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
+                        <ItemsControl x:Name="SeriesGridView" Visibility="Collapsed" Style="{StaticResource PosterGridCatalogStyle}" ItemsSource="{Binding SeriesContentCollectionView}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource CardStyle}"
@@ -1225,16 +1196,9 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </ScrollViewer>
 
                         <!-- Series List View -->
-                        <ScrollViewer x:Name="SeriesListScrollViewer" Visibility="Collapsed">
-                            <ItemsControl ItemsSource="{Binding SeriesContentCollectionView}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <StackPanel Orientation="Vertical"/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
+                        <ItemsControl x:Name="SeriesListView" Visibility="Collapsed" Style="{StaticResource CatalogListStyle}" ItemsSource="{Binding SeriesContentCollectionView}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8" Padding="12"
@@ -1276,7 +1240,6 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                        </ScrollViewer>
 
                         <!-- Series Loading Overlay -->
                         <Grid x:Name="SeriesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">

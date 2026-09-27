@@ -1,0 +1,48 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:DesktopApp.Controls">
+    <!-- Scrolling must live inside the ItemsControl so its panel receives the viewport. -->
+    <Style x:Key="VirtualizedCatalogStyle" TargetType="ItemsControl">
+        <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True"/>
+        <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling"/>
+        <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel"/>
+        <Setter Property="VirtualizingPanel.CacheLength" Value="1"/>
+        <Setter Property="VirtualizingPanel.CacheLengthUnit" Value="Page"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ItemsControl">
+                    <ScrollViewer CanContentScroll="True" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled" Focusable="False"
+                                  Padding="0" Background="Transparent">
+                        <ItemsPresenter/>
+                    </ScrollViewer>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="CatalogListStyle" TargetType="ItemsControl" BasedOn="{StaticResource VirtualizedCatalogStyle}">
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="ChannelGridCatalogStyle" TargetType="ItemsControl" BasedOn="{StaticResource VirtualizedCatalogStyle}">
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <controls:VirtualizingTilePanel ItemWidth="{Binding TileWidth}" ItemHeight="{Binding TileHeight}"/>
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+    <Style x:Key="PosterGridCatalogStyle" TargetType="ItemsControl" BasedOn="{StaticResource VirtualizedCatalogStyle}">
+        <Setter Property="ItemsPanel">
+            <Setter.Value>
+                <ItemsPanelTemplate>
+                    <controls:VirtualizingTilePanel ItemWidth="{Binding TileWidth}" ItemHeight="{Binding VodTileHeight}"/>
+                </ItemsPanelTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+</ResourceDictionary>

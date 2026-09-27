@@ -116,4 +116,5 @@ dotnet run --project Tests/RecordingRegressionTests/RecordingRegressionTests.csp
 dotnet run --project Tests/EpgRegressionTests/EpgRegressionTests.csproj -c Release
 dotnet run --project Tests/UrlRegressionTests/UrlRegressionTests.csproj -c Release
 dotnet run --project Tests/CategoryRegressionTests/CategoryRegressionTests.csproj -c Release
+dotnet run --project Tests/VirtualizationRegressionTests/VirtualizationRegressionTests.csproj -c Release
 ```
