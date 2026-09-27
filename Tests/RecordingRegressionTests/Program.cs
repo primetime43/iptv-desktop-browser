@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 using DesktopApp.Models;
 using DesktopApp.Security;
@@ -273,6 +274,8 @@ try
     await finished(queued);
     Check(ReadAccounts(queued)[queuedOwner].Single().Status == RecordingScheduleStatus.Completed,
         "Queued runs retain their original account and FFmpeg settings across startup races");
+
+    await RecordingMutationChecks.RunAsync(root, Check);
 
     Console.WriteLine($"Passed {passed} recording regression checks.");
     return 0;

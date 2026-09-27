@@ -154,18 +154,22 @@ public partial class RecordingScheduler : INotifyPropertyChanged
 
     public void UpdateRecording(ScheduledRecording updatedRecording)
     {
+        // Dispatch the entire operation before taking the scheduler lock. Waiting
+        // for the UI while holding that lock can deadlock with a scheduler/UI action.
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+        {
+            dispatcher.Invoke(() => UpdateRecording(updatedRecording));
+            return;
+        }
+
         lock (_lockObject)
         {
             var existingRecording = _scheduledRecordings.FirstOrDefault(r => r.Id == updatedRecording.Id);
             if (existingRecording != null && existingRecording.CanEdit)
             {
-                // Update on UI thread to ensure proper binding updates
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
-                {
-                    var index = _scheduledRecordings.IndexOf(existingRecording);
-                    _scheduledRecordings[index] = updatedRecording;
-                });
-
+                var index = _scheduledRecordings.IndexOf(existingRecording);
+                _scheduledRecordings[index] = updatedRecording;
                 SaveScheduledRecordings();
                 Log($"Updated recording: {updatedRecording.Title}");
             }
@@ -174,6 +178,13 @@ public partial class RecordingScheduler : INotifyPropertyChanged
 
     public void DeleteCompletedRecordings()
     {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher != null && !dispatcher.CheckAccess())
+        {
+            dispatcher.Invoke(DeleteCompletedRecordings);
+            return;
+        }
+
         lock (_lockObject)
         {
             var toRemove = _scheduledRecordings
@@ -184,15 +195,10 @@ public partial class RecordingScheduler : INotifyPropertyChanged
 
             if (toRemove.Any())
             {
-                // Remove items on UI thread to ensure proper binding updates
-                System.Windows.Application.Current.Dispatcher.BeginInvoke(() =>
+                foreach (var recording in toRemove)
                 {
-                    foreach (var recording in toRemove)
-                    {
-                        _scheduledRecordings.Remove(recording);
-                    }
-                });
-
+                    _scheduledRecordings.Remove(recording);
+                }
                 SaveScheduledRecordings();
                 Log($"Deleted {toRemove.Count} completed recordings");
             }
