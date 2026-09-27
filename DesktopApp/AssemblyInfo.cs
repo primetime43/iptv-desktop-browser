@@ -1,6 +1,7 @@
 using System.Windows;
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("RecordingRegressionTests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("CatalogLoadingRegressionTests")]
 
 [assembly: ThemeInfo(
     ResourceDictionaryLocation.None,            //where theme specific resource dictionaries are located

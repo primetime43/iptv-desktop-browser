@@ -75,6 +75,7 @@ v1.06/v2.0.0
 - Favorites are saved per account/playlist and persist between sessions.
 - Favorite channels maintain all EPG data and functionality.
 - Xtream “Now playing” is recalculated from the loaded schedule every 10 seconds. Guide gaps clear the label, and expired schedules refresh automatically. Older snapshot-only EPG caches are replaced when loaded.
+- Images and Xtream guides load for the selected item first, then visible cards, then nearby cards. A shared queue limits loading to four active jobs and 128 retained requests, cancels obsolete viewport work, and shares duplicate requests. “Now playing” and upcoming programs use the same guide.
 
 ### Scheduled recording failures
 - Failed or prematurely ended recordings show **Failed** immediately, with a notification.
@@ -117,4 +118,5 @@ dotnet run --project Tests/EpgRegressionTests/EpgRegressionTests.csproj -c Relea
 dotnet run --project Tests/UrlRegressionTests/UrlRegressionTests.csproj -c Release
 dotnet run --project Tests/CategoryRegressionTests/CategoryRegressionTests.csproj -c Release
 dotnet run --project Tests/VirtualizationRegressionTests/VirtualizationRegressionTests.csproj -c Release
+dotnet run --project Tests/CatalogLoadingRegressionTests/CatalogLoadingRegressionTests.csproj -c Release
 ```

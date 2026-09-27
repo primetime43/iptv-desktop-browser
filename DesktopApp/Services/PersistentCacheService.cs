@@ -35,14 +35,20 @@ public class PersistentCacheService : ICacheService
     private static readonly TimeSpan DefaultDataExpiration = TimeSpan.FromMinutes(30);
 
     public PersistentCacheService(IHttpService httpService, ISessionService sessionService, ILogger<PersistentCacheService> logger)
+        : this(httpService, sessionService, logger, Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IPTV-Desktop-Browser", "Cache"), true)
+    {
+    }
+
+    internal PersistentCacheService(IHttpService httpService, ISessionService sessionService,
+        ILogger<PersistentCacheService> logger, string cacheDirectory, bool startMaintenance = false)
     {
         _httpService = httpService;
         _sessionService = sessionService;
         _logger = logger;
 
         // Setup cache directories
-        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-        _cacheDirectory = Path.Combine(appDataPath, "IPTV-Desktop-Browser", "Cache");
+        _cacheDirectory = cacheDirectory;
         _imageDirectory = Path.Combine(_cacheDirectory, "Images");
         _dataDirectory = Path.Combine(_cacheDirectory, "Data");
         _indexFile = Path.Combine(_cacheDirectory, "cache_index.json");
@@ -52,6 +58,8 @@ public class PersistentCacheService : ICacheService
         Directory.CreateDirectory(_dataDirectory);
 
         _logger.LogInformation("🏗️ PersistentCacheService created - Cache dir: {CacheDir}", _cacheDirectory);
+
+        if (!startMaintenance) return;
 
         // Load existing cache
         _ = Task.Run(LoadCacheFromDiskAsync);
@@ -74,11 +82,12 @@ public class PersistentCacheService : ICacheService
             return cachedImage;
         }
 
+        var imageFile = Path.Combine(_imageDirectory, $"{cacheKey}.jpg");
         // Only check disk cache if caching is enabled
         if (_sessionService.CachingEnabled)
         {
             // Check file cache (try to load synchronously for immediate display)
-            var imageFile = Path.Combine(_imageDirectory, $"{cacheKey}.jpg");
+
             if (File.Exists(imageFile))
             {
                 try
@@ -105,67 +114,67 @@ public class PersistentCacheService : ICacheService
                 }
             }
 
-            // Download and cache
-            await _imageSemaphore.WaitAsync(cancellationToken);
-            try
-            {
-                // Double-check after acquiring semaphore
-                if (_imageCache.TryGetValue(cacheKey, out cachedImage))
-                    return cachedImage;
-
-                _logger.LogInformation("🔄 Image cache MISS - Downloading: {Url}", url);
-                var imageBytes = await _httpService.GetByteArrayAsync(url, cancellationToken);
-
-                if (imageBytes.Length == 0)
-                    return null;
-
-                // Save to disk only if caching is enabled
-                if (_sessionService.CachingEnabled)
-                {
-                    await File.WriteAllBytesAsync(imageFile, imageBytes, cancellationToken);
-                }
-
-                // Load into memory
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.StreamSource = new MemoryStream(imageBytes);
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.EndInit();
-                bmp.Freeze();
-
-                // Apply size limits
-                if (_imageCache.Count >= MaxImageCacheSize)
-                {
-                    var keysToRemove = _imageCache.Keys.Take(MaxImageCacheSize / 10).ToList();
-                    foreach (var key in keysToRemove)
-                    {
-                        _imageCache.TryRemove(key, out _);
-                    }
-                }
-
-                _imageCache[cacheKey] = bmp;
-                if (_sessionService.CachingEnabled)
-                {
-                    _logger.LogInformation("💾 Image cached to disk and memory: {Url}", url);
-                }
-                else
-                {
-                    _logger.LogInformation("💾 Image cached to memory only (disk caching disabled): {Url}", url);
-                }
-                return bmp;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to download and cache image: {Url}", url);
-                return null;
-            }
-            finally
-            {
-                _imageSemaphore.Release();
-            }
         }
 
-        return null;
+        // Downloads and memory caching are independent of the disk-cache setting.
+        await _imageSemaphore.WaitAsync(cancellationToken);
+        try
+        {
+            // Double-check after acquiring semaphore
+            if (_imageCache.TryGetValue(cacheKey, out cachedImage))
+                return cachedImage;
+
+            _logger.LogInformation("🔄 Image cache MISS - Downloading: {Url}", url);
+            var imageBytes = await _httpService.GetByteArrayAsync(url, cancellationToken);
+
+            if (imageBytes.Length == 0)
+                return null;
+
+            // Save to disk only if caching is enabled
+            if (_sessionService.CachingEnabled)
+            {
+                await File.WriteAllBytesAsync(imageFile, imageBytes, cancellationToken);
+            }
+
+            // Load into memory
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.StreamSource = new MemoryStream(imageBytes);
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.EndInit();
+            bmp.Freeze();
+
+            // Apply size limits
+            if (_imageCache.Count >= MaxImageCacheSize)
+            {
+                var keysToRemove = _imageCache.Keys.Take(MaxImageCacheSize / 10).ToList();
+                foreach (var key in keysToRemove)
+                {
+                    _imageCache.TryRemove(key, out _);
+                }
+            }
+
+            _imageCache[cacheKey] = bmp;
+            if (_sessionService.CachingEnabled)
+            {
+                _logger.LogInformation("💾 Image cached to disk and memory: {Url}", url);
+            }
+            else
+            {
+                _logger.LogInformation("💾 Image cached to memory only (disk caching disabled): {Url}", url);
+            }
+            return bmp;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to download and cache image: {Url}", url);
+            return null;
+        }
+        finally
+        {
+            _imageSemaphore.Release();
+        }
     }
 
     public async Task<BitmapImage?> GetChannelLogoAsync(int channelId, string logoUrl, CancellationToken cancellationToken = default)

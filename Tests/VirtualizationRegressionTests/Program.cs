@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Markup;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using DesktopApp.Controls;
@@ -51,11 +52,18 @@ internal static class Program
                 </DataTemplate>
                 """)
         };
+        // A hidden native presentation source supplies real WPF visibility state.
+        using var source = new HwndSource(new HwndSourceParameters("Catalog regression fixture")
+        { Width = 640, Height = 400, WindowStyle = unchecked((int)0x80000000), PositionX = -10000, PositionY = -10000 });
+        source.RootVisual = control;
         Layout(control);
         var panel = Descendants(control).OfType<VirtualizingPanel>().Single();
         var scroll = (IScrollInfo)panel;
         Check(scroll.ScrollOwner?.CanContentScroll == true, "The internal ScrollViewer delegates scrolling to the virtualizing panel");
         var initial = Children(panel).ToHashSet();
+        var viewport = CatalogViewport.Read(control);
+        Check(viewport.Any(i => i.Priority == 1) && viewport.Any(i => i.Priority == 2) && viewport.Count < 100,
+            "Viewport demand distinguishes visible items from the nearby buffer");
         Check(initial.Count > 0 && initial.Count < 100, $"{style}: only a viewport-sized set of 10,000 items is realized");
         Check(control.ItemContainerGenerator.ContainerFromIndex(9999) == null, "Distant items have no UI containers");
         Console.WriteLine($"{style}: {initial.Count} containers for {data.Count:N0} items at 640x400.");
@@ -132,6 +140,7 @@ internal static class Program
             (string)first.DataContext == "New category 7", "Category replacement renders correctly after reset");
         control.Visibility = Visibility.Collapsed;
         Layout(control);
+        Check(CatalogViewport.Read(control).Count == 0, "Hidden views request no images or guides");
         control.Visibility = Visibility.Visible;
         Layout(control);
         Check(Children(panel).Count() == 1, "Hiding and restoring a view retains correct content");

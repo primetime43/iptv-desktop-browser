@@ -18,11 +18,7 @@ public partial class ChannelService
 
             var nowUtc = _clock.GetUtcNow().UtcDateTime;
             channel.RefreshCurrentProgram(nowUtc);
-            if (string.IsNullOrEmpty(channel.EpgChannelId))
-            {
-                channel.NextEpgRefreshUtc = null;
-                return;
-            }
+            // Xtream's guide endpoint is addressed by stream ID, not epg_channel_id.
 
             // Retain the loaded guide in memory even when disk caching is disabled.
             if (channel.EpgSchedule?.IsStillValid(nowUtc) == true)

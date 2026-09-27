@@ -130,6 +130,13 @@ await noDisk.Service.LoadEpgForChannelAsync(noDisk.Channel);
 Check(noDisk.Channel.NowTitle == "Second show" && noDisk.Http.Requests == 1 && noDisk.Cache.Reads == 0 && noDisk.Cache.Writes == 0,
     "Loaded schedule advances in memory with disk caching disabled");
 
+var noGuideId = Create();
+noGuideId.Channel.EpgChannelId = null;
+noGuideId.Http.Response = Guide(Program("Selected channel guide", -5, 10));
+await noGuideId.Service.LoadEpgForChannelAsync(noGuideId.Channel);
+Check(noGuideId.Http.Requests == 1 && noGuideId.Channel.NowTitle == "Selected channel guide",
+    "Selected channels can load the shared guide by stream ID without an optional EPG identifier");
+
 Console.WriteLine($"Passed {passed} EPG regression checks.");
 
 Harness Create()

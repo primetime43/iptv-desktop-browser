@@ -34,8 +34,6 @@ namespace DesktopApp.Views
         private readonly ICacheService _cacheService;
         private readonly ObservableCollection<Category> _categories = new(); public ObservableCollection<Category> Categories => _categories;
         private readonly ObservableCollection<Channel> _channels = new(); public ObservableCollection<Channel> Channels => _channels;
-        private readonly Dictionary<string, BitmapImage> _logoCache = new(StringComparer.OrdinalIgnoreCase);
-        private readonly SemaphoreSlim _logoSemaphore = new(6);
         private readonly ObservableCollection<EpgEntry> _upcomingEntries = new(); public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
 
         // VOD collections
@@ -310,8 +308,7 @@ namespace DesktopApp.Views
                 {
                     if (Session.Mode == SessionMode.Xtream)
                     {
-                        _ = EnsureEpgLoadedAsync(value, force: true);
-                        _ = LoadFullEpgForSelectedChannelAsync(value);
+                        RefreshCatalogResources();
                     }
                     else
                     {
@@ -360,11 +357,11 @@ namespace DesktopApp.Views
         private bool _isClosing;
         private readonly CancellationTokenSource _cts = new();
         private readonly LatestRequestLoader _categoryLoader = new();
+        private bool _showingSeriesCatalog;
 
         // Buffer for log messages during startup before UI is ready
         private readonly List<string> _startupLogBuffer = new();
         private DateTime _nextScheduledEpgRefreshUtc;
-        private Task? _epgBoundaryRefreshTask;
         private string _lastEpgUpdateText = "(never)";
         public string LastEpgUpdateText
         {
@@ -641,6 +638,7 @@ namespace DesktopApp.Views
 
             // Subscribe to recording manager events for channel indicators
             RecordingManager.Instance.PropertyChanged += OnRecordingManagerChanged;
+            InitializeCatalogLoading();
         }
 
         // ===== Index building for playlist mode (M3U) =====
@@ -879,7 +877,7 @@ namespace DesktopApp.Views
             ChannelsCountText = matches.Count.ToString() + " channels";
             ChannelsCollectionView.Refresh();
             // Lazy load logos for shown subset
-            _ = Task.Run(() => PreloadLogosAsync(matches), _cts.Token);
+            ScheduleCatalogRefresh();
         }
 
         private async Task LoadAllChannelsIndexAsync()
@@ -1061,40 +1059,11 @@ namespace DesktopApp.Views
         }
         private void RefreshVisibleNowPlaying()
         {
-            var channels = _channels.ToList();
-            if (SelectedChannel != null) channels.Add(SelectedChannel);
-            if (FindName("FavoritesChannelsControl") is ItemsControl favorites && favorites.ItemsSource is IEnumerable<Channel> favoriteChannels)
-                channels.AddRange(favoriteChannels);
-            channels = channels.Distinct().ToList();
-
-            var nowUtc = DateTime.UtcNow;
-            foreach (var channel in channels)
-                if (channel.EpgSchedule != null) channel.RefreshCurrentProgram(nowUtc);
-            UpdateSelectedNowPlaying();
-
-            // Clock-only updates above keep running while expired guides are fetched
-            // in small batches. A slow provider must not freeze other channels' labels.
-            if (_epgBoundaryRefreshTask == null || _epgBoundaryRefreshTask.IsCompleted)
-            {
-                var due = channels.Where(c => !c.EpgLoading && c.NextEpgRefreshUtc <= nowUtc).ToList();
-                if (due.Count > 0) _epgBoundaryRefreshTask = RefreshExpiredEpgAsync(due);
-            }
+            var now = DateTime.UtcNow;
+            foreach (var channel in ReadCatalogViewport().Select(i => i.Item).OfType<Channel>())
+                channel.RefreshCurrentProgram(now);
+            RefreshCatalogResources();
         }
-
-        private async Task RefreshExpiredEpgAsync(List<Channel> channels)
-        {
-            try
-            {
-                foreach (var batch in channels.Chunk(5))
-                {
-                    if (_cts.IsCancellationRequested) return;
-                    await Task.WhenAll(batch.Select(c => EnsureEpgLoadedAsync(c, force: true)));
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { Log($"EPG refresh failed: {ex.Message}\n"); }
-        }
-
         private void UpdateSelectedNowPlaying()
         {
             NowProgramText = string.IsNullOrWhiteSpace(SelectedChannel?.NowTitle)
@@ -1108,12 +1077,7 @@ namespace DesktopApp.Views
             {
                 LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
                 Log("EPG refresh triggered\n");
-                foreach (var ch in _channels) { ch.EpgLoaded = false; ch.EpgAttempts = 0; }
-                if (SelectedChannel != null)
-                {
-                    _ = EnsureEpgLoadedAsync(SelectedChannel, force: true);
-                    _ = LoadFullEpgForSelectedChannelAsync(SelectedChannel);
-                }
+                RefreshVisibleNowPlaying();
             });
         }
 
@@ -1169,6 +1133,7 @@ namespace DesktopApp.Views
         private void CancelCategoryLoad()
         {
             _categoryLoader.Cancel();
+            _catalogResources?.Cancel();
             SetGuideLoading(false);
             HideLoadingOverlay("ChannelsLoadingOverlay");
         }
@@ -1190,6 +1155,7 @@ namespace DesktopApp.Views
                     _channels.Clear();
                     ChannelsCountText = "0 channels";
                     SelectedChannel = null;
+                    _catalogResources?.Cancel();
                     Log($"Loading channels for category: {cat.Name}\n");
                     if (cat.Id == "⭐ Favorites") return GetFavoriteCategoryChannels();
                     if (Session.Mode == SessionMode.M3u)
@@ -1214,12 +1180,10 @@ namespace DesktopApp.Views
                     ChannelsCountText = cat.Id == "⭐ Favorites"
                         ? $"{channels.Count} favorite channels" : $"{channels.Count} channels";
                     Log($"Loaded {channels.Count} channels for category: {cat.Name}\n");
-                    // Background work uses this result snapshot, not the changing UI collection.
-                    _ = Task.Run(() => PreloadLogosAsync(channels), _cts.Token);
+                    // Layout determines visible and nearby resource demand.
+                    ScheduleCatalogRefresh();
                     if (Session.Mode == SessionMode.M3u)
                         UpdateChannelsEpgFromXmltvBatch(channels);
-                    else if (cat.Id != "⭐ Favorites")
-                        _ = Task.Run(() => StartGradualEpgLoadingAsync(channels), _cts.Token);
                     ApplySearch();
                 },
                 ex => Log("ERROR loading channels: " + ex.Message + "\n"),
@@ -1249,232 +1213,8 @@ namespace DesktopApp.Views
             }).ToList();
         }
 
-        // ===================== Logos =====================
-        private async Task PreloadLogosAsync(IEnumerable<Channel> channels)
-        { try { await Task.WhenAll(channels.Where(c => !string.IsNullOrWhiteSpace(c.Logo)).Select(LoadLogoAsync)); } catch { } }
-        private async Task LoadLogoAsync(Channel channel)
-        {
-            if (_cts.IsCancellationRequested) return;
-            var url = channel.Logo;
-            if (string.IsNullOrWhiteSpace(url)) return;
-
-            try
-            {
-                // Use channel_id based caching for better cache matching
-                var cachedImage = await _cacheService.GetChannelLogoAsync(channel.Id, url, _cts.Token);
-                if (cachedImage != null)
-                {
-                    await Application.Current.Dispatcher.InvokeAsync(() =>
-                    {
-                        channel.LogoImage = cachedImage;
-                    });
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected when cancellation is requested
-            }
-            catch (Exception ex)
-            {
-                Log($"Error loading logo for channel {channel.Id} from {url}: {ex.Message}\n");
-            }
-        }
-
-        // ===================== Xtream EPG loading =====================
-        private async Task LoadEpgDataBatchedAsync(List<Channel> channels)
-        {
-            if (Session.Mode != SessionMode.Xtream || _cts.IsCancellationRequested) return;
-
-            const int batchSize = 3; // Limit concurrent API calls to avoid overwhelming server
-            const int maxRetries = 3;
-            const int retryDelayMs = 2000;
-
-            Log($"Starting batched EPG loading for {channels.Count} channels (batch size: {batchSize})\n");
-
-            for (int i = 0; i < channels.Count; i += batchSize)
-            {
-                if (_cts.IsCancellationRequested) break;
-
-                var batch = channels.Skip(i).Take(batchSize).ToList();
-                var tasks = batch.Select(async ch =>
-                {
-                    for (int retry = 0; retry < maxRetries; retry++)
-                    {
-                        if (_cts.IsCancellationRequested) break;
-                        if (ch.EpgLoaded && !string.IsNullOrEmpty(ch.NowTitle)) break;
-
-                        try
-                        {
-                            await Dispatcher.InvokeAsync(() => _ = EnsureEpgLoadedAsync(ch, force: retry > 0));
-                            // Small delay to check if loading succeeded
-                            await Task.Delay(500, _cts.Token);
-
-                            if (ch.EpgLoaded && !string.IsNullOrEmpty(ch.NowTitle))
-                            {
-                                Log($"EPG loaded successfully for channel {ch.Name} (attempt {retry + 1})\n");
-                                break;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Log($"EPG loading failed for channel {ch.Name} (attempt {retry + 1}): {ex.Message}\n");
-                        }
-
-                        if (retry < maxRetries - 1)
-                        {
-                            Log($"Retrying EPG load for channel {ch.Name} in {retryDelayMs}ms...\n");
-                            await Task.Delay(retryDelayMs, _cts.Token);
-                        }
-                    }
-                }).ToList();
-
-                try
-                {
-                    await Task.WhenAll(tasks);
-                }
-                catch (Exception ex)
-                {
-                    Log($"ERROR in EPG batch processing: {ex.Message}\n");
-                }
-
-                // Small delay between batches to be respectful to the server
-                if (i + batchSize < channels.Count && !_cts.IsCancellationRequested)
-                {
-                    await Task.Delay(1000, _cts.Token);
-                }
-            }
-
-            var successCount = channels.Count(ch => ch.EpgLoaded && !string.IsNullOrEmpty(ch.NowTitle));
-            Log($"EPG batch loading completed: {successCount}/{channels.Count} channels loaded successfully\n");
-        }
-
-        private async Task EnsureEpgLoadedAsync(Channel ch, bool force = false)
-        {
-            if (Session.Mode != SessionMode.Xtream) return;
-            if (_cts.IsCancellationRequested) return;
-            if (ch.EpgLoading) return;
-            ch.RefreshCurrentProgram(DateTime.UtcNow);
-            if (!force && ch.EpgLoaded) return;
-
-            // Use ChannelService instead of direct API calls
-            ch.EpgLoading = true;
-            ch.EpgAttempts++;
-            try
-            {
-                await _channelService.LoadEpgForChannelAsync(ch, _cts.Token);
-                if (ReferenceEquals(ch, SelectedChannel)) UpdateSelectedNowPlaying();
-            }
-            catch (Exception ex)
-            {
-                Log($"ERROR loading EPG for {ch.Name}: {ex.Message}\n");
-            }
-            finally
-            {
-                ch.EpgLoading = false;
-            }
-        }
-
-        private async Task StartGradualEpgLoadingAsync(IEnumerable<Channel> channels)
-        {
-            if (Session.Mode != SessionMode.Xtream || _cts.IsCancellationRequested) return;
-
-            var channelList = channels.ToList();
-            Log($"Starting gradual EPG loading for {channelList.Count} channels in background\n");
-
-            const int batchSize = 5; // Load EPG for 5 channels at a time
-            const int delayBetweenBatches = 1000; // 1 second delay between batches
-
-            try
-            {
-                for (int i = 0; i < channelList.Count; i += batchSize)
-                {
-                    if (_cts.IsCancellationRequested) break;
-
-                    var batch = channelList.Skip(i).Take(batchSize);
-                    var batchTasks = batch.Select(async channel =>
-                    {
-                        channel.RefreshCurrentProgram(DateTime.UtcNow);
-                        if (_cts.IsCancellationRequested || channel.EpgLoaded || channel.EpgLoading)
-                            return;
-
-                        try
-                        {
-                            channel.EpgLoading = true;
-                            await _channelService.LoadEpgForChannelAsync(channel, _cts.Token);
-                        }
-                        catch (Exception ex)
-                        {
-                            // Don't log individual EPG failures in background loading to avoid spam
-                        }
-                        finally
-                        {
-                            channel.EpgLoading = false;
-                        }
-                    });
-
-                    await Task.WhenAll(batchTasks);
-
-                    // Small delay between batches to avoid overwhelming the server
-                    if (i + batchSize < channelList.Count && !_cts.IsCancellationRequested)
-                    {
-                        await Task.Delay(delayBetweenBatches, _cts.Token);
-                    }
-                }
-
-                // Update EPG timestamp when background loading completes
-                if (!_cts.IsCancellationRequested && Session.LastEpgUpdateUtc == null)
-                {
-                    Session.LastEpgUpdateUtc = DateTime.UtcNow;
-                    await Dispatcher.InvokeAsync(() => LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"));
-                }
-
-                Log($"Completed gradual EPG loading for {channelList.Count} channels\n");
-            }
-            catch (OperationCanceledException)
-            {
-                // Expected when cancellation is requested
-            }
-            catch (Exception ex)
-            {
-                Log($"Error in gradual EPG loading: {ex.Message}\n");
-            }
-        }
-
         private static string TryGetString(JsonElement el, params string[] names)
         { foreach (var n in names) if (el.TryGetProperty(n, out var p)) { if (p.ValueKind == JsonValueKind.String) return p.GetString() ?? string.Empty; if (p.ValueKind == JsonValueKind.Number) return p.ToString(); } return string.Empty; }
-        private void ApplyNow(Channel ch, string title, string desc, DateTime startUtc, DateTime endUtc)
-        { ch.NowTitle = title; ch.NowDescription = desc; ch.NowTimeRange = $"{startUtc.ToLocalTime():h:mm tt} - {endUtc.ToLocalTime():h:mm tt}"; if (ReferenceEquals(ch, SelectedChannel)) NowProgramText = $"Now: {ch.NowTitle} ({ch.NowTimeRange})"; if (Session.LastEpgUpdateUtc == null) { Session.LastEpgUpdateUtc = DateTime.UtcNow; LastEpgUpdateText = Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g"); } }
-        private async Task LoadFullEpgForSelectedChannelAsync(Channel ch)
-        {
-            if (Session.Mode != SessionMode.Xtream) return; if (_cts.IsCancellationRequested) { _upcomingEntries.Clear(); return; }
-            try
-            {
-                var url = Session.BuildApi("get_simple_data_table") + "&stream_id=" + ch.Id; Log($"GET {url} (full for selected)\n");
-                using var resp = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, _cts.Token); var json = await resp.Content.ReadAsStringAsync(_cts.Token); Log("(length=" + json.Length + ")\n\n");
-                var trimmed = json.AsSpan().TrimStart(); if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '[')) return;
-                var upcoming = new List<EpgEntry>(); var nowUtc = DateTime.UtcNow;
-                try
-                {
-                    using var doc = JsonDocument.Parse(json); if (doc.RootElement.TryGetProperty("epg_listings", out var listings) && listings.ValueKind == JsonValueKind.Array)
-                        foreach (var el in listings.EnumerateArray())
-                        {
-                            var start = GetUnix(el, "start_timestamp"); var end = GetUnix(el, "stop_timestamp"); if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
-                            string titleRaw = TryGetString(el, "title", "name", "programme", "program"); string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
-                            string title = DecodeMaybeBase64(titleRaw); string desc = DecodeMaybeBase64(descRaw); bool isNow = nowUtc >= start && nowUtc < end; if (!isNow && start >= nowUtc) upcoming.Add(new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc });
-                        }
-                }
-                catch (Exception ex) { Log("PARSE ERROR (full epg selected): " + ex.Message + "\n"); }
-                await Dispatcher.InvokeAsync(() => { _upcomingEntries.Clear(); foreach (var e in upcoming.OrderBy(e => e.StartUtc).Take(10)) _upcomingEntries.Add(e); });
-
-                // Check for new episodes to record based on series recording rules
-                if (upcoming.Any())
-                {
-                    RecordingScheduler.Instance.CheckForNewEpisodes(ch.Id, upcoming);
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { Log("ERROR loading full epg: " + ex.Message + "\n"); }
-        }
         private static DateTime GetUnix(JsonElement el, string prop)
         {
             if (!el.TryGetProperty(prop, out var tsEl))
@@ -1729,6 +1469,7 @@ namespace DesktopApp.Views
         // modify existing OnClosed (search and replace previous implementation) - keep rest of file intact
         protected override void OnClosed(EventArgs e)
         {
+            StopCatalogLoading();
             _scheduler.RecordingFailed -= OnScheduledRecordingFailed;
             _scheduler.EpgRefreshNeeded -= OnEpgRefreshNeeded;
             try { StopRecording(); } catch { }
@@ -1779,10 +1520,10 @@ namespace DesktopApp.Views
         }
 
 
-        private async void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        private void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is Channel ch)
-                await EnsureEpgLoadedAsync(ch);
+                ScheduleCatalogRefresh();
         }
 
         private void ChannelTile_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
@@ -2036,6 +1777,7 @@ namespace DesktopApp.Views
 
             // Set loading state
             IsLoadingVodContent = true;
+            RefreshCatalogResources();
 
             // Show toast notification
             ShowToast("📽️ Loading Movies", "Fetching movie list...", "#347DFF");
@@ -2105,11 +1847,6 @@ namespace DesktopApp.Views
                                 ContainerExtension = GetFlex(el, "container_extension")
                             };
 
-                            if (!string.IsNullOrEmpty(vod.StreamIcon))
-                            {
-                                _ = LoadVodPosterAsync(vod);
-                            }
-
                             parsed.Add(vod);
                         }
                     }
@@ -2146,89 +1883,6 @@ namespace DesktopApp.Views
             }
         }
 
-        private async Task LoadVodPosterAsync(VodContent vod)
-        {
-            if (string.IsNullOrEmpty(vod.StreamIcon)) return;
-
-            try
-            {
-                await _logoSemaphore.WaitAsync(_cts.Token);
-                try
-                {
-                    // Try to get from cache first, then fallback to direct download if cache fails
-                    var bitmap = await _cacheService.GetImageAsync(vod.StreamIcon, _cts.Token);
-                    if (bitmap != null)
-                    {
-                        vod.PosterImage = bitmap;
-                        return;
-                    }
-
-                    // Fallback to direct download if cache fails
-                    var imageData = await _http.GetByteArrayAsync(vod.StreamIcon, _cts.Token);
-                    var fallbackBitmap = new BitmapImage();
-                    fallbackBitmap.BeginInit();
-                    fallbackBitmap.StreamSource = new MemoryStream(imageData);
-                    fallbackBitmap.CacheOption = BitmapCacheOption.OnLoad;
-                    fallbackBitmap.EndInit();
-                    fallbackBitmap.Freeze();
-
-                    vod.PosterImage = fallbackBitmap;
-                }
-                finally
-                {
-                    _logoSemaphore.Release();
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                Log($"Failed to load poster for {vod.Name}: {ex.Message}\n");
-            }
-        }
-
-        private async Task LoadSeriesPosterAsync(SeriesContent series)
-        {
-            if (string.IsNullOrEmpty(series.StreamIcon)) return;
-
-            try
-            {
-                await _logoSemaphore.WaitAsync(_cts.Token);
-                try
-                {
-                    // Try to get from cache first, then fallback to direct download if cache fails
-                    var bitmap = await _cacheService.GetImageAsync(series.StreamIcon, _cts.Token);
-                    if (bitmap != null)
-                    {
-                        series.PosterImage = bitmap;
-                        return;
-                    }
-
-                    // Fallback to direct download if cache fails
-                    var imageBytes = await _http.GetByteArrayAsync(series.StreamIcon, _cts.Token);
-                    await Dispatcher.InvokeAsync(() =>
-                    {
-                        using var stream = new MemoryStream(imageBytes);
-                        var fallbackBitmap = new BitmapImage();
-                        fallbackBitmap.BeginInit();
-                        fallbackBitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        fallbackBitmap.StreamSource = stream;
-                        fallbackBitmap.EndInit();
-                        fallbackBitmap.Freeze();
-                        series.PosterImage = fallbackBitmap;
-                    }, DispatcherPriority.Background, _cts.Token);
-                }
-                finally
-                {
-                    _logoSemaphore.Release();
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                Log($"Failed to load poster for {series.Name}: {ex.Message}\n");
-            }
-        }
-
         private void OnVodCategoryChanged()
         {
             if (!string.IsNullOrEmpty(SelectedVodCategoryId))
@@ -2261,6 +1915,7 @@ namespace DesktopApp.Views
         {
             // Set loading state
             IsLoadingSeriesContent = true;
+            RefreshCatalogResources();
 
             // Show toast notification
             ShowToast("📺 Loading TV Shows", "Fetching series list...", "#347DFF");
@@ -2305,12 +1960,7 @@ namespace DesktopApp.Views
                 SeriesContentCollectionView.Refresh();
                 var filteredSeriesCount = _seriesContent.Count(s => SeriesContentFilter(s));
                 SeriesCountText = $"{filteredSeriesCount} series";
-
-                // Load posters for visible series
-                foreach (var series in parsed.Take(10)) // Load first 10 posters
-                {
-                    _ = LoadSeriesPosterAsync(series);
-                }
+                ScheduleCatalogRefresh();
 
                 // Show success toast
                 ShowToast("✅ TV Shows Loaded", $"Loaded {filteredSeriesCount} series", "#28A745");
@@ -3116,6 +2766,7 @@ namespace DesktopApp.Views
 
         private void ShowMoviesView_Click(object sender, RoutedEventArgs e)
         {
+            _showingSeriesCatalog = false;
             // Show movies and hide series based on current view mode
             if (FindName("MoviesGridView") is ItemsControl moviesGridViewer)
                 moviesGridViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
@@ -3152,6 +2803,7 @@ namespace DesktopApp.Views
 
         private void ShowSeriesView_Click(object sender, RoutedEventArgs e)
         {
+            _showingSeriesCatalog = true;
             // Show series and hide movies based on current view mode
             if (FindName("MoviesGridView") is ItemsControl moviesGridViewer)
                 moviesGridViewer.Visibility = Visibility.Collapsed;
@@ -3676,7 +3328,7 @@ namespace DesktopApp.Views
                 UpdateFavoritesDisplay(channels.Count);
 
                 // Load logos for favorites that don't have them
-                _ = Task.Run(() => LoadFavoriteLogosAsync(channels));
+                ScheduleCatalogRefresh();
             }
             catch (Exception ex)
             {
@@ -3731,30 +3383,6 @@ namespace DesktopApp.Views
                     LoadFavoritesPage();
                 }
             });
-        }
-
-        private async Task LoadFavoriteLogosAsync(List<Channel> favoriteChannels)
-        {
-            foreach (var channel in favoriteChannels.Where(c => !string.IsNullOrWhiteSpace(c.Logo) && c.LogoImage == null))
-            {
-                if (_cts.IsCancellationRequested) return;
-
-                try
-                {
-                    var logoImage = await _cacheService.GetChannelLogoAsync(channel.Id, channel.Logo, _cts.Token);
-                    if (logoImage != null)
-                    {
-                        await Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            channel.LogoImage = logoImage;
-                        });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Log($"Error loading logo for favorite channel {channel.Name}: {ex.Message}\n");
-                }
-            }
         }
 
         private void RefreshFavorites_Click(object sender, RoutedEventArgs e)
@@ -6211,15 +5839,15 @@ namespace DesktopApp.Views
         {
             // Update Movies view visibility
             if (FindName("MoviesGridView") is ItemsControl moviesGridScrollViewer)
-                moviesGridScrollViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+                moviesGridScrollViewer.Visibility = !_showingSeriesCatalog && IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
             if (FindName("MoviesListView") is ItemsControl moviesListScrollViewer)
-                moviesListScrollViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
+                moviesListScrollViewer.Visibility = !_showingSeriesCatalog && IsVodListView ? Visibility.Visible : Visibility.Collapsed;
 
             // Update Series view visibility
             if (FindName("SeriesGridView") is ItemsControl seriesGridScrollViewer)
-                seriesGridScrollViewer.Visibility = IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
+                seriesGridScrollViewer.Visibility = _showingSeriesCatalog && IsVodGridView ? Visibility.Visible : Visibility.Collapsed;
             if (FindName("SeriesListView") is ItemsControl seriesListScrollViewer)
-                seriesListScrollViewer.Visibility = IsVodListView ? Visibility.Visible : Visibility.Collapsed;
+                seriesListScrollViewer.Visibility = _showingSeriesCatalog && IsVodListView ? Visibility.Visible : Visibility.Collapsed;
         }
 
 
