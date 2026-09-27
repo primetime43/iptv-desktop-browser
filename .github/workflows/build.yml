@@ -58,6 +58,9 @@ jobs:
       - name: URL regression checks
         run: dotnet run --project Tests/UrlRegressionTests/UrlRegressionTests.csproj -c $env:CONFIG
 
+      - name: Category regression checks
+        run: dotnet run --project Tests/CategoryRegressionTests/CategoryRegressionTests.csproj -c $env:CONFIG
+
       - name: Publish (framework-dependent win-x64 single-file)
         run: >-
           dotnet publish $env:PROJECT -c $env:CONFIG -f $env:FRAMEWORK

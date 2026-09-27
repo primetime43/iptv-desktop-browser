@@ -359,6 +359,7 @@ namespace DesktopApp.Views
         private bool _logoutRequested;
         private bool _isClosing;
         private readonly CancellationTokenSource _cts = new();
+        private readonly LatestRequestLoader _categoryLoader = new();
 
         // Buffer for log messages during startup before UI is ready
         private readonly List<string> _startupLogBuffer = new();
@@ -740,6 +741,7 @@ namespace DesktopApp.Views
 
         private void OnSearchQueryChanged()
         {
+            if (IsGlobalSearchActive) CancelCategoryLoad();
             if (!SearchAllChannels)
             {
                 // Normal (category) search immediate
@@ -758,6 +760,7 @@ namespace DesktopApp.Views
 
         private void OnSearchAllToggle()
         {
+            if (IsGlobalSearchActive) CancelCategoryLoad();
             CancelDebounce();
             if (SearchAllChannels)
             {
@@ -845,7 +848,7 @@ namespace DesktopApp.Views
 
         private void FilterGlobalChannels()
         {
-            if (_allChannelsIndex == null) return;
+            if (!IsGlobalSearchActive || _cts.IsCancellationRequested || _allChannelsIndex == null) return;
             string query = SearchQuery.Trim();
             _channels.Clear();
             if (query.Length == 0)
@@ -1163,173 +1166,87 @@ namespace DesktopApp.Views
             // Guide loading indicators removed in new layout
             // TODO: Add loading indicators to new Live TV page if needed
         }
+        private void CancelCategoryLoad()
+        {
+            _categoryLoader.Cancel();
+            SetGuideLoading(false);
+            HideLoadingOverlay("ChannelsLoadingOverlay");
+        }
+
         private async Task LoadChannelsForCategoryAsync(Category cat)
         {
-            if (cat == null)
+            if (IsGlobalSearchActive || _isClosing || _cts.IsCancellationRequested)
             {
-                Log("Cannot load channels: category is null\n");
+                CancelCategoryLoad();
                 return;
             }
 
-            if (IsGlobalSearchActive)
-                return; // avoid overriding global results
-
-            ShowLoadingOverlay("ChannelsLoadingOverlay");
-
-            // Handle special Favorites category
-            if (cat.Id == "⭐ Favorites")
-            {
-                await LoadFavoritesAsCategoryAsync();
-                return;
-            }
-            if (Session.Mode == SessionMode.M3u)
-            {
-                SetGuideLoading(true);
-                try
+            await _categoryLoader.LoadAsync(
+                async token =>
                 {
-                    if (Session.PlaylistChannels == null)
+                    ShowLoadingOverlay("ChannelsLoadingOverlay");
+                    SetGuideLoading(true);
+                    // Do not leave the previous category visible if this request fails.
+                    _channels.Clear();
+                    ChannelsCountText = "0 channels";
+                    SelectedChannel = null;
+                    Log($"Loading channels for category: {cat.Name}\n");
+                    if (cat.Id == "⭐ Favorites") return GetFavoriteCategoryChannels();
+                    if (Session.Mode == SessionMode.M3u)
                     {
-                        Log("Playlist channels are not loaded\n");
-                        return;
+                        return Session.PlaylistChannels
+                            .Where(p => (string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category) == cat.Id)
+                            .Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId })
+                            .ToList();
                     }
-
-                    var list = Session.PlaylistChannels.Where(p => (string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category) == cat.Id)
-                        .Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId }).ToList();
+                    return await _channelService.LoadChannelsForCategoryAsync(cat, token);
+                },
+                channels =>
+                {
                     _channels.Clear();
                     int channelNumber = 1;
-                    foreach (var c in list)
+                    foreach (var channel in channels)
                     {
-                        c.Number = channelNumber++;
-                        _channels.Add(c);
+                        channel.Number = channelNumber++;
+                        _channels.Add(channel);
                     }
                     UpdateChannelsFavoriteStatus();
-                    ChannelsCountText = _channels.Count.ToString() + " channels";
-                    _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
-                    UpdateChannelsEpgFromXmltvBatch(_channels);
-                }
-                finally
+                    ChannelsCountText = cat.Id == "⭐ Favorites"
+                        ? $"{channels.Count} favorite channels" : $"{channels.Count} channels";
+                    Log($"Loaded {channels.Count} channels for category: {cat.Name}\n");
+                    // Background work uses this result snapshot, not the changing UI collection.
+                    _ = Task.Run(() => PreloadLogosAsync(channels), _cts.Token);
+                    if (Session.Mode == SessionMode.M3u)
+                        UpdateChannelsEpgFromXmltvBatch(channels);
+                    else if (cat.Id != "⭐ Favorites")
+                        _ = Task.Run(() => StartGradualEpgLoadingAsync(channels), _cts.Token);
+                    ApplySearch();
+                },
+                ex => Log("ERROR loading channels: " + ex.Message + "\n"),
+                () =>
                 {
                     SetGuideLoading(false);
                     HideLoadingOverlay("ChannelsLoadingOverlay");
-                }
-                ApplySearch();
-                return;
-            }
-            SetGuideLoading(true);
-            try
-            {
-                Log($"Loading channels for category: {cat.Name} using ChannelService...\n");
-                var channels = await _channelService.LoadChannelsForCategoryAsync(cat, _cts.Token);
-
-                _channels.Clear();
-                int channelNumber = 1;
-                foreach (var c in channels)
-                {
-                    c.Number = channelNumber++;
-                    _channels.Add(c);
-                }
-                UpdateChannelsFavoriteStatus();
-
-                ChannelsCountText = _channels.Count.ToString() + " channels";
-                Log($"Loaded {channels.Count} channels for category: {cat.Name}\n");
-
-                _ = Task.Run(() => PreloadLogosAsync(channels), _cts.Token);
-
-                // Start gradual EPG loading in background without blocking UI
-                _ = Task.Run(() => StartGradualEpgLoadingAsync(channels), _cts.Token);
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { Log("ERROR loading channels: " + ex.Message + "\n"); }
-            finally
-            {
-                SetGuideLoading(false);
-                HideLoadingOverlay("ChannelsLoadingOverlay");
-            }
-            ApplySearch();
+                },
+                () => !_isClosing && !IsGlobalSearchActive && ReferenceEquals(CategoryCombo.SelectedItem, cat),
+                _cts.Token);
         }
 
-        private async Task LoadFavoritesAsCategoryAsync()
+        private static List<Channel> GetFavoriteCategoryChannels()
         {
-            SetGuideLoading(true);
-            try
+            return Session.GetFavoriteChannels().Select(favorite =>
             {
-                Log("Loading favorites as category...\n");
-                var favoriteChannels = Session.GetFavoriteChannels();
-                var channels = new List<Channel>();
-
-                // Convert FavoriteChannel objects to Channel objects
-                foreach (var favorite in favoriteChannels)
+                var playlistChannel = Session.Mode == SessionMode.M3u
+                    ? Session.PlaylistChannels.FirstOrDefault(p => p.Id == favorite.Id) : null;
+                return new Channel
                 {
-                    // Try to find the channel in current session data for fresh info
-                    Channel? existingChannel = null;
-
-                    if (Session.Mode == SessionMode.M3u)
-                    {
-                        var playlistChannel = Session.PlaylistChannels?.FirstOrDefault(p => p.Id == favorite.Id);
-                        if (playlistChannel != null)
-                        {
-                            existingChannel = new Channel
-                            {
-                                Id = playlistChannel.Id,
-                                Name = playlistChannel.Name,
-                                Logo = playlistChannel.Logo,
-                                EpgChannelId = playlistChannel.TvgId
-                            };
-                        }
-                    }
-
-                    if (existingChannel != null)
-                    {
-                        // Use fresh data from playlist/session
-                        existingChannel.IsFavorite = true;
-                        channels.Add(existingChannel);
-                    }
-                    else
-                    {
-                        // Use stored favorite data
-                        var favoriteChannel = new Channel
-                        {
-                            Id = favorite.Id,
-                            Name = favorite.Name,
-                            Logo = favorite.Logo,
-                            EpgChannelId = favorite.EpgChannelId,
-                            IsFavorite = true
-                        };
-                        channels.Add(favoriteChannel);
-                    }
-                }
-
-                // Update UI
-                _channels.Clear();
-                int channelNumber = 1;
-                foreach (var c in channels)
-                {
-                    c.Number = channelNumber++;
-                    _channels.Add(c);
-                }
-
-                ChannelsCountText = $"{_channels.Count} favorite channels";
-                Log($"Loaded {channels.Count} favorite channels\n");
-
-                // Load logos and EPG data
-                _ = Task.Run(() => PreloadLogosAsync(_channels), _cts.Token);
-
-                // Update EPG for channels if in M3U mode
-                if (Session.Mode == SessionMode.M3u)
-                {
-                    UpdateChannelsEpgFromXmltvBatch(_channels);
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"Error loading favorites: {ex.Message}\n");
-            }
-            finally
-            {
-                SetGuideLoading(false);
-                HideLoadingOverlay("ChannelsLoadingOverlay");
-            }
-            ApplySearch();
+                    Id = favorite.Id,
+                    Name = playlistChannel != null ? playlistChannel.Name : favorite.Name,
+                    Logo = playlistChannel != null ? playlistChannel.Logo : favorite.Logo,
+                    EpgChannelId = playlistChannel != null ? playlistChannel.TvgId : favorite.EpgChannelId,
+                    IsFavorite = true
+                };
+            }).ToList();
         }
 
         // ===================== Logos =====================
@@ -3165,6 +3082,13 @@ namespace DesktopApp.Views
             if (sender is ComboBox combo && combo.SelectedItem is Category category)
             {
                 await LoadChannelsForCategoryAsync(category);
+            }
+            else
+            {
+                CancelCategoryLoad();
+                _channels.Clear();
+                ChannelsCountText = "0 channels";
+                SelectedChannel = null;
             }
         }
 

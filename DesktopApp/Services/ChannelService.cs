@@ -192,6 +192,10 @@ public partial class ChannelService : IChannelService
             _logger.LogInformation("✅ API SUCCESS: Loaded {Count} channels from API for category {CategoryName} and cached for future use", channels.Count, category.Name);
             return channels;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error loading channels for category: {CategoryName}", category.Name);
