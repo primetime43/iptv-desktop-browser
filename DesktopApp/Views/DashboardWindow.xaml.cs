@@ -357,6 +357,8 @@ namespace DesktopApp.Views
         private bool _isClosing;
         private readonly CancellationTokenSource _cts = new();
         private readonly LatestRequestLoader _categoryLoader = new();
+        private readonly LatestRequestLoader _vodCategoryLoader = new();
+        private readonly LatestRequestLoader _seriesCategoryLoader = new();
         private bool _showingSeriesCatalog;
 
         // Buffer for log messages during startup before UI is ready
@@ -1675,33 +1677,7 @@ namespace DesktopApp.Views
             }
             try
             {
-                var url = Session.BuildApi("get_vod_categories");
-                Log($"GET {url}\n");
-                var json = await _http.GetStringAsync(url, _cts.Token);
-                Log(json + "\n\n");
-
-                var parsed = new List<VodCategory>();
-                try
-                {
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var el in doc.RootElement.EnumerateArray())
-                        {
-                            parsed.Add(new VodCategory
-                            {
-                                CategoryId = el.TryGetProperty("category_id", out var idEl) ?
-                                    (idEl.ValueKind == JsonValueKind.String ? idEl.GetString() ?? string.Empty :
-                                     idEl.ValueKind == JsonValueKind.Number ? idEl.GetInt32().ToString() : string.Empty) : string.Empty,
-                                CategoryName = el.TryGetProperty("category_name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
-                                ParentId = el.TryGetProperty("parent_id", out var pEl) ?
-                                    (pEl.ValueKind == JsonValueKind.String ? pEl.GetString() :
-                                     pEl.ValueKind == JsonValueKind.Number ? pEl.GetInt32().ToString() : null) : null
-                            });
-                        }
-                    }
-                }
-                catch (Exception ex) { Log("PARSE ERROR VOD categories: " + ex.Message + "\n"); }
+                var parsed = await _vodService.LoadVodCategoriesAsync(_cts.Token);
 
                 // Populate local collection for UI binding
                 _vodCategories.Clear();
@@ -1731,33 +1707,7 @@ namespace DesktopApp.Views
             }
             try
             {
-                var url = Session.BuildApi("get_series_categories");
-                Log($"GET {url}\n");
-                var json = await _http.GetStringAsync(url, _cts.Token);
-                Log(json + "\n\n");
-
-                var parsed = new List<SeriesCategory>();
-                try
-                {
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var el in doc.RootElement.EnumerateArray())
-                        {
-                            parsed.Add(new SeriesCategory
-                            {
-                                CategoryId = el.TryGetProperty("category_id", out var idEl) ?
-                                    (idEl.ValueKind == JsonValueKind.String ? idEl.GetString() ?? string.Empty :
-                                     idEl.ValueKind == JsonValueKind.Number ? idEl.GetInt32().ToString() : string.Empty) : string.Empty,
-                                CategoryName = el.TryGetProperty("category_name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
-                                ParentId = el.TryGetProperty("parent_id", out var pEl) ?
-                                    (pEl.ValueKind == JsonValueKind.String ? pEl.GetString() :
-                                     pEl.ValueKind == JsonValueKind.Number ? pEl.GetInt32().ToString() : null) : null
-                            });
-                        }
-                    }
-                }
-                catch (Exception ex) { Log("PARSE ERROR series categories: " + ex.Message + "\n"); }
+                var parsed = await _vodService.LoadSeriesCategoriesAsync(_cts.Token);
 
                 _seriesCategories.Clear();
                 foreach (var c in parsed) _seriesCategories.Add(c);
@@ -1782,77 +1732,11 @@ namespace DesktopApp.Views
             // Show toast notification
             ShowToast("📽️ Loading Movies", "Fetching movie list...", "#347DFF");
 
-            // Show appropriate loading overlay based on current view
-            if (FindName("MoviesViewBtn") is Button moviesBtn && moviesBtn.Background.ToString().Contains("223247"))
+            ShowLoadingOverlay("MoviesLoadingOverlay");
+            await _vodCategoryLoader.LoadAsync(
+                token => _vodService.LoadVodContentAsync(categoryId, token),
+                parsed =>
             {
-                ShowLoadingOverlay("MoviesLoadingOverlay");
-            }
-            else if (FindName("SeriesViewBtn") is Button seriesBtn && seriesBtn.Background.ToString().Contains("223247"))
-            {
-                ShowLoadingOverlay("SeriesLoadingOverlay");
-            }
-            try
-            {
-                var url = Session.BuildApi("get_vod_streams") + "&category_id=" + Uri.EscapeDataString(categoryId);
-                Log($"GET {url}\n");
-                var json = await _http.GetStringAsync(url, _cts.Token);
-                Log(json + "\n\n");
-
-                var parsed = new List<VodContent>();
-                try
-                {
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
-                    {
-                        // Local helper to safely extract string or number-as-string
-                        static string? GetFlex(JsonElement parent, string prop)
-                        {
-                            if (!parent.TryGetProperty(prop, out var el)) return null;
-                            return el.ValueKind switch
-                            {
-                                JsonValueKind.String => el.GetString(),
-                                JsonValueKind.Number => el.ToString(),
-                                JsonValueKind.True => "1",
-                                JsonValueKind.False => "0",
-                                _ => null
-                            };
-                        }
-
-                        foreach (var el in doc.RootElement.EnumerateArray())
-                        {
-                            // stream_id expected int; guard against non-int
-                            int id = 0;
-                            if (el.TryGetProperty("stream_id", out var idEl))
-                            {
-                                if (idEl.ValueKind == JsonValueKind.Number) idEl.TryGetInt32(out id);
-                                else if (idEl.ValueKind == JsonValueKind.String && int.TryParse(idEl.GetString(), out var parsedId)) id = parsedId;
-                            }
-
-                            var vod = new VodContent
-                            {
-                                Id = id,
-                                Name = GetFlex(el, "name") ?? string.Empty,
-                                CategoryId = categoryId,
-                                StreamIcon = GetFlex(el, "stream_icon"),
-                                Plot = GetFlex(el, "plot"),
-                                Cast = GetFlex(el, "cast"),
-                                Director = GetFlex(el, "director"),
-                                Genre = GetFlex(el, "genre"),
-                                // Some portals use releaseDate, others release_date
-                                ReleaseDate = GetFlex(el, "releaseDate") ?? GetFlex(el, "release_date"),
-                                Duration = GetFlex(el, "duration"),
-                                Rating = GetFlex(el, "rating") ?? GetFlex(el, "rating_5based"),
-                                Country = GetFlex(el, "country"),
-                                Added = GetFlex(el, "added"),
-                                ContainerExtension = GetFlex(el, "container_extension")
-                            };
-
-                            parsed.Add(vod);
-                        }
-                    }
-                }
-                catch (Exception ex) { Log("PARSE ERROR VOD content: " + ex.Message + "\n"); }
-
                 // Add to session
                 var existing = Session.VodContent.Where(v => v.CategoryId != categoryId).ToList();
                 Session.VodContent.Clear();
@@ -1868,46 +1752,52 @@ namespace DesktopApp.Views
 
                 // Show success toast
                 ShowToast("✅ Movies Loaded", $"Loaded {filteredVodCount} movie{(filteredVodCount != 1 ? "s" : "")}", "#28A745");
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
+            }, ex =>
             {
                 Log("ERROR loading VOD content: " + ex.Message + "\n");
                 ShowToast("❌ Loading Failed", "Failed to load movies", "#DC3545");
-            }
-            finally
+            }, () =>
             {
                 IsLoadingVodContent = false;
                 HideLoadingOverlay("MoviesLoadingOverlay");
-                HideLoadingOverlay("SeriesLoadingOverlay");
-            }
+                ScheduleCatalogRefresh();
+            }, () => SelectedVodCategoryId == categoryId, _cts.Token);
         }
 
         private void OnVodCategoryChanged()
         {
+            _vodCategoryLoader.Cancel();
+            _vodContent.Clear();
+            SelectedVodContent = null;
+            VodCountText = "0 movies";
             if (!string.IsNullOrEmpty(SelectedVodCategoryId))
             {
                 _ = LoadVodContentAsync(SelectedVodCategoryId);
             }
             else
             {
-                _vodContent.Clear();
-                VodCountText = "0 movies";
+                IsLoadingVodContent = false;
+                HideLoadingOverlay("MoviesLoadingOverlay");
                 VodContentCollectionView.Refresh();
+                RefreshCatalogResources();
             }
         }
 
         private void OnSeriesCategoryChanged()
         {
+            _seriesCategoryLoader.Cancel();
+            _seriesContent.Clear();
+            SelectedSeriesContent = null;
+            SeriesCountText = "0 series";
             if (!string.IsNullOrEmpty(SelectedSeriesCategoryId))
             {
                 _ = LoadSeriesContentAsync(SelectedSeriesCategoryId);
             }
             else
             {
-                _seriesContent.Clear();
-                SeriesCountText = "0 series";
+                IsLoadingSeriesContent = false;
                 SeriesContentCollectionView.Refresh();
+                RefreshCatalogResources();
             }
         }
 
@@ -1920,36 +1810,10 @@ namespace DesktopApp.Views
             // Show toast notification
             ShowToast("📺 Loading TV Shows", "Fetching series list...", "#347DFF");
 
-            try
+            await _seriesCategoryLoader.LoadAsync(
+                token => _vodService.LoadSeriesContentAsync(categoryId, token),
+                parsed =>
             {
-                var url = Session.BuildApi("get_series") + "&category_id=" + Uri.EscapeDataString(categoryId);
-                var json = await _http.GetStringAsync(url, _cts.Token);
-
-                var parsed = new List<SeriesContent>();
-                var jArray = JsonSerializer.Deserialize<JsonElement[]>(json);
-
-                if (jArray != null)
-                {
-                    foreach (var item in jArray)
-                {
-                    var series = new SeriesContent
-                    {
-                        Id = item.TryGetProperty("series_id", out var idProp) ? (idProp.ValueKind == JsonValueKind.Number ? idProp.GetInt32() : int.TryParse(idProp.GetString() ?? "0", out var id) ? id : 0) : 0,
-                        Name = item.TryGetProperty("name", out var nameProp) ? nameProp.GetString() ?? string.Empty : string.Empty,
-                        CategoryId = categoryId,
-                        StreamIcon = item.TryGetProperty("cover", out var coverProp) ? coverProp.GetString() : null,
-                        Plot = item.TryGetProperty("plot", out var plotProp) ? plotProp.GetString() : null,
-                        Cast = item.TryGetProperty("cast", out var castProp) ? castProp.GetString() : null,
-                        Director = item.TryGetProperty("director", out var directorProp) ? directorProp.GetString() : null,
-                        Genre = item.TryGetProperty("genre", out var genreProp) ? genreProp.GetString() : null,
-                        ReleaseDate = item.TryGetProperty("releaseDate", out var releaseProp) ? releaseProp.GetString() : null,
-                        Rating = item.TryGetProperty("rating", out var ratingProp) ? ratingProp.GetString() : null,
-                        LastModified = item.TryGetProperty("last_modified", out var lastModProp) ? lastModProp.GetString() : null
-                    };
-                    parsed.Add(series);
-                    }
-                }
-
                 // Add to session
                 Session.SeriesContent.Clear();
                 Session.SeriesContent.AddRange(parsed);
@@ -1964,17 +1828,15 @@ namespace DesktopApp.Views
 
                 // Show success toast
                 ShowToast("✅ TV Shows Loaded", $"Loaded {filteredSeriesCount} series", "#28A745");
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
+            }, ex =>
             {
                 Log("ERROR loading series content: " + ex.Message + "\n");
                 ShowToast("❌ Loading Failed", "Failed to load TV shows", "#DC3545");
-            }
-            finally
+            }, () =>
             {
                 IsLoadingSeriesContent = false;
-            }
+                ScheduleCatalogRefresh();
+            }, () => SelectedSeriesCategoryId == categoryId, _cts.Token);
         }
 
 
@@ -1985,60 +1847,9 @@ namespace DesktopApp.Views
             try
             {
                 series.DetailsLoading = true;
-                var url = Session.BuildApi("get_series_info") + "&series_id=" + series.Id;
-                var json = await _http.GetStringAsync(url, _cts.Token);
-                var data = JsonSerializer.Deserialize<JsonElement>(json);
-
-                // Parse series info
-                if (data.TryGetProperty("info", out var infoProp))
-                {
-                    series.Plot = infoProp.TryGetProperty("plot", out var plotProp) ? plotProp.GetString() : series.Plot;
-                    series.Cast = infoProp.TryGetProperty("cast", out var castProp) ? castProp.GetString() : series.Cast;
-                    series.Director = infoProp.TryGetProperty("director", out var directorProp) ? directorProp.GetString() : series.Director;
-                    series.Genre = infoProp.TryGetProperty("genre", out var genreProp) ? genreProp.GetString() : series.Genre;
-                    series.Rating = infoProp.TryGetProperty("rating", out var ratingProp) ? ratingProp.GetString() : series.Rating;
-                }
-
-                // Parse seasons and episodes
-                if (data.TryGetProperty("episodes", out var episodesProp) && episodesProp.ValueKind == JsonValueKind.Object)
-                {
-                    var seasons = new List<SeasonInfo>();
-
-                    foreach (var seasonEntry in episodesProp.EnumerateObject())
-                    {
-                        if (int.TryParse(seasonEntry.Name, out var seasonNum) && seasonEntry.Value.ValueKind == JsonValueKind.Array)
-                        {
-                            var season = new SeasonInfo { SeasonNumber = seasonNum };
-                            var episodes = new List<EpisodeContent>();
-
-                            foreach (var episodeItem in seasonEntry.Value.EnumerateArray())
-                            {
-                                var episode = new EpisodeContent
-                                {
-                                    Id = episodeItem.TryGetProperty("id", out var idProp) ? (idProp.ValueKind == JsonValueKind.Number ? idProp.GetInt32() : int.TryParse(idProp.GetString() ?? "0", out var id) ? id : 0) : 0,
-                                    SeriesId = series.Id,
-                                    SeasonNumber = seasonNum,
-                                    EpisodeNumber = episodeItem.TryGetProperty("episode_num", out var epNumProp) ? (epNumProp.ValueKind == JsonValueKind.Number ? epNumProp.GetInt32() : int.TryParse(epNumProp.GetString() ?? "0", out var epNum) ? epNum : 0) : 0,
-                                    Name = episodeItem.TryGetProperty("title", out var titleProp) ? titleProp.GetString() ?? string.Empty : string.Empty,
-                                    Plot = episodeItem.TryGetProperty("info", out var infoProp2) && infoProp2.TryGetProperty("plot", out var plotProp2) ? plotProp2.GetString() : null,
-                                    Duration = episodeItem.TryGetProperty("info", out var infoProp3) && infoProp3.TryGetProperty("duration", out var durProp) ? durProp.GetString() : null,
-                                    ReleaseDate = episodeItem.TryGetProperty("info", out var infoProp4) && infoProp4.TryGetProperty("releasedate", out var relProp) ? relProp.GetString() : null,
-                                    ContainerExtension = episodeItem.TryGetProperty("container_extension", out var contProp) ? contProp.GetString() : "mp4"
-                                };
-                                episodes.Add(episode);
-                            }
-
-                            season.Episodes = episodes.OrderBy(e => e.EpisodeNumber).ToList();
-                            season.EpisodeCount = season.Episodes.Count;
-                            seasons.Add(season);
-                        }
-                    }
-
-                    series.Seasons = seasons.OrderBy(s => s.SeasonNumber).ToList();
-                }
-
-                series.DetailsLoaded = true;
+                await _vodService.LoadSeriesDetailsAsync(series, _cts.Token);
             }
+
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
@@ -2098,78 +1909,9 @@ namespace DesktopApp.Views
             vod.DetailsLoading = true;
             try
             {
-                var url = Session.BuildApi("get_vod_info") + "&vod_id=" + vod.Id;
-                Log($"GET {url} (VOD details)\n");
-                var json = await _http.GetStringAsync(url, _cts.Token);
-                Log($"(VOD details length={json.Length})\n\n");
-
-                try
-                {
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("info", out var info))
-                    {
-                        // Helper to safely get string values
-                        static string? GetStringValue(JsonElement parent, string prop)
-                        {
-                            if (!parent.TryGetProperty(prop, out var el)) return null;
-                            return el.ValueKind switch
-                            {
-                                JsonValueKind.String => el.GetString(),
-                                JsonValueKind.Number => el.ToString(),
-                                JsonValueKind.True => "1",
-                                JsonValueKind.False => "0",
-                                _ => null
-                            };
-                        }
-
-                        // Update with detailed info
-                        vod.Plot = GetStringValue(info, "plot") ?? vod.Plot;
-                        vod.Cast = GetStringValue(info, "cast") ?? vod.Cast;
-                        vod.Director = GetStringValue(info, "director") ?? vod.Director;
-                        vod.Genre = GetStringValue(info, "genre") ?? vod.Genre;
-                        vod.ReleaseDate = GetStringValue(info, "releasedate") ?? GetStringValue(info, "release_date") ?? vod.ReleaseDate;
-                        vod.Rating = GetStringValue(info, "rating") ?? GetStringValue(info, "rating_5based") ?? vod.Rating;
-                        vod.Duration = GetStringValue(info, "duration") ?? vod.Duration;
-                        vod.Country = GetStringValue(info, "country") ?? vod.Country;
-                        vod.Backdrop = GetStringValue(info, "backdrop_path");
-                        vod.Trailer = GetStringValue(info, "youtube_trailer");
-                        vod.TmdbId = GetStringValue(info, "tmdb_id");
-                        vod.ImdbId = GetStringValue(info, "imdb_id");
-                        vod.Language = GetStringValue(info, "language");
-                        vod.BitRate = GetStringValue(info, "bitrate");
-                        vod.VideoCodec = GetStringValue(info, "video");
-                        vod.AudioCodec = GetStringValue(info, "audio");
-
-                        // Parse numeric values
-                        if (int.TryParse(GetStringValue(info, "played"), out var played))
-                            vod.Played = played;
-                        if (int.TryParse(GetStringValue(info, "views"), out var views))
-                            vod.Views = views;
-                    }
-
-                    // Also check for movie_data array (some servers use this format)
-                    if (doc.RootElement.TryGetProperty("movie_data", out var movieData) && movieData.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var movie in movieData.EnumerateArray())
-                        {
-                            if (movie.TryGetProperty("stream_id", out var idEl) &&
-                                idEl.TryGetInt32(out var movieId) && movieId == vod.Id)
-                            {
-                                // Update with movie_data info if available
-                                vod.Name = movie.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? vod.Name : vod.Name;
-                                break;
-                            }
-                        }
-                    }
-
-                    vod.DetailsLoaded = true;
-                    Log($"VOD details loaded for: {vod.Name}\n");
-                }
-                catch (Exception ex)
-                {
-                    Log($"PARSE ERROR VOD details: {ex.Message}\n");
-                }
+                await _vodService.LoadVodDetailsAsync(vod, _cts.Token);
             }
+
             catch (OperationCanceledException) { }
             catch (Exception ex)
             {
@@ -2743,25 +2485,14 @@ namespace DesktopApp.Views
         }
 
 
-        private async void VodCategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void VodCategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (sender is ComboBox combo && combo.SelectedValue is string categoryId)
-            {
-                // Load content based on current view (Movies or Series)
-                bool isMoviesVisible = (FindName("MoviesGridView") is ItemsControl moviesGridViewer && moviesGridViewer.Visibility == Visibility.Visible) ||
-                                     (FindName("MoviesListView") is ItemsControl moviesListViewer && moviesListViewer.Visibility == Visibility.Visible);
-                bool isSeriesVisible = (FindName("SeriesGridView") is ItemsControl seriesGridViewer && seriesGridViewer.Visibility == Visibility.Visible) ||
-                                     (FindName("SeriesListView") is ItemsControl seriesListViewer && seriesListViewer.Visibility == Visibility.Visible);
-
-                if (isMoviesVisible)
-                {
-                    await LoadVodContentAsync(categoryId);
-                }
-                else if (isSeriesVisible)
-                {
-                    await LoadSeriesContentAsync(categoryId);
-                }
-            }
+            if (sender is not ComboBox combo) return;
+            // Keep the selection used by filters and request guards in sync with the shared picker.
+            if (_showingSeriesCatalog)
+                SelectedSeriesCategoryId = (combo.SelectedItem as SeriesCategory)?.CategoryId ?? string.Empty;
+            else
+                SelectedVodCategoryId = (combo.SelectedItem as VodCategory)?.CategoryId ?? string.Empty;
         }
 
         private void ShowMoviesView_Click(object sender, RoutedEventArgs e)

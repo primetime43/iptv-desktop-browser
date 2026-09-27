@@ -119,4 +119,5 @@ dotnet run --project Tests/UrlRegressionTests/UrlRegressionTests.csproj -c Relea
 dotnet run --project Tests/CategoryRegressionTests/CategoryRegressionTests.csproj -c Release
 dotnet run --project Tests/VirtualizationRegressionTests/VirtualizationRegressionTests.csproj -c Release
 dotnet run --project Tests/CatalogLoadingRegressionTests/CatalogLoadingRegressionTests.csproj -c Release
+dotnet run --project Tests/VodRegressionTests/VodRegressionTests.csproj -c Release
 ```

@@ -1,13 +1,12 @@
-using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using System.Windows.Media.Imaging;
 using DesktopApp.Models;
 using Microsoft.Extensions.Logging;
 
 namespace DesktopApp.Services;
 
-public class VodService : IVodService
+public partial class VodService : IVodService
 {
     private readonly ISessionService _sessionService;
     private readonly IHttpService _httpService;
@@ -26,381 +25,116 @@ public class VodService : IVodService
         _logger = logger;
     }
 
-    public async Task<List<VodCategory>> LoadVodCategoriesAsync(CancellationToken cancellationToken = default)
+    public Task<List<VodCategory>> LoadVodCategoriesAsync(CancellationToken cancellationToken = default) =>
+        _sessionService.Mode == SessionMode.M3u
+            ? Task.FromResult(_sessionService.VodCategories.ToList())
+            : LoadCachedAsync("get_vod_categories", [], TimeSpan.FromHours(1), ParseVodCategories, cancellationToken);
+
+    public Task<List<SeriesCategory>> LoadSeriesCategoriesAsync(CancellationToken cancellationToken = default) =>
+        _sessionService.Mode == SessionMode.M3u
+            ? Task.FromResult(_sessionService.SeriesCategories.ToList())
+            : LoadCachedAsync("get_series_categories", [], TimeSpan.FromHours(1), ParseSeriesCategories, cancellationToken);
+
+    public Task<List<VodContent>> LoadVodContentAsync(string categoryId, CancellationToken cancellationToken = default) =>
+        _sessionService.Mode == SessionMode.M3u
+            ? Task.FromResult(_sessionService.VodContent.Where(v => v.CategoryId == categoryId).ToList())
+            : LoadCachedAsync("get_vod_streams", [("category_id", categoryId)], TimeSpan.FromMinutes(30),
+                root => ParseVodContent(root, categoryId), cancellationToken);
+
+    public Task<List<SeriesContent>> LoadSeriesContentAsync(string categoryId, CancellationToken cancellationToken = default) =>
+        _sessionService.Mode == SessionMode.M3u
+            ? Task.FromResult(_sessionService.SeriesContent.Where(s => s.CategoryId == categoryId).ToList())
+            : LoadCachedAsync("get_series", [("category_id", categoryId)], TimeSpan.FromMinutes(30),
+                root => ParseSeriesContent(root, categoryId), cancellationToken);
+
+    public async Task LoadVodDetailsAsync(VodContent content, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            _logger.LogInformation("Loading VOD categories");
-
-            if (_sessionService.Mode == SessionMode.M3u)
-            {
-                return _sessionService.VodCategories.ToList();
-            }
-
-            // Check cache first (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"vod_categories_{_sessionService.Host}_{_sessionService.Username}";
-                var cachedCategories = await _cacheService.GetDataAsync<List<VodCategory>>(cacheKey, cancellationToken);
-                if (cachedCategories != null)
-                {
-                    _logger.LogInformation("Loaded {Count} VOD categories from cache", cachedCategories.Count);
-                    return cachedCategories;
-                }
-            }
-
-            var url = _sessionService.BuildApi("get_vod_categories");
-            var response = await _httpService.GetStringAsync(url, cancellationToken);
-
-            var categories = new List<VodCategory>();
-
-            if (IsBase64String(response))
-            {
-                var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(response));
-                response = decoded;
-            }
-
-            var jsonCategories = JsonSerializer.Deserialize<List<JsonElement>>(response);
-            if (jsonCategories != null)
-            {
-                foreach (var item in jsonCategories)
-                {
-                    var category = new VodCategory
-                    {
-                        CategoryId = item.GetProperty("category_id").GetString() ?? "",
-                        CategoryName = item.GetProperty("category_name").GetString() ?? "",
-                        ParentId = item.TryGetProperty("parent_id", out var parentId) ? parentId.GetString() : null
-                    };
-                    categories.Add(category);
-                }
-            }
-
-            // Cache the results (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"vod_categories_{_sessionService.Host}_{_sessionService.Username}";
-                await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(1), cancellationToken);
-            }
-
-            _logger.LogInformation("Loaded {Count} VOD categories", categories.Count);
-            return categories;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading VOD categories");
-            throw;
-        }
+        var details = await LoadCachedAsync("get_vod_info", [("vod_id", content.Id.ToString())], TimeSpan.FromHours(2),
+            root => ParseVodDetails(root, content.Id), cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        content.Name = string.IsNullOrEmpty(details.Name) ? content.Name : details.Name;
+        content.Plot = details.Plot ?? content.Plot;
+        content.Cast = details.Cast ?? content.Cast;
+        content.Director = details.Director ?? content.Director;
+        content.Genre = details.Genre ?? content.Genre;
+        content.ReleaseDate = details.ReleaseDate ?? content.ReleaseDate;
+        content.Rating = details.Rating ?? content.Rating;
+        content.Duration = details.Duration ?? content.Duration;
+        content.Country = details.Country ?? content.Country;
+        content.Backdrop = details.Backdrop;
+        content.Trailer = details.Trailer;
+        content.TmdbId = details.TmdbId;
+        content.ImdbId = details.ImdbId;
+        content.Language = details.Language;
+        content.BitRate = details.BitRate;
+        content.VideoCodec = details.VideoCodec;
+        content.AudioCodec = details.AudioCodec;
+        content.Played = details.Played ?? content.Played;
+        content.Views = details.Views ?? content.Views;
+        content.DetailsLoaded = true;
     }
 
-    public async Task<List<VodContent>> LoadVodContentAsync(string categoryId, CancellationToken cancellationToken = default)
+    public async Task LoadSeriesDetailsAsync(SeriesContent content, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            _logger.LogInformation("Loading VOD content for category: {CategoryId}", categoryId);
-
-            if (_sessionService.Mode == SessionMode.M3u)
-            {
-                return _sessionService.VodContent
-                    .Where(v => v.CategoryId == categoryId)
-                    .ToList();
-            }
-
-            // Check cache first (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"vod_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
-                var cachedContent = await _cacheService.GetDataAsync<List<VodContent>>(cacheKey, cancellationToken);
-                if (cachedContent != null)
-                {
-                    _logger.LogInformation("Loaded {Count} VOD items for category {CategoryId} from cache", cachedContent.Count, categoryId);
-                    return cachedContent;
-                }
-            }
-
-            var url = _sessionService.BuildApi("get_vod_streams", ("category_id", categoryId));
-            var response = await _httpService.GetStringAsync(url, cancellationToken);
-
-            var content = new List<VodContent>();
-
-            if (IsBase64String(response))
-            {
-                var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(response));
-                response = decoded;
-            }
-
-            var jsonContent = JsonSerializer.Deserialize<List<JsonElement>>(response);
-            if (jsonContent != null)
-            {
-                foreach (var item in jsonContent)
-                {
-                    var vodContent = new VodContent
-                    {
-                        Id = int.TryParse(item.GetProperty("stream_id").GetString(), out var streamId) ? streamId : 0,
-                        Name = item.GetProperty("name").GetString() ?? "",
-                        StreamIcon = item.TryGetProperty("stream_icon", out var icon) ? icon.GetString() : null,
-                        CategoryId = categoryId,
-                        ContainerExtension = item.TryGetProperty("container_extension", out var ext) ? ext.GetString() ?? "mp4" : "mp4"
-                    };
-
-                    // Try to get additional metadata
-                    if (item.TryGetProperty("rating", out var rating))
-                        vodContent.Rating = rating.GetString();
-                    if (item.TryGetProperty("plot", out var plot))
-                        vodContent.Plot = plot.GetString();
-                    if (item.TryGetProperty("cast", out var cast))
-                        vodContent.Cast = cast.GetString();
-                    if (item.TryGetProperty("director", out var director))
-                        vodContent.Director = director.GetString();
-                    if (item.TryGetProperty("genre", out var genre))
-                        vodContent.Genre = genre.GetString();
-                    if (item.TryGetProperty("releasedate", out var releaseDate))
-                        vodContent.ReleaseDate = releaseDate.GetString();
-                    if (item.TryGetProperty("duration", out var duration))
-                        vodContent.Duration = duration.GetString();
-
-                    content.Add(vodContent);
-                }
-            }
-
-            // Cache the results (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"vod_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
-                await _cacheService.SetDataAsync(cacheKey, content, TimeSpan.FromMinutes(30), cancellationToken);
-            }
-
-            _logger.LogInformation("Loaded {Count} VOD items for category {CategoryId}", content.Count, categoryId);
-            return content;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading VOD content for category: {CategoryId}", categoryId);
-            throw;
-        }
+        var details = await LoadSeriesInfoAsync(content.Id.ToString(), cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        content.Plot = details.Plot ?? content.Plot;
+        content.Cast = details.Cast ?? content.Cast;
+        content.Director = details.Director ?? content.Director;
+        content.Genre = details.Genre ?? content.Genre;
+        content.Rating = details.Rating ?? content.Rating;
+        content.Seasons = details.Seasons;
+        content.DetailsLoaded = true;
     }
 
-    public async Task<List<SeriesCategory>> LoadSeriesCategoriesAsync(CancellationToken cancellationToken = default)
+    public async Task<List<EpisodeContent>> LoadEpisodesAsync(string seriesId, CancellationToken cancellationToken = default) =>
+        (await LoadSeriesInfoAsync(seriesId, cancellationToken)).Seasons.SelectMany(s => s.Episodes).ToList();
+
+    private Task<SeriesContent> LoadSeriesInfoAsync(string seriesId, CancellationToken cancellationToken) =>
+        LoadCachedAsync("get_series_info", [("series_id", seriesId)], TimeSpan.FromHours(2),
+            root => ParseSeriesDetails(root, int.TryParse(seriesId, out var id) ? id : 0), cancellationToken);
+
+    private async Task<T> LoadCachedAsync<T>(string action, (string key, string value)[] parameters,
+        TimeSpan lifetime, Func<JsonElement, T> parse, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        // Capture the complete request before awaiting: servers, ports, accounts and categories
+        // must never share cached data. Hashing also keeps credentials out of cache keys/logs.
+        var url = _sessionService.BuildApi(action, parameters);
+        var cacheKey = $"vod_v2_{action}_{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url)))}";
+        var useCache = _sessionService.CachingEnabled;
         try
         {
-            _logger.LogInformation("Loading series categories");
-
-            if (_sessionService.Mode == SessionMode.M3u)
+            var response = useCache ? await _cacheService.GetDataAsync<string>(cacheKey, cancellationToken).ConfigureAwait(false) : null;
+            cancellationToken.ThrowIfCancellationRequested();
+            var fromCache = response != null;
+            response ??= await _httpService.GetStringAsync(url, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            // Cache immutable provider data, not live WPF models with posters, selection and
+            // loading flags. Recreate models off the UI thread even on a memory-cache hit.
+            var parsed = await Task.Run(() =>
             {
-                return _sessionService.SeriesCategories.ToList();
-            }
-
-            // Check cache first (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"series_categories_{_sessionService.Host}_{_sessionService.Username}";
-                var cachedCategories = await _cacheService.GetDataAsync<List<SeriesCategory>>(cacheKey, cancellationToken);
-                if (cachedCategories != null)
+                var json = response.Trim();
+                if (!json.StartsWith('[') && !json.StartsWith('{') && !json.StartsWith("null", StringComparison.Ordinal))
                 {
-                    _logger.LogInformation("Loaded {Count} series categories from cache", cachedCategories.Count);
-                    return cachedCategories;
+                    try { json = Encoding.UTF8.GetString(Convert.FromBase64String(json)); }
+                    catch (FormatException) { /* Let the JSON parser report the invalid response. */ }
                 }
-            }
-
-            var url = _sessionService.BuildApi("get_series_categories");
-            var response = await _httpService.GetStringAsync(url, cancellationToken);
-
-            var categories = new List<SeriesCategory>();
-
-            if (IsBase64String(response))
-            {
-                var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(response));
-                response = decoded;
-            }
-
-            var jsonCategories = JsonSerializer.Deserialize<List<JsonElement>>(response);
-            if (jsonCategories != null)
-            {
-                foreach (var item in jsonCategories)
-                {
-                    var category = new SeriesCategory
-                    {
-                        CategoryId = item.GetProperty("category_id").GetString() ?? "",
-                        CategoryName = item.GetProperty("category_name").GetString() ?? "",
-                        ParentId = item.TryGetProperty("parent_id", out var parentId) ? parentId.GetString() : null
-                    };
-                    categories.Add(category);
-                }
-            }
-
-            // Cache the results (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"series_categories_{_sessionService.Host}_{_sessionService.Username}";
-                await _cacheService.SetDataAsync(cacheKey, categories, TimeSpan.FromHours(1), cancellationToken);
-            }
-
-            _logger.LogInformation("Loaded {Count} series categories", categories.Count);
-            return categories;
+                using var doc = JsonDocument.Parse(json);
+                return parse(doc.RootElement);
+            }, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            // Invalid/error responses are rejected by the parser and never cached as empty catalogs.
+            if (useCache && !fromCache)
+                await _cacheService.SetDataAsync(cacheKey, response, lifetime, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            _logger.LogInformation("Loaded {Action} from {Source}", action, fromCache ? "cache" : "provider");
+            return parsed;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error loading series categories");
-            throw;
-        }
-    }
-
-    public async Task<List<SeriesContent>> LoadSeriesContentAsync(string categoryId, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Loading series content for category: {CategoryId}", categoryId);
-
-            if (_sessionService.Mode == SessionMode.M3u)
-            {
-                return _sessionService.SeriesContent
-                    .Where(s => s.CategoryId == categoryId)
-                    .ToList();
-            }
-
-            // Check cache first (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"series_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
-                var cachedContent = await _cacheService.GetDataAsync<List<SeriesContent>>(cacheKey, cancellationToken);
-                if (cachedContent != null)
-                {
-                    _logger.LogInformation("Loaded {Count} series for category {CategoryId} from cache", cachedContent.Count, categoryId);
-                    return cachedContent;
-                }
-            }
-
-            var url = _sessionService.BuildApi("get_series", ("category_id", categoryId));
-            var response = await _httpService.GetStringAsync(url, cancellationToken);
-
-            var content = new List<SeriesContent>();
-
-            if (IsBase64String(response))
-            {
-                var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(response));
-                response = decoded;
-            }
-
-            var jsonContent = JsonSerializer.Deserialize<List<JsonElement>>(response);
-            if (jsonContent != null)
-            {
-                foreach (var item in jsonContent)
-                {
-                    var seriesContent = new SeriesContent
-                    {
-                        Id = int.TryParse(item.GetProperty("series_id").GetString(), out var seriesId) ? seriesId : 0,
-                        Name = item.GetProperty("name").GetString() ?? "",
-                        StreamIcon = item.TryGetProperty("cover", out var cover) ? cover.GetString() : null,
-                        CategoryId = categoryId
-                    };
-
-                    // Try to get additional metadata
-                    if (item.TryGetProperty("plot", out var plot))
-                        seriesContent.Plot = plot.GetString();
-                    if (item.TryGetProperty("cast", out var cast))
-                        seriesContent.Cast = cast.GetString();
-                    if (item.TryGetProperty("director", out var director))
-                        seriesContent.Director = director.GetString();
-                    if (item.TryGetProperty("genre", out var genre))
-                        seriesContent.Genre = genre.GetString();
-                    if (item.TryGetProperty("releasedate", out var releaseDate))
-                        seriesContent.ReleaseDate = releaseDate.GetString();
-                    if (item.TryGetProperty("rating", out var rating))
-                        seriesContent.Rating = rating.GetString();
-
-                    content.Add(seriesContent);
-                }
-            }
-
-            // Cache the results (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"series_content_{_sessionService.Host}_{_sessionService.Username}_{categoryId}";
-                await _cacheService.SetDataAsync(cacheKey, content, TimeSpan.FromMinutes(30), cancellationToken);
-            }
-
-            _logger.LogInformation("Loaded {Count} series for category {CategoryId}", content.Count, categoryId);
-            return content;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading series content for category: {CategoryId}", categoryId);
-            throw;
-        }
-    }
-
-    public async Task<List<EpisodeContent>> LoadEpisodesAsync(string seriesId, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            _logger.LogInformation("Loading episodes for series: {SeriesId}", seriesId);
-
-            // Check cache first (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"episodes_{_sessionService.Host}_{_sessionService.Username}_{seriesId}";
-                var cachedEpisodes = await _cacheService.GetDataAsync<List<EpisodeContent>>(cacheKey, cancellationToken);
-                if (cachedEpisodes != null)
-                {
-                    _logger.LogInformation("Loaded {Count} episodes for series {SeriesId} from cache", cachedEpisodes.Count, seriesId);
-                    return cachedEpisodes;
-                }
-            }
-
-            var url = _sessionService.BuildApi("get_series_info", ("series_id", seriesId));
-            var response = await _httpService.GetStringAsync(url, cancellationToken);
-
-            var episodes = new List<EpisodeContent>();
-
-            if (IsBase64String(response))
-            {
-                var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(response));
-                response = decoded;
-            }
-
-            var jsonData = JsonSerializer.Deserialize<JsonElement>(response);
-            if (jsonData.TryGetProperty("episodes", out var episodesElement))
-            {
-                foreach (var seasonProperty in episodesElement.EnumerateObject())
-                {
-                    var seasonNumber = int.TryParse(seasonProperty.Name, out var season) ? season : 1;
-
-                    foreach (var episode in seasonProperty.Value.EnumerateArray())
-                    {
-                        var episodeContent = new EpisodeContent
-                        {
-                            Id = int.TryParse(episode.GetProperty("id").GetString(), out var episodeId) ? episodeId : 0,
-                            Name = episode.GetProperty("title").GetString() ?? "",
-                            SeasonNumber = seasonNumber,
-                            SeriesId = int.TryParse(seriesId, out var parsedSeriesId) ? parsedSeriesId : 0,
-                            ContainerExtension = episode.TryGetProperty("container_extension", out var ext) ? ext.GetString() ?? "mp4" : "mp4"
-                        };
-
-                        if (episode.TryGetProperty("episode_num", out var episodeNum))
-                            episodeContent.EpisodeNumber = episodeNum.GetInt32();
-                        if (episode.TryGetProperty("info", out var info) && info.TryGetProperty("plot", out var plot))
-                            episodeContent.Plot = plot.GetString();
-                        if (episode.TryGetProperty("info", out var info2) && info2.TryGetProperty("duration", out var duration))
-                            episodeContent.Duration = duration.GetString();
-
-                        episodes.Add(episodeContent);
-                    }
-                }
-            }
-
-            // Cache the results - episodes change rarely, so cache for longer (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"episodes_{_sessionService.Host}_{_sessionService.Username}_{seriesId}";
-                await _cacheService.SetDataAsync(cacheKey, episodes, TimeSpan.FromHours(2), cancellationToken);
-            }
-
-            _logger.LogInformation("Loaded {Count} episodes for series {SeriesId}", episodes.Count, seriesId);
-            return episodes;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading episodes for series: {SeriesId}", seriesId);
+            _logger.LogError(ex, "Error loading {Action}", action);
             throw;
         }
     }
@@ -449,19 +183,4 @@ public class VodService : IVodService
         }
     }
 
-    private static bool IsBase64String(string base64)
-    {
-        if (string.IsNullOrEmpty(base64) || base64.Length % 4 != 0)
-            return false;
-
-        try
-        {
-            Convert.FromBase64String(base64);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
 }
