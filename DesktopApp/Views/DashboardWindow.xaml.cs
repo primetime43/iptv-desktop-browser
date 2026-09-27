@@ -1766,6 +1766,7 @@ namespace DesktopApp.Views
         protected override void OnClosed(EventArgs e)
         {
             _scheduler.RecordingFailed -= OnScheduledRecordingFailed;
+            _scheduler.EpgRefreshNeeded -= OnEpgRefreshNeeded;
             try { StopRecording(); } catch { }
             CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; Session.FavoritesChanged -= OnFavoritesChanged; RecordingManager.Instance.PropertyChanged -= OnRecordingManagerChanged; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
         }
@@ -3582,7 +3583,7 @@ namespace DesktopApp.Views
             if (Dispatcher.HasShutdownStarted) return;
             Dispatcher.BeginInvoke(() =>
             {
-                if (_isClosing) return;
+                if (_isClosing || !_scheduler.ScheduledRecordings.Contains(recording)) return;
                 var summary = recording.FailureReason?.Split('\n')[0] ?? "Open recording properties for details.";
                 ShowToast("Recording failed", $"{recording.Title}: {summary}", "#DC3545");
             });

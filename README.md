@@ -79,6 +79,7 @@ v1.06/v2.0.0
 - Failed or prematurely ended recordings show **Failed** immediately, with a notification.
 - Hover over the status or open **Props** to see the FFmpeg exit code and recent error output. Error details redact credentials and remain available after restarting the app.
 - Scheduled stops let FFmpeg finalize the output. Forced termination is reported as a failure; user cancellation remains **Cancelled**.
+- Active scheduled recordings continue through logout and account switches while the app remains open. Their stop times, buffers, and results stay tied to the original account; switching back reconnects the list to the existing recording.
 
 ---
 

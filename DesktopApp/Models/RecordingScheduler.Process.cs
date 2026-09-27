@@ -11,11 +11,12 @@ public partial class RecordingScheduler
     {
         lock (_lockObject)
         {
-            if (recording.Status != RecordingScheduleStatus.Scheduled || _activeRecordings.ContainsKey(recording.Id))
+            var key = (_loadedSessionKey, recording.Id);
+            if (recording.Status != RecordingScheduleStatus.Scheduled || _activeRecordings.ContainsKey(key))
                 return;
 
-            var run = new RecordingRun(recording);
-            _activeRecordings.Add(recording.Id, run);
+            var run = new RecordingRun(recording, _loadedSessionKey);
+            _activeRecordings.Add(key, run);
             recording.FailureReason = null;
             recording.ExitCode = null;
             recording.Status = RecordingScheduleStatus.Recording;
@@ -33,7 +34,7 @@ public partial class RecordingScheduler
         string? failure = null;
         try
         {
-            var psi = Session.BuildFfmpegRecordProcess(recording.StreamUrl, recording.Title, recording.OutputFilePath)
+            var psi = run.StartInfo
                 ?? throw new InvalidOperationException("FFmpeg path not set or file not found. Configure FFmpeg in Settings.");
             psi.RedirectStandardInput = true;
             var outputDir = Path.GetDirectoryName(recording.OutputFilePath);
@@ -115,9 +116,9 @@ public partial class RecordingScheduler
                 recording.ExitCode = exitCode;
                 recording.RecordingProcess = null;
                 run.Process = null;
-                _activeRecordings.Remove(recording.Id);
+                _activeRecordings.Remove((run.SessionKey, recording.Id));
                 process?.Dispose();
-                SaveScheduledRecordings();
+                SaveScheduledRecordings(run);
             }
 
             UpdateRecordingIndicator();
@@ -146,12 +147,12 @@ public partial class RecordingScheduler
         }
     }
 
-    private void StopRecording(ScheduledRecording recording, bool cancelled = false)
+    private void StopRecording(RecordingRun run, bool cancelled = false)
     {
         lock (_lockObject)
         {
-            if (recording.Status != RecordingScheduleStatus.Recording ||
-                !_activeRecordings.TryGetValue(recording.Id, out var run)) return;
+            if (run.Recording.Status != RecordingScheduleStatus.Recording ||
+                !_activeRecordings.ContainsKey((run.SessionKey, run.Recording.Id))) return;
 
             // An already-exited process retains its own result, even if a timer tick
             // or Cancel click arrives before the monitor finishes draining stderr.
@@ -209,7 +210,8 @@ public partial class RecordingScheduler
             {
                 // Scheduled exits must not clear the manual-recording indicator.
                 if (RecordingManager.Instance.IsManualRecording) return;
-                var active = _activeRecordings.Values.FirstOrDefault(r => r.Process != null)?.Recording;
+                var active = _activeRecordings.Values.FirstOrDefault(r => r.Process != null &&
+                    r.SessionKey == _loadedSessionKey && r.SessionKey == GetCurrentSessionKey())?.Recording;
                 if (active == null) RecordingManager.Instance.StopRecording();
                 else RecordingManager.Instance.StartRecording(active.StreamUrl, active.OutputFilePath, active.Title, active.ChannelId);
                 foreach (System.Windows.Window window in application.Windows)

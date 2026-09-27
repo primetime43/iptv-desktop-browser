@@ -35,11 +35,18 @@ public partial class RecordingScheduler : INotifyPropertyChanged
     private readonly string _scheduleFilePath;
     private readonly string _seriesFilePath;
     private readonly object _lockObject = new();
-    private readonly Dictionary<Guid, RecordingRun> _activeRecordings = new();
+    private readonly Dictionary<(string SessionKey, Guid Id), RecordingRun> _activeRecordings = new();
+    // The collections belong to this account, even while the login window changes Session.
+    private string _loadedSessionKey;
+    private bool _schedulesLoaded;
+    private bool _seriesLoaded;
 
-    private sealed class RecordingRun(ScheduledRecording recording)
+    private sealed class RecordingRun(ScheduledRecording recording, string sessionKey)
     {
         public ScheduledRecording Recording { get; } = recording;
+        public string SessionKey { get; } = sessionKey;
+        public ProcessStartInfo? StartInfo { get; } = Session.BuildFfmpegRecordProcess(
+            recording.StreamUrl, recording.Title, recording.OutputFilePath);
         public Process? Process { get; set; }
         public bool StopRequested { get; set; }
         public bool CancelRequested { get; set; }
@@ -62,6 +69,7 @@ public partial class RecordingScheduler : INotifyPropertyChanged
         Directory.CreateDirectory(appDataPath);
         _scheduleFilePath = Path.Combine(appDataPath, "scheduled_recordings.json");
         _seriesFilePath = Path.Combine(appDataPath, "series_recordings.json");
+        _loadedSessionKey = GetCurrentSessionKey();
 
         LoadScheduledRecordings();
         LoadSeriesRecordings();
@@ -130,7 +138,8 @@ public partial class RecordingScheduler : INotifyPropertyChanged
                 // If currently recording, stop the recording process
                 if (recording.Status == RecordingScheduleStatus.Recording)
                 {
-                    StopRecording(recording, cancelled: true);
+                    if (_activeRecordings.TryGetValue((_loadedSessionKey, recording.Id), out var run))
+                        StopRecording(run, cancelled: true);
                 }
                 else
                 {
@@ -196,7 +205,18 @@ public partial class RecordingScheduler : INotifyPropertyChanged
         {
             lock (_lockObject)
             {
-                foreach (var recording in _scheduledRecordings.ToList())
+                // Active processes outlive the visible account's collection. Always
+                // honor their deadlines, including while logged out or switching profiles.
+                foreach (var run in _activeRecordings.Values.ToList())
+                {
+                    if (run.Recording.ShouldStopNow())
+                        StopRecording(run);
+                }
+
+                // Do not start pending work using another account's current settings.
+                var visibleRecordings = _loadedSessionKey == GetCurrentSessionKey()
+                    ? _scheduledRecordings.ToList() : new List<ScheduledRecording>();
+                foreach (var recording in visibleRecordings)
                 {
                     // Check for missed recordings
                     if (recording.IsMissed())
@@ -213,12 +233,6 @@ public partial class RecordingScheduler : INotifyPropertyChanged
                         StartRecording(recording);
                     }
 
-                    // Check if recording should stop
-                    if (recording.ShouldStopNow())
-                    {
-                        Log($"Stopping recording: {recording.Title} (scheduled end: {recording.EndTimeLocal}, now: {DateTime.Now:MM/dd/yyyy hh:mm:ss tt})");
-                        StopRecording(recording);
-                    }
                 }
 
                 SaveScheduledRecordings();
@@ -260,16 +274,29 @@ public partial class RecordingScheduler : INotifyPropertyChanged
         return string.IsNullOrWhiteSpace(result) ? "Recording" : result;
     }
 
-    private void SaveScheduledRecordings()
+    private void SaveScheduledRecordings(RecordingRun? completedRun = null)
     {
         try
         {
             // Load all scheduled recordings from file (for all accounts)
             var allScheduled = LoadAllScheduledRecordings();
 
-            // Update the current session's scheduled recordings
-            var currentSessionKey = GetCurrentSessionKey();
-            allScheduled[currentSessionKey] = _scheduledRecordings.ToList();
+            // Save the visible list under its captured owner, never the mutable login state.
+            if (_schedulesLoaded)
+                allScheduled[_loadedSessionKey] = _scheduledRecordings.ToList();
+
+            // Merge background records without replacing the rest of their account's
+            // schedule. Include the just-completed run after it leaves the active registry.
+            var runs = _activeRecordings.Values.AsEnumerable();
+            if (completedRun != null) runs = runs.Append(completedRun);
+            foreach (var run in runs)
+            {
+                if (!allScheduled.TryGetValue(run.SessionKey, out var recordings))
+                    allScheduled[run.SessionKey] = recordings = new List<ScheduledRecording>();
+                var index = recordings.FindIndex(r => r.Id == run.Recording.Id);
+                if (index < 0) recordings.Add(run.Recording);
+                else recordings[index] = run.Recording;
+            }
 
             // Save all accounts back to file
             var json = JsonSerializer.Serialize(allScheduled, new JsonSerializerOptions
@@ -309,7 +336,7 @@ public partial class RecordingScheduler : INotifyPropertyChanged
                     var oldFormat = JsonSerializer.Deserialize<List<ScheduledRecording>>(json);
                     if (oldFormat != null && oldFormat.Any())
                     {
-                        var currentSessionKey = GetCurrentSessionKey();
+                        var currentSessionKey = _loadedSessionKey;
                         Log($"Migrating {oldFormat.Count} scheduled recordings from old format to new per-account format");
 
                         // Save in new format immediately
@@ -339,16 +366,16 @@ public partial class RecordingScheduler : INotifyPropertyChanged
 
     private void LoadScheduledRecordings()
     {
+        _schedulesLoaded = false;
+        _scheduledRecordings.Clear();
         try
         {
             var allScheduled = LoadAllScheduledRecordings();
-            var currentSessionKey = GetCurrentSessionKey();
-
-            _scheduledRecordings.Clear();
+            var currentSessionKey = _loadedSessionKey;
+            bool recoveredInterruptedRecording = false;
 
             if (allScheduled.TryGetValue(currentSessionKey, out var sessionRecordings))
             {
-                bool recoveredInterruptedRecording = false;
                 foreach (var recording in sessionRecordings)
                 {
                     // Skip recordings that are already completed or too old
@@ -359,7 +386,7 @@ public partial class RecordingScheduler : INotifyPropertyChanged
                         continue;
                     }
 
-                    if (_activeRecordings.TryGetValue(recording.Id, out var active))
+                    if (_activeRecordings.TryGetValue((currentSessionKey, recording.Id), out var active))
                     {
                         _scheduledRecordings.Add(active.Recording);
                         continue;
@@ -374,14 +401,14 @@ public partial class RecordingScheduler : INotifyPropertyChanged
                     _scheduledRecordings.Add(recording);
                 }
 
-                if (recoveredInterruptedRecording) SaveScheduledRecordings();
-
                 Log($"Loaded {_scheduledRecordings.Count} scheduled recordings for current session");
             }
             else
             {
                 Log($"No scheduled recordings found for current session");
             }
+            _schedulesLoaded = true;
+            if (recoveredInterruptedRecording) SaveScheduledRecordings();
         }
         catch (Exception ex)
         {
@@ -783,21 +810,28 @@ public partial class RecordingScheduler : INotifyPropertyChanged
     {
         lock (_lockObject)
         {
+            // Session may already contain the next account's credentials. Flush the
+            // outgoing collections using their captured key before changing ownership.
+            SaveScheduledRecordings();
+            SaveSeriesRecordings();
+            _loadedSessionKey = GetCurrentSessionKey();
             LoadScheduledRecordings();
             LoadSeriesRecordings();
+            UpdateRecordingIndicator();
             Log($"Reloaded recordings for current session");
         }
     }
 
     private void SaveSeriesRecordings()
     {
+        if (!_seriesLoaded) return;
         try
         {
             // Load all series recordings from file (for all accounts)
             var allSeries = LoadAllSeriesRecordings();
 
             // Update the current session's series recordings
-            var currentSessionKey = GetCurrentSessionKey();
+            var currentSessionKey = _loadedSessionKey;
             allSeries[currentSessionKey] = _seriesRecordings.ToList();
 
             // Save all accounts back to file
@@ -838,7 +872,7 @@ public partial class RecordingScheduler : INotifyPropertyChanged
                     var oldFormat = JsonSerializer.Deserialize<List<SeriesRecording>>(json);
                     if (oldFormat != null && oldFormat.Any())
                     {
-                        var currentSessionKey = GetCurrentSessionKey();
+                        var currentSessionKey = _loadedSessionKey;
                         Log($"Migrating {oldFormat.Count} series recordings from old format to new per-account format");
 
                         // Save in new format immediately
@@ -867,12 +901,12 @@ public partial class RecordingScheduler : INotifyPropertyChanged
 
     private void LoadSeriesRecordings()
     {
+        _seriesLoaded = false;
+        _seriesRecordings.Clear();
         try
         {
             var allSeries = LoadAllSeriesRecordings();
-            var currentSessionKey = GetCurrentSessionKey();
-
-            _seriesRecordings.Clear();
+            var currentSessionKey = _loadedSessionKey;
 
             if (allSeries.TryGetValue(currentSessionKey, out var sessionSeries))
             {
@@ -890,6 +924,7 @@ public partial class RecordingScheduler : INotifyPropertyChanged
             {
                 Log($"No series recordings found for current session");
             }
+            _seriesLoaded = true;
         }
         catch (Exception ex)
         {
@@ -907,6 +942,7 @@ public partial class RecordingScheduler : INotifyPropertyChanged
         {
             lock (_lockObject)
             {
+                if (_loadedSessionKey != GetCurrentSessionKey()) return;
                 var activeSeries = _seriesRecordings.Where(s => s.IsActive).ToList();
 
                 if (!activeSeries.Any())

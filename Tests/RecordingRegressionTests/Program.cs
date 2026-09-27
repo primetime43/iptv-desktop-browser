@@ -155,6 +155,125 @@ try
         recovered.ScheduledRecordings.Single().FailureReason!.Contains("could not be verified"), "Interrupted recordings cannot become false successes");
     recovered.Dispose();
 
+    Session.Username = "account-a";
+    Session.Password = "password-a";
+    var accountA = Begin("wait");
+    await accountA.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    var keyA = SessionKey();
+    var processA = accountA.Recording.RecordingProcess ?? throw new InvalidOperationException("A did not start");
+    var pendingA = new ScheduledRecording
+    {
+        Title = "Later on A", StartTime = DateTime.UtcNow.AddMinutes(10),
+        EndTime = DateTime.UtcNow.AddMinutes(20), OutputFilePath = Path.Combine(accountA.Directory, "later.ts")
+    };
+    accountA.Scheduler.ScheduleRecording(pendingA);
+    var seriesA = new SeriesRecording { SeriesName = "A series" };
+    accountA.Scheduler.AddSeriesRecording(seriesA);
+
+    // Logout mutates Session before the next dashboard calls ReloadForCurrentSession.
+    Session.Username = Session.Password = "";
+    pendingA.StartTime = DateTime.UtcNow.AddSeconds(-1);
+    accountA.Scheduler.CheckScheduledRecordings();
+    Check(ReadAccounts(accountA).Keys.SequenceEqual([keyA]), "Logout tick does not save A's schedules under an empty username");
+    Check(pendingA.Status == RecordingScheduleStatus.Scheduled && pendingA.RecordingProcess == null,
+        "Pending work does not start with another login's settings");
+    pendingA.StartTime = DateTime.UtcNow.AddMinutes(10);
+
+    Session.Username = "account-b";
+    Session.Password = "password-b";
+    var keyB = SessionKey();
+    accountA.Scheduler.CheckScheduledRecordings();
+    Check(!ReadAccounts(accountA).ContainsKey(keyB), "Tick during login keeps the outgoing account's ownership");
+    accountA.Scheduler.ReloadForCurrentSession();
+    Check(accountA.Scheduler.ScheduledRecordings.Count == 0 && accountA.Scheduler.SeriesRecordings.Count == 0,
+        "Switching accounts displays only the new account's schedules and series");
+
+    // Deliberately reuse a GUID across accounts to check account-scoped process identity.
+    var accountB = Begin("wait", sharedStore: accountA, recordingId: accountA.Recording.Id);
+    await accountB.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    Check(accountA.Recording.RecordingProcess != accountB.Recording.RecordingProcess && !processA.HasExited,
+        "Both accounts can retain independent active processes");
+
+    Session.Username = "account-a";
+    Session.Password = "password-a";
+    accountA.Scheduler.ReloadForCurrentSession();
+    Check(ReferenceEquals(accountA.Scheduler.ScheduledRecordings.Single(r => r.Id == accountA.Recording.Id), accountA.Recording) &&
+        ReferenceEquals(accountA.Recording.RecordingProcess, processA) && accountA.StartedCount == 1,
+        "Returning to A reattaches the existing run without restarting or marking it interrupted");
+    Check(accountA.Scheduler.SeriesRecordings.Single().Id == seriesA.Id, "Series rules retain their original account");
+
+    Session.Username = "account-b";
+    Session.Password = "password-b";
+    accountA.Scheduler.ReloadForCurrentSession();
+    accountA.Recording.PostBufferMinutes = 1;
+    accountA.Recording.EndTime = DateTime.UtcNow.AddSeconds(-1);
+    accountA.Scheduler.CheckScheduledRecordings();
+    Check(accountA.Recording.Status == RecordingScheduleStatus.Recording && !processA.HasExited,
+        "Hidden recording still honors its post-buffer");
+    accountA.Recording.EndTime = DateTime.UtcNow.AddMinutes(-2);
+    accountA.Scheduler.CheckScheduledRecordings();
+    await finished(accountA);
+    Check(accountA.Recording.Status == RecordingScheduleStatus.Completed && accountA.Recording.RecordingProcess == null,
+        "A reaches its scheduled stop while B is visible");
+    Check(accountB.Recording.Status == RecordingScheduleStatus.Recording && !accountB.Recording.RecordingProcess!.HasExited,
+        "Stopping A leaves B's recording running");
+    var accounts = ReadAccounts(accountA);
+    Check(accounts[keyA].Single(r => r.Id == accountA.Recording.Id).Status == RecordingScheduleStatus.Completed &&
+        accounts[keyA].Any(r => r.Id == pendingA.Id) && accounts[keyB].Single().Status == RecordingScheduleStatus.Recording,
+        "Background completion updates only its owner and preserves unrelated schedules");
+    accountB.Scheduler.CancelRecording(accountB.Recording.Id);
+    await finished(accountB);
+    Check(ReadAccounts(accountA)[keyB].Single().Status == RecordingScheduleStatus.Cancelled &&
+        ReadAccounts(accountA)[keyA].Single(r => r.Id == accountA.Recording.Id).Status == RecordingScheduleStatus.Completed,
+        "Cancelling a shared GUID affects only the visible account");
+
+    Session.Username = "failure-owner";
+    var backgroundFailure = Begin("fail-on-stop");
+    await backgroundFailure.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    var failureOwner = SessionKey();
+    Session.Username = "other-viewer";
+    backgroundFailure.Scheduler.ReloadForCurrentSession();
+    backgroundFailure.Recording.EndTime = DateTime.UtcNow.AddSeconds(-1);
+    backgroundFailure.Scheduler.CheckScheduledRecordings();
+    await finished(backgroundFailure);
+    Check(ReadAccounts(backgroundFailure)[failureOwner].Single().Status == RecordingScheduleStatus.Failed &&
+        backgroundFailure.Scheduler.ScheduledRecordings.Count == 0,
+        "Background failures persist under their owner without entering another account's list");
+    Session.Username = "failure-owner";
+    backgroundFailure.Scheduler.ReloadForCurrentSession();
+    Check(backgroundFailure.Scheduler.ScheduledRecordings.Single().ExitCode == 9,
+        "Returning to the owner displays the background failure details");
+
+    Session.Username = "logged-out-owner";
+    var loggedOut = Begin("wait");
+    await loggedOut.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    var loggedOutOwner = SessionKey();
+    Session.Username = Session.Password = "";
+    loggedOut.Recording.EndTime = DateTime.UtcNow.AddSeconds(-1);
+    loggedOut.Scheduler.CheckScheduledRecordings();
+    await finished(loggedOut);
+    Check(ReadAccounts(loggedOut).Keys.SequenceEqual([loggedOutOwner]) && loggedOut.Recording.Status == RecordingScheduleStatus.Completed,
+        "Recording stops and saves to its owner while logged out");
+
+    Session.Username = "queued-owner";
+    Session.Password = "queued-password";
+    var queuedOwner = SessionKey();
+    var queued = Begin("wait", whenQueued: () =>
+    {
+        // This runs before Task.Run: reproduce a switch before process startup.
+        Session.Username = "next-account";
+        Session.Password = "next-password";
+        Session.FfmpegPath = Path.Combine(root, "missing-after-switch.exe");
+        Session.FfmpegArgsTemplate = "--fake-ffmpeg fail";
+    });
+    await queued.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    queued.Scheduler.ReloadForCurrentSession();
+    queued.Recording.EndTime = DateTime.UtcNow.AddSeconds(-1);
+    queued.Scheduler.CheckScheduledRecordings();
+    await finished(queued);
+    Check(ReadAccounts(queued)[queuedOwner].Single().Status == RecordingScheduleStatus.Completed,
+        "Queued runs retain their original account and FFmpeg settings across startup races");
+
     Console.WriteLine($"Passed {passed} recording regression checks.");
     return 0;
 }
@@ -175,11 +294,13 @@ finally
     Directory.Delete(root);
 }
 
-TestRun Begin(string mode, bool missingExecutable = false, Action<TestRun>? beforeStarted = null)
+TestRun Begin(string mode, bool missingExecutable = false, Action<TestRun>? beforeStarted = null,
+    TestRun? sharedStore = null, Guid? recordingId = null, Action? whenQueued = null)
 {
-    var directory = Path.Combine(root, Guid.NewGuid().ToString("N"));
-    var run = new TestRun(new RecordingScheduler(directory), new ScheduledRecording
+    var directory = sharedStore?.Directory ?? Path.Combine(root, Guid.NewGuid().ToString("N"));
+    var run = new TestRun(sharedStore?.Scheduler ?? new RecordingScheduler(directory), new ScheduledRecording
     {
+        Id = recordingId ?? Guid.NewGuid(),
         Title = "Process test",
         StreamUrl = "https://example.test/live/test-user/test-password/1.ts",
         OutputFilePath = Path.Combine(directory, "recording.ts"),
@@ -192,14 +313,28 @@ TestRun Begin(string mode, bool missingExecutable = false, Action<TestRun>? befo
     runs.Add(run);
     Session.FfmpegPath = missingExecutable ? Path.Combine(directory, "missing.exe") : Environment.ProcessPath!;
     Session.FfmpegArgsTemplate = $"--fake-ffmpeg {mode}";
-    run.Scheduler.RecordingStarted += _ =>
+    run.Scheduler.RecordingStarted += recording =>
     {
+        if (!ReferenceEquals(recording, run.Recording)) return;
         Interlocked.Increment(ref run.StartedCount);
         beforeStarted?.Invoke(run);
         run.Started.TrySetResult();
     };
-    run.Scheduler.RecordingFailed += _ => { Interlocked.Increment(ref run.FailedCount); run.Finished.TrySetResult(); };
-    run.Scheduler.RecordingStopped += _ => { Interlocked.Increment(ref run.StoppedCount); run.Finished.TrySetResult(); };
+    run.Scheduler.RecordingFailed += recording =>
+    {
+        if (!ReferenceEquals(recording, run.Recording)) return;
+        Interlocked.Increment(ref run.FailedCount); run.Finished.TrySetResult();
+    };
+    run.Scheduler.RecordingStopped += recording =>
+    {
+        if (!ReferenceEquals(recording, run.Recording)) return;
+        Interlocked.Increment(ref run.StoppedCount); run.Finished.TrySetResult();
+    };
+    run.Recording.PropertyChanged += (_, e) =>
+    {
+        if (e.PropertyName == nameof(ScheduledRecording.Status) && run.Recording.Status == RecordingScheduleStatus.Recording)
+            whenQueued?.Invoke();
+    };
     run.Scheduler.ScheduleRecording(run.Recording);
     return run;
 }
@@ -208,6 +343,12 @@ async Task finished(TestRun run) => await run.Finished.Task.WaitAsync(TimeSpan.F
 
 ScheduledRecording ReadStored(TestRun run) => JsonSerializer.Deserialize<Dictionary<string, List<ScheduledRecording>>>(
     ProtectedRecordingFile.ReadAllText(Path.Combine(run.Directory, "scheduled_recordings.json")))!.Values.Single().Single();
+
+Dictionary<string, List<ScheduledRecording>> ReadAccounts(TestRun run) =>
+    JsonSerializer.Deserialize<Dictionary<string, List<ScheduledRecording>>>(
+        ProtectedRecordingFile.ReadAllText(Path.Combine(run.Directory, "scheduled_recordings.json")))!;
+
+string SessionKey() => $"{Environment.UserName}_{Session.Host}_{Session.Port}_{Session.Username}";
 
 void Check(bool condition, string description)
 {
