@@ -111,7 +111,7 @@ public static class Session
             var scheme = UseSsl
                 ? (_networkConfig?.Schemes.Https ?? "https")
                 : (_networkConfig?.Schemes.Http ?? "http");
-            return $"{scheme}://{Host}:{Port}";
+            return Port == 0 ? $"{scheme}://{Host}" : $"{scheme}://{Host}:{Port}";
         }
     }
 
@@ -209,33 +209,41 @@ public static class Session
         }
     }
 
-    public static string BuildApi(string? action = null)
+    public static string BuildApi(string? action = null, params (string key, string value)[] additionalParams)
     {
         var playerApiEndpoint = _apiConfig?.Endpoints.PlayerApi ?? "player_api.php";
-        var core = $"{BaseUrl}/{playerApiEndpoint}?username={Uri.EscapeDataString(Username)}&password={Uri.EscapeDataString(Password)}";
-        if (!string.IsNullOrWhiteSpace(action)) core += "&action=" + action;
-        return core;
+        var parameters = new List<(string key, string value)>();
+        if (!string.IsNullOrWhiteSpace(action)) parameters.Add(("action", action));
+        parameters.AddRange(additionalParams);
+        return XtreamUrlBuilder.BuildApi(BaseUrl, playerApiEndpoint, Username, Password, parameters.ToArray());
     }
 
-    public static string BuildStreamUrl(int streamId, string? extension = null)
+    public static string BuildStreamUrl(int streamId, string? extension = null) =>
+        BuildStreamUrl(streamId.ToString(System.Globalization.CultureInfo.InvariantCulture), extension);
+
+    public static string BuildStreamUrl(string streamId, string? extension = null)
     {
         var ext = extension ?? _apiConfig?.DefaultExtensions.LiveStream ?? "ts";
         var livePath = _apiConfig?.StreamPaths.Live ?? "live";
-        return $"{BaseUrl}/{livePath}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{ext}";
+        return XtreamUrlBuilder.BuildStream(BaseUrl, livePath, Username, Password, streamId, ext);
     }
 
-    public static string BuildVodStreamUrl(int streamId, string? extension = null)
+    public static string BuildVodStreamUrl(int streamId, string? extension = null) =>
+        BuildVodStreamUrl(streamId.ToString(System.Globalization.CultureInfo.InvariantCulture), extension);
+
+    public static string BuildVodStreamUrl(string streamId, string? extension = null)
     {
         var ext = extension ?? _apiConfig?.DefaultExtensions.VodStream ?? "mp4";
         var moviePath = _apiConfig?.StreamPaths.Movie ?? "movie";
-        return $"{BaseUrl}/{moviePath}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{ext}";
+        return XtreamUrlBuilder.BuildStream(BaseUrl, moviePath, Username, Password, streamId, ext);
     }
 
     public static string BuildSeriesStreamUrl(int streamId, string? extension = null)
     {
         var ext = extension ?? _apiConfig?.DefaultExtensions.SeriesStream ?? "mp4";
         var seriesPath = _apiConfig?.StreamPaths.Series ?? "series";
-        return $"{BaseUrl}/{seriesPath}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{streamId}.{ext}";
+        return XtreamUrlBuilder.BuildStream(BaseUrl, seriesPath, Username, Password,
+            streamId.ToString(System.Globalization.CultureInfo.InvariantCulture), ext);
     }
 
     public static ProcessStartInfo BuildPlayerProcess(string streamUrl, string title)

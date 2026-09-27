@@ -114,4 +114,5 @@ Run the Windows regression checks (also run in CI):
 dotnet run --project Tests/SecurityRegressionTests/SecurityRegressionTests.csproj -c Release
 dotnet run --project Tests/RecordingRegressionTests/RecordingRegressionTests.csproj -c Release
 dotnet run --project Tests/EpgRegressionTests/EpgRegressionTests.csproj -c Release
+dotnet run --project Tests/UrlRegressionTests/UrlRegressionTests.csproj -c Release
 ```

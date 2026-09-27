@@ -95,32 +95,13 @@ public class SessionService : ISessionService
     }
 
     public string BuildApi(string action, params (string key, string value)[] additionalParams)
-    {
-        var protocol = UseSsl ? "https" : "http";
-        var portPart = (Port != 0 && Port != (UseSsl ? 443 : 80)) ? $":{Port}" : "";
-        var url = $"{protocol}://{Host}{portPart}/player_api.php?username={Username}&password={Password}&action={action}";
-
-        foreach (var (key, value) in additionalParams)
-        {
-            url += $"&{key}={value}";
-        }
-
-        return url;
-    }
+        => Session.BuildApi(action, additionalParams);
 
     public string BuildStreamUrl(string streamId, string extension = "m3u8")
-    {
-        var protocol = UseSsl ? "https" : "http";
-        var portPart = (Port != 0 && Port != (UseSsl ? 443 : 80)) ? $":{Port}" : "";
-        return $"{protocol}://{Host}{portPart}/live/{Username}/{Password}/{streamId}.{extension}";
-    }
+        => Session.BuildStreamUrl(streamId, extension);
 
     public string BuildVodStreamUrl(string streamId, string containerExtension)
-    {
-        var protocol = UseSsl ? "https" : "http";
-        var portPart = (Port != 0 && Port != (UseSsl ? 443 : 80)) ? $":{Port}" : "";
-        return $"{protocol}://{Host}{portPart}/movie/{Username}/{Password}/{streamId}.{containerExtension}";
-    }
+        => Session.BuildVodStreamUrl(streamId, containerExtension);
 
     public ProcessStartInfo BuildPlayerProcess(string streamUrl, string title = "IPTV Stream")
     {

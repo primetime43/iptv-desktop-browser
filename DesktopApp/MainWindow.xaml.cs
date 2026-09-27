@@ -297,10 +297,11 @@ namespace DesktopApp
             var baseUrl = $"{scheme}://{host}:{port}";
             var candidateUrls = new[]
             {
-                $"{baseUrl}/{_apiSettings.Endpoints.PlayerApi}?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}",
-                (port == _networkSettings.DefaultPorts.Http || port == _networkSettings.DefaultPorts.Https) ? $"{scheme}://{host}/{_apiSettings.Endpoints.PlayerApi}?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}" : null,
-                $"{baseUrl}/{_apiSettings.Endpoints.PanelApi}?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}",
-                $"{baseUrl}/{_apiSettings.Endpoints.GetPlaylist}?username={Uri.EscapeDataString(username)}&password={Uri.EscapeDataString(password)}&type=m3u"
+                XtreamUrlBuilder.BuildApi(baseUrl, _apiSettings.Endpoints.PlayerApi, username, password),
+                (port == _networkSettings.DefaultPorts.Http || port == _networkSettings.DefaultPorts.Https)
+                    ? XtreamUrlBuilder.BuildApi($"{scheme}://{host}", _apiSettings.Endpoints.PlayerApi, username, password) : null,
+                XtreamUrlBuilder.BuildApi(baseUrl, _apiSettings.Endpoints.PanelApi, username, password),
+                XtreamUrlBuilder.BuildApi(baseUrl, _apiSettings.Endpoints.GetPlaylist, username, password, ("type", "m3u"))
             };
             var sw = Stopwatch.StartNew();
             var diag = new StringBuilder();
