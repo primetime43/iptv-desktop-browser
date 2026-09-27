@@ -6,7 +6,7 @@ using Microsoft.Extensions.Logging;
 
 namespace DesktopApp.Services;
 
-public class ChannelService : IChannelService
+public partial class ChannelService : IChannelService
 {
     private readonly ISessionService _sessionService;
     private readonly IHttpService _httpService;
@@ -17,6 +17,7 @@ public class ChannelService : IChannelService
     private readonly BatchProcessingSettings _batchSettings;
     private readonly M3uSettings _m3uSettings;
     private readonly EpgSettings _epgSettings;
+    private readonly TimeProvider _clock;
     private Action<string>? _rawOutputLogger;
 
     public ChannelService(
@@ -28,7 +29,8 @@ public class ChannelService : IChannelService
         CacheSettings cacheSettings,
         BatchProcessingSettings batchSettings,
         M3uSettings m3uSettings,
-        EpgSettings epgSettings)
+        EpgSettings epgSettings,
+        TimeProvider? timeProvider = null)
     {
         _sessionService = sessionService;
         _httpService = httpService;
@@ -39,6 +41,7 @@ public class ChannelService : IChannelService
         _batchSettings = batchSettings;
         _m3uSettings = m3uSettings;
         _epgSettings = epgSettings;
+        _clock = timeProvider ?? TimeProvider.System;
     }
 
     public void SetRawOutputLogger(Action<string>? logger)
@@ -138,6 +141,9 @@ public class ChannelService : IChannelService
                 var cachedChannels = await _cacheService.GetDataAsync<List<Channel>>(cacheKey, cancellationToken);
                 if (cachedChannels != null)
                 {
+                    // Old channel-list caches may contain an already-loaded snapshot.
+                    foreach (var channel in cachedChannels)
+                        channel.RefreshCurrentProgram(_clock.GetUtcNow().UtcDateTime);
                     var cacheHitMsg = $"📱 CACHE HIT: Loaded {cachedChannels.Count} channels from CACHE for category: {category.Name} (no API call needed)";
                     _logger.LogInformation(cacheHitMsg);
                     _rawOutputLogger?.Invoke(cacheHitMsg + "\n");
@@ -190,180 +196,6 @@ public class ChannelService : IChannelService
         {
             _logger.LogError(ex, "Error loading channels for category: {CategoryName}", category.Name);
             throw;
-        }
-    }
-
-    public async Task LoadEpgForChannelAsync(Channel channel, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            if (_sessionService.Mode == SessionMode.M3u)
-            {
-                LoadM3uEpgForChannel(channel);
-                return;
-            }
-
-            if (string.IsNullOrEmpty(channel.EpgChannelId))
-            {
-                return;
-            }
-
-            // Check cache first (only if caching is enabled)
-            if (_sessionService.CachingEnabled)
-            {
-                var cacheKey = $"{_cacheSettings.KeyPrefixes.Epg}_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
-                var cachedEpg = await _cacheService.GetDataAsync<EpgData>(cacheKey, cancellationToken);
-                if (cachedEpg != null && cachedEpg.IsStillValid())
-                {
-                    var epgCacheHitMsg = $"📱 CACHE HIT: EPG loaded from CACHE for channel: {channel.Name} (no API call needed)";
-                    _logger.LogInformation(epgCacheHitMsg);
-                    _rawOutputLogger?.Invoke(epgCacheHitMsg + "\n");
-                    channel.NowTitle = cachedEpg.NowTitle;
-                    channel.NowDescription = cachedEpg.NowDescription;
-                    channel.NowTimeRange = cachedEpg.NowTimeRange;
-                    channel.EpgLoaded = true;
-                    return;
-                }
-
-                var epgCacheMissMsg = $"🌐 API CALL: EPG cache MISS - Loading from API server for channel: {channel.Name}";
-                _logger.LogInformation(epgCacheMissMsg);
-                _rawOutputLogger?.Invoke(epgCacheMissMsg + "\n");
-            }
-
-            var url = _sessionService.BuildApi(_apiSettings.Actions.GetSimpleDataTable, ("stream_id", channel.Id.ToString()));
-            var response = await _httpService.GetStringAsync(url, cancellationToken);
-
-            // Parse EPG data and update channel properties
-            var epgData = new EpgData();
-
-            // Handle potential base64 encoded response
-            var trimmed = response.AsSpan().TrimStart();
-            if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
-            {
-                _logger.LogWarning("EPG non-JSON response skipped for channel: {ChannelName}", channel.Name);
-                channel.EpgLoaded = true;
-                return;
-            }
-
-            try
-            {
-                using var doc = JsonDocument.Parse(response);
-                if (doc.RootElement.TryGetProperty("epg_listings", out var listings) && listings.ValueKind == JsonValueKind.Array)
-                {
-                    var nowUtc = DateTime.UtcNow;
-                    bool found = false;
-                    EpgEntry? fallbackFirstFuture = null;
-                    DateTime? latestEndTime = null;
-
-                    foreach (var el in listings.EnumerateArray())
-                    {
-                        var start = GetUnixTimestamp(el, "start_timestamp");
-                        var end = GetUnixTimestamp(el, "stop_timestamp");
-                        if (start == DateTime.MinValue || end == DateTime.MinValue) continue;
-
-                        // Track the latest end time across all EPG entries for smart cache expiration
-                        if (!latestEndTime.HasValue || end > latestEndTime.Value)
-                        {
-                            latestEndTime = end;
-                        }
-
-                        string titleRaw = TryGetString(el, "title", "name", "programme", "program");
-                        string descRaw = TryGetString(el, "description", "desc", "info", "plot", "short_description");
-                        string title = DecodeMaybeBase64(titleRaw);
-                        string desc = DecodeMaybeBase64(descRaw);
-
-                        bool nowFlag = el.TryGetProperty("now_playing", out var np) &&
-                                      (np.ValueKind == JsonValueKind.Number ? np.GetInt32() == 1 :
-                                       (np.ValueKind == JsonValueKind.String && np.GetString() == "1"));
-                        bool isCurrent = nowFlag || (nowUtc >= start && nowUtc < end);
-
-                        if (isCurrent && !string.IsNullOrWhiteSpace(title))
-                        {
-                            epgData.NowTitle = title;
-                            epgData.NowDescription = desc;
-                            epgData.NowTimeRange = $"{start.ToLocalTime():h:mm tt} - {end.ToLocalTime():h:mm tt}";
-                            found = true;
-                            // Don't break here - we still need to find the latest end time
-                        }
-
-                        if (!isCurrent && start > nowUtc && fallbackFirstFuture == null && !string.IsNullOrWhiteSpace(title))
-                        {
-                            fallbackFirstFuture = new EpgEntry { StartUtc = start, EndUtc = end, Title = title, Description = desc };
-                        }
-                    }
-
-                    // Set the latest show end time for smart cache expiration
-                    epgData.LatestShowEndUtc = latestEndTime;
-
-                    if (!found && fallbackFirstFuture != null)
-                    {
-                        epgData.NowTitle = fallbackFirstFuture.Title;
-                        epgData.NowDescription = fallbackFirstFuture.Description ?? string.Empty;
-                        epgData.NowTimeRange = $"{fallbackFirstFuture.StartUtc.ToLocalTime():h:mm tt} - {fallbackFirstFuture.EndUtc.ToLocalTime():h:mm tt}";
-                        found = true;
-                    }
-
-                    // Update channel with EPG data
-                    channel.NowTitle = epgData.NowTitle;
-                    channel.NowDescription = epgData.NowDescription;
-                    channel.NowTimeRange = epgData.NowTimeRange;
-                    channel.EpgLoaded = true;
-
-                    // Cache the results with smart expiration based on EPG content
-                    // Calculate expiration time based on the latest show end time (convert to local time)
-                    TimeSpan cacheExpiration;
-                    if (epgData.LatestShowEndUtc.HasValue)
-                    {
-                        // Convert UTC time to local time for expiration calculation
-                        var latestShowEndLocal = epgData.LatestShowEndUtc.Value.ToLocalTime();
-
-                        // Expire N minutes before the last show ends (to fetch next batch)
-                        var smartExpirationTimeLocal = latestShowEndLocal.AddMinutes(-_epgSettings.SmartCacheExpirationMinutesBeforeShowEnd);
-                        var timeUntilExpiration = smartExpirationTimeLocal - DateTime.Now;
-
-                        // Ensure minimum and maximum validity times from config
-                        if (timeUntilExpiration < TimeSpan.FromMinutes(_epgSettings.MinCacheValidityMinutes))
-                            cacheExpiration = TimeSpan.FromMinutes(_epgSettings.MinCacheValidityMinutes);
-                        else if (timeUntilExpiration > TimeSpan.FromHours(_epgSettings.MaxCacheValidityHours))
-                            cacheExpiration = TimeSpan.FromHours(_epgSettings.MaxCacheValidityHours);
-                        else
-                            cacheExpiration = timeUntilExpiration;
-                    }
-                    else
-                    {
-                        // Fallback: minimum expiration from config if no show end time available
-                        cacheExpiration = TimeSpan.FromMinutes(_epgSettings.MinCacheValidityMinutes);
-                    }
-
-                    // Cache the results (only if caching is enabled)
-                    if (_sessionService.CachingEnabled)
-                    {
-                        var cacheKey = $"{_cacheSettings.KeyPrefixes.Epg}_{_sessionService.Host}_{_sessionService.Username}_{channel.Id}";
-                        await _cacheService.SetDataAsync(cacheKey, epgData, cacheExpiration, cancellationToken);
-
-                        var expirationInfo = epgData.LatestShowEndUtc.HasValue
-                            ? $"until {epgData.LatestShowEndUtc.Value.ToLocalTime():MM/dd HH:mm}"
-                            : "for 30 minutes (fallback)";
-                        _logger.LogInformation("✅ API SUCCESS: EPG loaded from API for channel {ChannelName} and cached {ExpirationInfo}", channel.Name, expirationInfo);
-                        _rawOutputLogger?.Invoke($"📺 EPG cached for {channel.Name} {expirationInfo}\n");
-                    }
-                    else
-                    {
-                        _logger.LogInformation("✅ API SUCCESS: EPG loaded from API for channel {ChannelName} (caching disabled)", channel.Name);
-                    }
-                }
-            }
-            catch (JsonException ex)
-            {
-                _logger.LogWarning(ex, "Failed to parse EPG JSON for channel: {ChannelName}", channel.Name);
-                channel.EpgLoaded = true;
-            }
-
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading EPG for channel: {ChannelName}", channel.Name);
-            // Don't throw - EPG failures shouldn't break channel loading
         }
     }
 
@@ -480,11 +312,15 @@ public class ChannelService : IChannelService
         if (!el.TryGetProperty(prop, out var tsEl))
             return DateTime.MinValue;
 
-        var str = tsEl.GetString();
-        if (string.IsNullOrEmpty(str) || !long.TryParse(str, out var unix) || unix <= 0)
+        long unix;
+        var parsed = tsEl.ValueKind == JsonValueKind.Number
+            ? tsEl.TryGetInt64(out unix)
+            : long.TryParse(tsEl.ValueKind == JsonValueKind.String ? tsEl.GetString() : null, out unix);
+        if (!parsed || unix <= 0)
             return DateTime.MinValue;
 
-        return DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime;
+        try { return DateTimeOffset.FromUnixTimeSeconds(unix).UtcDateTime; }
+        catch (ArgumentOutOfRangeException) { return DateTime.MinValue; }
     }
 
     private static string TryGetString(JsonElement el, params string[] names)

@@ -74,6 +74,7 @@ v1.06/v2.0.0
 - Access favorites by selecting **⭐ Favorites** from the categories dropdown.
 - Favorites are saved per account/playlist and persist between sessions.
 - Favorite channels maintain all EPG data and functionality.
+- Xtream “Now playing” is recalculated from the loaded schedule every 10 seconds. Guide gaps clear the label, and expired schedules refresh automatically. Older snapshot-only EPG caches are replaced when loaded.
 
 ### Scheduled recording failures
 - Failed or prematurely ended recordings show **Failed** immediately, with a notification.
@@ -112,4 +113,5 @@ Run the Windows regression checks (also run in CI):
 ```bash
 dotnet run --project Tests/SecurityRegressionTests/SecurityRegressionTests.csproj -c Release
 dotnet run --project Tests/RecordingRegressionTests/RecordingRegressionTests.csproj -c Release
+dotnet run --project Tests/EpgRegressionTests/EpgRegressionTests.csproj -c Release
 ```

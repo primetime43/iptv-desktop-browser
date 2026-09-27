@@ -363,6 +363,7 @@ namespace DesktopApp.Views
         // Buffer for log messages during startup before UI is ready
         private readonly List<string> _startupLogBuffer = new();
         private DateTime _nextScheduledEpgRefreshUtc;
+        private Task? _epgBoundaryRefreshTask;
         private string _lastEpgUpdateText = "(never)";
         public string LastEpgUpdateText
         {
@@ -1044,6 +1045,7 @@ namespace DesktopApp.Views
                 {
                     await Task.Delay(TimeSpan.FromSeconds(10), _cts.Token);
                     if (_cts.IsCancellationRequested) break;
+                    RefreshVisibleNowPlaying();
                     if (DateTime.UtcNow >= _nextScheduledEpgRefreshUtc)
                     {
                         Session.RaiseEpgRefreshRequested();
@@ -1054,6 +1056,48 @@ namespace DesktopApp.Views
                 catch { }
             }
         }
+        private void RefreshVisibleNowPlaying()
+        {
+            var channels = _channels.ToList();
+            if (SelectedChannel != null) channels.Add(SelectedChannel);
+            if (FindName("FavoritesChannelsControl") is ItemsControl favorites && favorites.ItemsSource is IEnumerable<Channel> favoriteChannels)
+                channels.AddRange(favoriteChannels);
+            channels = channels.Distinct().ToList();
+
+            var nowUtc = DateTime.UtcNow;
+            foreach (var channel in channels)
+                if (channel.EpgSchedule != null) channel.RefreshCurrentProgram(nowUtc);
+            UpdateSelectedNowPlaying();
+
+            // Clock-only updates above keep running while expired guides are fetched
+            // in small batches. A slow provider must not freeze other channels' labels.
+            if (_epgBoundaryRefreshTask == null || _epgBoundaryRefreshTask.IsCompleted)
+            {
+                var due = channels.Where(c => !c.EpgLoading && c.NextEpgRefreshUtc <= nowUtc).ToList();
+                if (due.Count > 0) _epgBoundaryRefreshTask = RefreshExpiredEpgAsync(due);
+            }
+        }
+
+        private async Task RefreshExpiredEpgAsync(List<Channel> channels)
+        {
+            try
+            {
+                foreach (var batch in channels.Chunk(5))
+                {
+                    if (_cts.IsCancellationRequested) return;
+                    await Task.WhenAll(batch.Select(c => EnsureEpgLoadedAsync(c, force: true)));
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { Log($"EPG refresh failed: {ex.Message}\n"); }
+        }
+
+        private void UpdateSelectedNowPlaying()
+        {
+            NowProgramText = string.IsNullOrWhiteSpace(SelectedChannel?.NowTitle)
+                ? string.Empty : $"Now: {SelectedChannel.NowTitle} ({SelectedChannel.NowTimeRange})";
+        }
+
         private void OnEpgRefreshRequested()
         {
             if (_cts.IsCancellationRequested || Session.Mode != SessionMode.Xtream) return;
@@ -1061,7 +1105,7 @@ namespace DesktopApp.Views
             {
                 LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g") : "(never)";
                 Log("EPG refresh triggered\n");
-                foreach (var ch in _channels) { ch.EpgLoaded = false; ch.EpgLoading = false; ch.EpgAttempts = 0; }
+                foreach (var ch in _channels) { ch.EpgLoaded = false; ch.EpgAttempts = 0; }
                 if (SelectedChannel != null)
                 {
                     _ = EnsureEpgLoadedAsync(SelectedChannel, force: true);
@@ -1391,8 +1435,9 @@ namespace DesktopApp.Views
         {
             if (Session.Mode != SessionMode.Xtream) return;
             if (_cts.IsCancellationRequested) return;
-            if (!force && (ch.EpgLoaded || ch.EpgLoading)) return;
-            if (!force && ch.EpgAttempts >= 3 && !string.IsNullOrEmpty(ch.NowTitle)) return;
+            if (ch.EpgLoading) return;
+            ch.RefreshCurrentProgram(DateTime.UtcNow);
+            if (!force && ch.EpgLoaded) return;
 
             // Use ChannelService instead of direct API calls
             ch.EpgLoading = true;
@@ -1400,6 +1445,7 @@ namespace DesktopApp.Views
             try
             {
                 await _channelService.LoadEpgForChannelAsync(ch, _cts.Token);
+                if (ReferenceEquals(ch, SelectedChannel)) UpdateSelectedNowPlaying();
             }
             catch (Exception ex)
             {
@@ -1430,6 +1476,7 @@ namespace DesktopApp.Views
                     var batch = channelList.Skip(i).Take(batchSize);
                     var batchTasks = batch.Select(async channel =>
                     {
+                        channel.RefreshCurrentProgram(DateTime.UtcNow);
                         if (_cts.IsCancellationRequested || channel.EpgLoaded || channel.EpgLoading)
                             return;
 
@@ -3671,6 +3718,8 @@ namespace DesktopApp.Views
                             NowTitle = existingChannel.NowTitle,
                             NowTimeRange = existingChannel.NowTimeRange,
                             EpgLoaded = existingChannel.EpgLoaded,
+                            EpgSchedule = existingChannel.EpgSchedule,
+                            NextEpgRefreshUtc = existingChannel.NextEpgRefreshUtc,
                             EpgLoading = existingChannel.EpgLoading,
                             IsRecording = existingChannel.IsRecording,
                             IsFavorite = true

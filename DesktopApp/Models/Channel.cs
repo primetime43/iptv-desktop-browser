@@ -37,6 +37,22 @@ public sealed class Channel : INotifyPropertyChanged
     private bool _epgLoaded;
     public bool EpgLoaded { get => _epgLoaded; set { if (value != _epgLoaded) { _epgLoaded = value; OnPropertyChanged(); OnPropertyChanged(nameof(TooltipText)); } } }
 
+    // EPG persistence belongs to its own cache entry, not the cached channel list.
+    [System.Text.Json.Serialization.JsonIgnore]
+    public EpgData? EpgSchedule { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DateTime? NextEpgRefreshUtc { get; set; }
+
+    public void RefreshCurrentProgram(DateTime utcNow)
+    {
+        var current = EpgSchedule?.GetCurrentProgram(utcNow);
+        NowTitle = current?.Title;
+        NowDescription = current?.Description;
+        NowTimeRange = current?.TimeRangeLocal;
+        EpgLoaded = EpgSchedule?.IsStillValid(utcNow) == true;
+    }
+
     private bool _epgLoading;
     public bool EpgLoading { get => _epgLoading; set { if (value != _epgLoading) { _epgLoading = value; OnPropertyChanged(); OnPropertyChanged(nameof(TooltipText)); } } }
 

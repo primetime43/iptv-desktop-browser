@@ -52,6 +52,9 @@ jobs:
       - name: Recording regression checks
         run: dotnet run --project Tests/RecordingRegressionTests/RecordingRegressionTests.csproj -c $env:CONFIG
 
+      - name: EPG regression checks
+        run: dotnet run --project Tests/EpgRegressionTests/EpgRegressionTests.csproj -c $env:CONFIG
+
       - name: Publish (framework-dependent win-x64 single-file)
         run: >-
           dotnet publish $env:PROJECT -c $env:CONFIG -f $env:FRAMEWORK
