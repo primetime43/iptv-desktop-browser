@@ -186,6 +186,9 @@ internal static class Program
             var root = new XElement(wpf + "Grid",
                 new XElement(wpf + "Grid.Resources", new XElement(dictionary)), element);
             var host = (Grid)XamlReader.Parse(root.ToString());
+            using var source = new HwndSource(new HwndSourceParameters("Thumbnail viewport fixture")
+            { Width = 640, Height = 400, WindowStyle = unchecked((int)0x80000000), PositionX = -10000, PositionY = -10000 });
+            source.RootVisual = host;
             host.DataContext = new Sizing();
             var control = host.Children.OfType<ItemsControl>().Single();
             control.ItemsSource = Enumerable.Range(0, 10000).Select(i => name.StartsWith("Channels")
@@ -196,6 +199,21 @@ internal static class Program
             var panel = Descendants(control).OfType<VirtualizingPanel>().Single();
             Check(Children(panel).Count() is > 0 and < 100, $"{name}: production templates virtualize");
             Check(Descendants(control).OfType<TextBlock>().Any(t => t.Text.EndsWith(" 0")), $"{name}: item bindings render the first title");
+            var thumbnails = CatalogViewport.Read(control);
+            Check(thumbnails.Count > 0 && thumbnails.All(t => t.ImageWidth > 0 && t.ImageHeight > 0),
+                $"{name}: empty image sources still supply their display dimensions");
+            var dpi = VisualTreeHelper.GetDpi(control);
+            var expectedSize = name switch
+            {
+                "ChannelsGridView" => (Width: 48, Height: 48),
+                "ChannelsListView" => (Width: 48, Height: 32),
+                "MoviesListView" or "SeriesListView" => (Width: 60, Height: 80),
+                _ => (Width: 0, Height: 0)
+            };
+            if (expectedSize.Width > 0)
+                Check(thumbnails.All(t => t.ImageWidth == (int)Math.Ceiling(expectedSize.Width * dpi.DpiScaleX) &&
+                    t.ImageHeight == (int)Math.Ceiling(expectedSize.Height * dpi.DpiScaleY)),
+                    $"{name}: requested pixels match the thumbnail slot at the current DPI");
             var scroll = (IScrollInfo)panel;
             scroll.SetVerticalOffset(scroll.ExtentHeight);
             Layout(host);

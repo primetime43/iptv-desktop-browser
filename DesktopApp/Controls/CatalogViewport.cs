@@ -4,7 +4,7 @@ using System.Windows.Media;
 
 namespace DesktopApp.Controls;
 
-public sealed record CatalogViewportItem(object Item, int Priority);
+public sealed record CatalogViewportItem(object Item, int Priority, int ImageWidth = 0, int ImageHeight = 0);
 
 public static class CatalogViewport
 {
@@ -28,7 +28,15 @@ public static class CatalogViewport
             if (!bounds.IntersectsWith(nearby)) continue; // e.g. an offscreen focused item
             var item = control.ItemContainerGenerator.ItemFromContainer(container);
             if (item == DependencyProperty.UnsetValue) continue;
-            result.Add(new(item, bounds.IntersectsWith(viewport) ? 1 : 2));
+            var image = Find<Image>(container);
+            // Before a source is available an auto-sized Image can measure as zero. Its
+            // host has the actual thumbnail slot dimensions, independent of the bitmap.
+            var host = image?.Parent as FrameworkElement;
+            var dpi = VisualTreeHelper.GetDpi(container);
+            var width = image?.Width > 0 ? image.Width : host?.ActualWidth > 0 ? host.ActualWidth : image?.ActualWidth ?? 0;
+            var height = image?.Height > 0 ? image.Height : host?.ActualHeight > 0 ? host.ActualHeight : image?.ActualHeight ?? 0;
+            result.Add(new(item, bounds.IntersectsWith(viewport) ? 1 : 2,
+                (int)Math.Ceiling(width * dpi.DpiScaleX), (int)Math.Ceiling(height * dpi.DpiScaleY)));
         }
         return result.OrderBy(r => r.Priority).ToList();
     }

@@ -55,12 +55,18 @@ public partial class DashboardWindow
             if (FindName(name) is ItemsControl control) items.AddRange(CatalogViewport.Read(control));
         }
         if ((ChannelsGridView.IsVisible || ChannelsListView.IsVisible) && SelectedChannel != null)
-            items.Add(new(SelectedChannel, 0));
+            AddSelected(SelectedChannel);
         if (!IsLoadingVodContent && (MoviesGridView.IsVisible || MoviesListView.IsVisible) && SelectedVodContent != null)
-            items.Add(new(SelectedVodContent, 0));
+            AddSelected(SelectedVodContent);
         if (!IsLoadingSeriesContent && (SeriesGridView.IsVisible || SeriesListView.IsVisible) && SelectedSeriesContent != null)
-            items.Add(new(SelectedSeriesContent, 0));
+            AddSelected(SelectedSeriesContent);
         return items.OrderBy(i => i.Priority).DistinctBy(i => i.Item).ToList();
+
+        void AddSelected(object selected)
+        {
+            var visible = items.FirstOrDefault(i => ReferenceEquals(i.Item, selected));
+            items.Add(visible != null ? visible with { Priority = 0 } : new(selected, 0));
+        }
     }
 
     private void RefreshCatalogResources()

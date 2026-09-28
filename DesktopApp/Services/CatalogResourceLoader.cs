@@ -1,6 +1,7 @@
 using DesktopApp.Controls;
 using DesktopApp.Models;
 using System.Windows.Media.Imaging;
+using System.Runtime.CompilerServices;
 
 namespace DesktopApp.Services;
 
@@ -16,6 +17,8 @@ public sealed class CatalogResourceLoader : IDisposable
     private readonly TimeProvider _clock;
     private readonly Dictionary<string, GuideResult> _guides = new();
     private readonly Dictionary<string, DateTime> _imageRetry = new();
+    private readonly ConditionalWeakTable<object, ImageState> _images = new();
+    private sealed class ImageState { public string? Key; }
     private HashSet<Channel> _loading = [];
     private string? _account;
 
@@ -46,7 +49,7 @@ public sealed class CatalogResourceLoader : IDisposable
             switch (entry.Item)
             {
                 case Channel channel:
-                    AddImage(channel.Logo, channel.LogoImage, image => channel.LogoImage = image, entry.Priority);
+                    AddImage(entry, channel.Logo, channel.LogoImage, image => channel.LogoImage = image);
                     if (!xtream) break;
                     var key = account + ":epg:" + channel.Id;
                     if (_guides.TryGetValue(key, out var guide) &&
@@ -89,10 +92,10 @@ public sealed class CatalogResourceLoader : IDisposable
                     loading.Add(channel);
                     break;
                 case VodContent movie:
-                    AddImage(movie.StreamIcon, movie.PosterImage, image => movie.PosterImage = image, entry.Priority);
+                    AddImage(entry, movie.StreamIcon, movie.PosterImage, image => movie.PosterImage = image);
                     break;
                 case SeriesContent series:
-                    AddImage(series.StreamIcon, series.PosterImage, image => series.PosterImage = image, entry.Priority);
+                    AddImage(entry, series.StreamIcon, series.PosterImage, image => series.PosterImage = image);
                     break;
             }
         }
@@ -101,16 +104,19 @@ public sealed class CatalogResourceLoader : IDisposable
         _loading = loading;
         _queue.Replace(requests);
 
-        void AddImage(string? url, BitmapImage? current, Action<BitmapImage> apply, int priority)
+        void AddImage(CatalogViewportItem entry, string? url, BitmapImage? current, Action<BitmapImage> apply)
         {
-            if (current != null || string.IsNullOrWhiteSpace(url)) return;
-            var key = account + ":image:" + url;
+            if (string.IsNullOrWhiteSpace(url)) return;
+            var size = ThumbnailSize.Create(entry.ImageWidth, entry.ImageHeight);
+            var key = $"{account}:image:{url}:{size.Width}x{size.Height}";
+            var state = _images.GetOrCreateValue(entry.Item);
+            if (current != null && state.Key == key) return;
             if (_imageRetry.TryGetValue(key, out var retry) && retry > now) return;
-            requests.Add(new(key, priority,
-                async token => await Task.Run(async () => (object?)await _cache.GetImageAsync(url, token), token),
+            requests.Add(new(key, entry.Priority,
+                async token => await Task.Run(async () => (object?)await _cache.GetImageAsync(url, size.Width, size.Height, token), token),
                 result =>
                 {
-                    if (result is BitmapImage image) apply(image);
+                    if (result is BitmapImage image) { state.Key = key; apply(image); }
                     else { _imageRetry[key] = _clock.GetUtcNow().UtcDateTime.AddMinutes(1); Trim(_imageRetry); }
                 }));
         }

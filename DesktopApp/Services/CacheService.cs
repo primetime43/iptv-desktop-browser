@@ -10,9 +10,10 @@ public class CacheService : ICacheService
 {
     private readonly IHttpService _httpService;
     private readonly ILogger<CacheService> _logger;
+    private readonly ISessionService _sessionService;
 
     // Image cache
-    private readonly ConcurrentDictionary<string, BitmapImage> _imageCache = new();
+    private readonly ThumbnailMemoryCache _imageCache = new();
     private readonly SemaphoreSlim _imageSemaphore = new(10); // Allow up to 10 concurrent image loads
 
     // Data cache with expiration
@@ -20,15 +21,15 @@ public class CacheService : ICacheService
     private readonly Timer _cleanupTimer;
 
     // Cache limits
-    private const int MaxImageCacheSize = 500;
     private const int MaxDataCacheSize = 1000;
     private static readonly TimeSpan DefaultDataExpiration = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(5);
 
-    public CacheService(IHttpService httpService, ILogger<CacheService> logger)
+    public CacheService(IHttpService httpService, ILogger<CacheService> logger, ISessionService? sessionService = null)
     {
         _httpService = httpService;
         _logger = logger;
+        _sessionService = sessionService ?? new SessionService(Microsoft.Extensions.Logging.Abstractions.NullLogger<SessionService>.Instance);
 
         _logger.LogInformation("🏗️ CacheService instance created");
 
@@ -36,13 +37,19 @@ public class CacheService : ICacheService
         _cleanupTimer = new Timer(async _ => await CleanupExpiredItemsAsync(), null, CleanupInterval, CleanupInterval);
     }
 
-    public async Task<BitmapImage?> GetImageAsync(string url, CancellationToken cancellationToken = default)
+    public Task<BitmapImage?> GetImageAsync(string url, CancellationToken cancellationToken = default) =>
+        GetImageAsync(url, 512, 512, cancellationToken);
+
+    public async Task<BitmapImage?> GetImageAsync(string url, int pixelWidth, int pixelHeight, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(url))
             return null;
 
+        cancellationToken.ThrowIfCancellationRequested();
+        var size = ThumbnailSize.Create(pixelWidth, pixelHeight);
+        var key = $"{ThumbnailImage.SourceKey(_sessionService, url)}_{size.Width}x{size.Height}";
         // Check cache first
-        if (_imageCache.TryGetValue(url, out var cachedImage))
+        if (_imageCache.TryGetValue(key, out var cachedImage))
         {
             _logger.LogInformation("🎯 Image cache HIT for: {Url}", url);
             return cachedImage;
@@ -53,7 +60,7 @@ public class CacheService : ICacheService
         try
         {
             // Double-check cache after acquiring semaphore
-            if (_imageCache.TryGetValue(url, out cachedImage))
+            if (_imageCache.TryGetValue(key, out cachedImage))
                 return cachedImage;
 
             _logger.LogInformation("🔄 Image cache MISS - Loading from: {Url}", url);
@@ -62,28 +69,13 @@ public class CacheService : ICacheService
             if (imageBytes.Length == 0)
                 return null;
 
-            var bitmap = new BitmapImage();
-            bitmap.BeginInit();
-            bitmap.StreamSource = new MemoryStream(imageBytes);
-            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.EndInit();
-            bitmap.Freeze();
-
-            // Add to cache with size limit
-            if (_imageCache.Count >= MaxImageCacheSize)
-            {
-                // Remove oldest 10% of entries
-                var keysToRemove = _imageCache.Keys.Take(MaxImageCacheSize / 10).ToList();
-                foreach (var key in keysToRemove)
-                {
-                    _imageCache.TryRemove(key, out _);
-                }
-            }
-
-            _imageCache[url] = bitmap;
+            var bitmap = await Task.Run(() => ThumbnailImage.Decode(imageBytes, size), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _imageCache.Store(key, bitmap);
             _logger.LogDebug("Cached image for: {Url}", url);
             return bitmap;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to load image: {Url}", url);
@@ -104,7 +96,7 @@ public class CacheService : ICacheService
     public async Task<BitmapImage?> GetChannelLogoAsync(int channelId, string logoUrl, CancellationToken cancellationToken = default)
     {
         // For the in-memory cache service, fall back to URL-based caching
-        return await GetImageAsync(logoUrl, cancellationToken);
+        return await GetImageAsync(logoUrl, 256, 256, cancellationToken);
     }
 
     public async Task<T?> GetDataAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
@@ -209,8 +201,8 @@ public class CacheService : ICacheService
     {
         get
         {
-            // Rough estimation: each image ~100KB, each data entry ~10KB
-            return (ImageCacheCount * 100 * 1024) + (DataCacheCount * 10 * 1024);
+            // Decoded image pixels plus a rough estimate for data entries.
+            return _imageCache.Bytes + (DataCacheCount * 10 * 1024);
         }
     }
 

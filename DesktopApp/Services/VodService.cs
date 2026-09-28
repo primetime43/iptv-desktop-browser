@@ -120,13 +120,10 @@ public partial class VodService : IVodService
         {
             if (string.IsNullOrEmpty(content.StreamIcon)) return;
 
-            if (_sessionService.CachingEnabled)
+            var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
+            if (bitmap != null)
             {
-                var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
-                if (bitmap != null)
-                {
-                    content.PosterImage = bitmap;
-                }
+                content.PosterImage = bitmap;
             }
         }
         catch (Exception ex)
@@ -142,13 +139,10 @@ public partial class VodService : IVodService
         {
             if (string.IsNullOrEmpty(content.StreamIcon)) return;
 
-            if (_sessionService.CachingEnabled)
+            var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
+            if (bitmap != null)
             {
-                var bitmap = await _cacheService.GetImageAsync(content.StreamIcon, cancellationToken);
-                if (bitmap != null)
-                {
-                    content.PosterImage = bitmap;
-                }
+                content.PosterImage = bitmap;
             }
         }
         catch (Exception ex)

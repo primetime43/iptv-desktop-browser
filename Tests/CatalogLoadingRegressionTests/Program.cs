@@ -117,6 +117,7 @@ internal static partial class Program
         await VerifySelectedGuide();
         await VerifyBackoffAndAccounts();
         await VerifyMemoryImages();
+        await VerifyThumbnailCaching();
     }
 
     private static async Task VerifyBackoffAndAccounts()
@@ -215,7 +216,7 @@ internal static partial class Program
         var guideResponse = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         ((FakeService)(object)cache).Handler = (_, args) =>
         {
-            imageCalls.Enqueue((CancellationToken)args![1]!);
+            imageCalls.Enqueue((CancellationToken)args![^1]!);
             return imageResponse.Task;
         };
         ((FakeService)(object)channels).Handler = async (_, args) =>

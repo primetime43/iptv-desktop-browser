@@ -6,6 +6,8 @@ public interface ICacheService
 {
     // Image caching
     Task<BitmapImage?> GetImageAsync(string url, CancellationToken cancellationToken = default);
+    Task<BitmapImage?> GetImageAsync(string url, int pixelWidth, int pixelHeight, CancellationToken cancellationToken = default)
+        => GetImageAsync(url, cancellationToken);
     Task<BitmapImage?> GetChannelLogoAsync(int channelId, string logoUrl, CancellationToken cancellationToken = default);
     void ClearImageCache();
 
