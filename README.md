@@ -32,6 +32,7 @@ v1.06/v2.0.0
   - **Favorites system** - save preferred channels per account/playlist
   - Grid-style EPG with per-channel timelines
   - External player integration (VLC, MPC-HC, MPV, custom)
+  - HLS playback quality selection using provider-advertised resolutions and bitrates
 - **Performance & extras**
   - **High-speed channel loading** with optimized caching
   - Channel recording with FFmpeg integration
@@ -68,6 +69,15 @@ v1.06/v2.0.0
 2. Paste a playlist URL or select a `.m3u`/`.m3u8` file.
 3. (Optional) Add XMLTV URL or file for EPG.
 4. Click **Load Playlist**.
+
+### **Playback quality**
+
+- For Live TV, select a channel and click **Play with quality…** in its information panel.
+- For movies, click **Quality…** in the details panel. Episode rows also have a **Quality…** button.
+- Choose an advertised resolution/bitrate, or **Automatic** to let the player use the original/master stream. Normal Play and double-click playback start immediately without quality discovery.
+- Xtream live channels are checked through their HLS (`.m3u8`) endpoint. Playlist channels, movies, and episodes are checked at their supplied stream URL. Direct TS/MP4 streams and providers without advertised alternatives remain playable at their original quality.
+- Fixed HLS quality selection preserves associated audio, subtitles, and encryption-key references. Keep the app open while using this mode: it supplies a small in-memory playlist to the external player, which downloads the actual media directly from the provider. No credential-bearing playlist is saved to disk.
+- This feature selects existing HLS variants; it does not transcode, combine separately listed SD/HD channels, or select DASH representations. Playlists requiring HLS variable substitution or content steering use Automatic instead.
 
 ### **Favorites**
 - Click the ⭐ star button on any channel to add/remove from favorites.

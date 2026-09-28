@@ -360,6 +360,15 @@
                                 <!-- Channel Info -->
                                 <TextBlock Text="Selected Channel:" Foreground="#8BA1B9" Margin="0,0,0,4" />
                                 <TextBlock Text="{Binding SelectedChannelName}" FontWeight="Bold" Foreground="#F0F6FC" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <Button Content="Play with quality…" Click="ChooseChannelQuality_Click" Padding="12,6" Margin="0,0,0,12">
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedChannel}" Value="{x:Null}"><Setter Property="IsEnabled" Value="False"/></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
 
                                 <TextBlock Text="{Binding NowProgramText}" Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,4" />
 

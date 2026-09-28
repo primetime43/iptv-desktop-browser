@@ -73,77 +73,11 @@ public partial class DashboardWindow
         private DateTime _lastVodClickTime;
         private DateTime _lastSeriesClickTime;
 
-        private void TryLaunchVodInPlayer(VodContent vod)
-        {
-            try
-            {
-                var extension = !string.IsNullOrEmpty(vod.ContainerExtension) ? vod.ContainerExtension : "mp4";
-                var url = Session.BuildVodStreamUrl(vod.Id, extension);
+        private void TryLaunchVodInPlayer(VodContent vod) => PlayStream(
+            Session.BuildVodStreamUrl(vod.Id, string.IsNullOrEmpty(vod.ContainerExtension) ? "mp4" : vod.ContainerExtension), vod.Name);
 
-                Log($"Launching VOD player: {Session.PreferredPlayer} {url}\n");
-                var psi = Session.BuildPlayerProcess(url, vod.Name);
-
-                if (string.IsNullOrWhiteSpace(psi.FileName))
-                {
-                    Log("Player executable not set. Configure in Settings.\n");
-                    MessageBox.Show(this, "Player executable not set. Open Settings and configure a path.",
-                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                Process.Start(psi);
-            }
-            catch (Exception ex)
-            {
-                Log("Failed to launch VOD player: " + ex.Message + "\n");
-                try
-                {
-                    MessageBox.Show(this, "Unable to start player for VOD. Check settings.",
-                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                catch (Exception msgEx)
-                {
-                    Log($"Failed to show error message: {msgEx.Message}\n");
-                }
-            }
-        }
-
-        private void TryLaunchEpisodeInPlayer(EpisodeContent episode)
-        {
-            try
-            {
-                var extension = !string.IsNullOrEmpty(episode.ContainerExtension) ? episode.ContainerExtension : "mp4";
-                var url = Session.BuildSeriesStreamUrl(episode.Id, extension);
-
-                Log($"Launching episode player: {Session.PreferredPlayer} {url}\n");
-                var psi = Session.BuildPlayerProcess(url, episode.DisplayTitle);
-
-                if (string.IsNullOrWhiteSpace(psi.FileName))
-                {
-                    Log("Player executable not set. Configure in Settings.\n");
-                    MessageBox.Show(this, "Player executable not set. Open Settings and configure a path.",
-                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                Process.Start(psi);
-            }
-            catch (Exception ex)
-            {
-                Log("Failed to launch episode player: " + ex.Message + "\n");
-                try
-                {
-                    MessageBox.Show(this, "Unable to start player for episode. Check settings.",
-                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                catch (Exception msgEx)
-                {
-                    Log($"Failed to show error message: {msgEx.Message}\n");
-                }
-            }
-        }
-
-
+        private void TryLaunchEpisodeInPlayer(EpisodeContent episode) => PlayStream(
+            Session.BuildSeriesStreamUrl(episode.Id, string.IsNullOrEmpty(episode.ContainerExtension) ? "mp4" : episode.ContainerExtension), episode.DisplayTitle);
         private void TryLaunchSeriesInPlayer(SeriesContent series)
         {
             // Series episodes are now shown inline in the VodPage

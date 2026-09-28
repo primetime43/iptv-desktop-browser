@@ -299,6 +299,8 @@ namespace DesktopApp.Views
             Catalog = new MoviesSeriesPageViewModel(_vodService);
             Catalog.Details.MoviePlaybackRequested += TryLaunchVodInPlayer;
             Catalog.Details.EpisodePlaybackRequested += TryLaunchEpisodeInPlayer;
+            Catalog.Details.MovieQualityRequested += ChooseMovieQuality;
+            Catalog.Details.EpisodeQualityRequested += ChooseEpisodeQuality;
             Catalog.Details.LoadFailed += error => Log($"ERROR loading details: {error.Message}\n");
             SettingsPageModel = new SettingsPageViewModel(new ApplicationSettingsService(),
                 new Dashboard.SettingsInteraction(() => this), _cacheService);
@@ -731,6 +733,7 @@ namespace DesktopApp.Views
             LiveTv.Dispose();
             Catalog.Dispose();
             StopCatalogLoading();
+            _playbackManifests?.Dispose();
             _scheduler.RecordingFailed -= OnScheduledRecordingFailed;
             _scheduler.EpgRefreshNeeded -= OnEpgRefreshNeeded;
             try { StopRecording(); } catch { }
@@ -874,48 +877,7 @@ namespace DesktopApp.Views
                 UpdateRecordingPageDisplay();
             }
         }
-        private void TryLaunchChannelInPlayer(Channel ch)
-        {
-            try
-            {
-                string url = Session.Mode == SessionMode.M3u
-                    ? Session.PlaylistChannels.FirstOrDefault(p => p.Id == ch.Id)?.StreamUrl ?? string.Empty
-                    : Session.BuildStreamUrl(ch.Id, "ts");
-
-                if (string.IsNullOrWhiteSpace(url))
-                {
-                    Log("Stream URL not found.\n");
-                    return;
-                }
-
-                Log($"Launching player: {Session.PreferredPlayer} {url}\n");
-                var psi = Session.BuildPlayerProcess(url, ch.Name);
-
-                if (string.IsNullOrWhiteSpace(psi.FileName))
-                {
-                    Log("Player executable not set. Configure in Settings.\n");
-                    MessageBox.Show(this, "Player executable not set. Open Settings and configure a path.",
-                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                Process.Start(psi);
-            }
-            catch (Exception ex)
-            {
-                Log("Failed to launch player: " + ex.Message + "\n");
-
-                try
-                {
-                    MessageBox.Show(this, "Unable to start player. Check settings.",
-                        "Player Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                catch (Exception msgEx)
-                {
-                    Log($"Failed to show error message: {msgEx.Message}\n");
-                }
-            }
-        }
+        private void TryLaunchChannelInPlayer(Channel ch) => PlayStream(ChannelPlaybackUrl(ch), ch.Name);
 
         // ===================== VOD =====================
         // API test output (disabled in M3U mode)

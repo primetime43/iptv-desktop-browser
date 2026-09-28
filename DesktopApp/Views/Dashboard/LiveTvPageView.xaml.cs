@@ -9,6 +9,7 @@ namespace DesktopApp.Views.Dashboard;
 public partial class LiveTvPageView : UserControl
 {
     public LiveTvPageView() => InitializeComponent();
+    private void ChooseChannelQuality_Click(object sender, RoutedEventArgs e) => (Window.GetWindow(this) as DashboardWindow)?.ChooseChannelQuality_Click(sender, e);
     private void ChannelsGridView_Click(object sender, RoutedEventArgs e) => (Window.GetWindow(this) as DashboardWindow)?.ChannelsGridView_Click(sender, e);
     private void ChannelsListView_Click(object sender, RoutedEventArgs e) => (Window.GetWindow(this) as DashboardWindow)?.ChannelsListView_Click(sender, e);
     private void TileSize_SelectionChanged(object sender, SelectionChangedEventArgs e) => (Window.GetWindow(this) as DashboardWindow)?.TileSize_SelectionChanged(sender, e);

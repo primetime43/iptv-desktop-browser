@@ -38,6 +38,8 @@ public partial class MediaDetailsViewModel(IVodService vodService) : ObservableO
 
     public event Action<VodContent>? MoviePlaybackRequested;
     public event Action<EpisodeContent>? EpisodePlaybackRequested;
+    public event Action<VodContent>? MovieQualityRequested;
+    public event Action<EpisodeContent>? EpisodeQualityRequested;
     public event Action<Exception>? LoadFailed;
 
     public Task SelectAsync(IWatchableContent content, CancellationToken lifetimeToken = default)
@@ -125,6 +127,8 @@ public partial class MediaDetailsViewModel(IVodService vodService) : ObservableO
         RetryCommand.NotifyCanExecuteChanged();
         PlayMovieCommand.NotifyCanExecuteChanged();
         PlayEpisodeCommand.NotifyCanExecuteChanged();
+        ChooseMovieQualityCommand.NotifyCanExecuteChanged();
+        ChooseEpisodeQualityCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(CanRetry), AllowConcurrentExecutions = true)]
@@ -142,5 +146,17 @@ public partial class MediaDetailsViewModel(IVodService vodService) : ObservableO
     private void PlayEpisode(EpisodeContent? episode)
     {
         if (CanPlayEpisode(episode)) EpisodePlaybackRequested?.Invoke(episode!);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanPlayMovie))]
+    private void ChooseMovieQuality()
+    {
+        if (CanPlayMovie() && Content is VodContent movie) MovieQualityRequested?.Invoke(movie);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanPlayEpisode))]
+    private void ChooseEpisodeQuality(EpisodeContent? episode)
+    {
+        if (CanPlayEpisode(episode)) EpisodeQualityRequested?.Invoke(episode!);
     }
 }

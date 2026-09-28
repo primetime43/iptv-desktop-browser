@@ -90,6 +90,12 @@ internal static partial class Program
         model.PlayEpisodeCommand.Execute(unrelated);
         Check(!model.PlayEpisodeCommand.CanExecute(unrelated) && ReferenceEquals(playedEpisode, episode),
             "An episode with a matching ID outside the current series cannot be played");
+        EpisodeContent? qualityEpisode = null;
+        model.EpisodeQualityRequested += value => qualityEpisode = value;
+        model.ChooseEpisodeQualityCommand.Execute(episode);
+        model.ChooseEpisodeQualityCommand.Execute(unrelated);
+        Check(ReferenceEquals(qualityEpisode, episode) && !model.ChooseEpisodeQualityCommand.CanExecute(unrelated),
+            "Episode quality selection uses the same current-series membership guard as playback");
 
         var errors = 0;
         model.LoadFailed += _ => errors++;
@@ -157,6 +163,12 @@ internal static partial class Program
         var play = Descendants(list).OfType<Button>().Single(button => Equals(button.Content, "▶ Play"));
         Check(play.IsVisible && play.IsEnabled && ReferenceEquals(play.Command, model.PlayMovieCommand),
             "Movie template resolves its play command through the details view");
+        var movieQuality = Descendants(list).OfType<Button>().Single(button => ReferenceEquals(button.Command, model.ChooseMovieQualityCommand));
+        VodContent? qualityMovie = null;
+        model.MovieQualityRequested += movie => qualityMovie = movie;
+        movieQuality.Command.Execute(null);
+        Check(movieQuality.IsVisible && movieQuality.IsEnabled && ReferenceEquals(qualityMovie, model.Content),
+            "Movie quality control requests the currently displayed movie");
 
         var show = new SeriesContent { Id = 2, Name = "Long series", DetailsLoaded = true, Seasons =
             [new SeasonInfo { SeasonNumber = 1, Episodes = Enumerable.Range(0, 10000).Select(i => new EpisodeContent
@@ -173,7 +185,7 @@ internal static partial class Program
         Layout(view, 360, 500);
         Check(Children(panel).Count() < 100 && list.ItemContainerGenerator.ContainerFromIndex(10001) != null,
             "Scrolling a large series virtualizes through its final episode");
-        var last = Descendants(list).OfType<Button>().Single(button => ReferenceEquals(button.CommandParameter, show.Seasons[0].Episodes[^1]));
+        var last = Descendants(list).OfType<Button>().Single(button => ReferenceEquals(button.Command, model.PlayEpisodeCommand) && ReferenceEquals(button.CommandParameter, show.Seasons[0].Episodes[^1]));
         Check(last.IsEnabled && ReferenceEquals(last.Command, model.PlayEpisodeCommand), "Recycled episode rows keep the correct command parameter");
         EpisodeContent? played = null;
         model.EpisodePlaybackRequested += episode => played = episode;
@@ -181,10 +193,15 @@ internal static partial class Program
         Check(ReferenceEquals(played, show.Seasons[0].Episodes[^1]), "The final virtualized episode requests the correct playback");
         var staleCommand = last.Command;
         var staleParameter = last.CommandParameter;
+        var episodeQuality = Descendants(list).OfType<Button>().Single(button =>
+            ReferenceEquals(button.Command, model.ChooseEpisodeQualityCommand) && ReferenceEquals(button.CommandParameter, staleParameter));
+        Check(episodeQuality.IsEnabled, "Recycled episode rows expose the quality command for the correct episode");
+        var staleQualityCommand = episodeQuality.Command;
         AwaitSettings(model.SelectAsync(new VodContent { Id = 3, Name = "Replacement movie", DetailsLoaded = true }));
         Layout(view, 360, 500);
         Check(list.Items.Count == 1 && Descendants(list).OfType<TextBlock>().Any(text => text.Text == "Replacement movie") &&
             !staleCommand.CanExecute(staleParameter), "Switching away from a scrolled series restores summary and invalidates old episode commands");
+        Check(!staleQualityCommand.CanExecute(staleParameter), "Old episode quality commands are disabled after switching content");
     }
 
     private sealed class DetailsRequest(IWatchableContent content, CancellationToken token)

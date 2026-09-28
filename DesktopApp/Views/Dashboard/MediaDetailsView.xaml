@@ -41,6 +41,9 @@
                     <Button Content="▶ Play" Background="#28A745" Foreground="White" Padding="12,8"
                             Visibility="{Binding IsMovie, Converter={StaticResource BooleanVisibility}}"
                             Command="{Binding DataContext.PlayMovieCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                    <Button Content="Quality…" Margin="0,8,0,0" Padding="12,6"
+                            Visibility="{Binding IsMovie, Converter={StaticResource BooleanVisibility}}"
+                            Command="{Binding DataContext.ChooseMovieQualityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}" />
                 </StackPanel>
             </DataTemplate>
             <DataTemplate DataType="{x:Type vm:SeasonHeaderRow}">
@@ -49,10 +52,16 @@
                 </Border>
             </DataTemplate>
             <DataTemplate DataType="{x:Type models:EpisodeContent}">
-                <Button Content="{Binding DisplayTitle}" Margin="24,1,16,1" Padding="8,4" Background="Transparent"
+                <Grid Margin="24,1,16,1">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                <Button Content="{Binding DisplayTitle}" Padding="8,4" Background="Transparent"
                         Foreground="#9DB2C7" BorderThickness="0" HorizontalContentAlignment="Left" FontSize="11" Cursor="Hand"
                         Command="{Binding DataContext.PlayEpisodeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                         CommandParameter="{Binding}" ToolTip="{Binding DisplayTitle}" />
+                    <Button Grid.Column="1" Content="Quality…" Padding="6,4" Margin="4,0,0,0"
+                            Command="{Binding DataContext.ChooseEpisodeQualityCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            CommandParameter="{Binding}" ToolTip="Choose the stream quality before playback"/>
+                </Grid>
             </DataTemplate>
         </ResourceDictionary>
     </UserControl.Resources>
