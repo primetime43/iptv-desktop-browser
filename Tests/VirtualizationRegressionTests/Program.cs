@@ -32,6 +32,7 @@ internal static partial class Program
             VerifyDashboardTemplates(app);
             VerifyExtractedPages(app);
             VerifyBulkCollections();
+            VerifySettingsCommands();
             Console.WriteLine($"Passed {_passed} virtualization regression checks.");
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }

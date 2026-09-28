@@ -15,7 +15,7 @@ internal static partial class Program
         var live = new LiveTvPageViewModel();
         var catalog = new MoviesSeriesPageViewModel();
         var scheduler = new SchedulerPageViewModel();
-        var settings = new SettingsPageViewModel();
+        var settings = CreateSettingsFixture().Model;
         var context = new { LiveTv = live, Catalog = catalog, SchedulerPageModel = scheduler, SettingsPageModel = settings,
             TileWidth = 180d, TileHeight = 150d, VodTileHeight = 240d };
         live.Channels.ReplaceAll([new Channel { Id = 1, Name = "Live channel" }]);
@@ -25,7 +25,7 @@ internal static partial class Program
         {
             using var source = new HwndSource(new HwndSourceParameters("Dashboard page fixture")
             { Width = 640, Height = 400, WindowStyle = unchecked((int)0x80000000), PositionX = -10000, PositionY = -10000 });
-            view.DataContext = context;
+            view.DataContext = view is SettingsPageView ? settings : context;
             source.RootVisual = view;
             Layout(view);
             Check(view.Content is FrameworkElement, $"{view.GetType().Name}: standalone compiled XAML resolves its shared resources");
@@ -41,6 +41,7 @@ internal static partial class Program
                     "Scheduler controls remain accessible to the gradual migration adapter");
             if (view is SettingsPageView)
             {
+                VerifySettingsBindings((SettingsPageView)view, settings);
                 settings.SetStatus("Saved", false);
                 Layout(view);
                 Check(((TextBlock)view.FindName("SettingsStatusText")).Text == "Saved", "Settings status is driven by its view model");

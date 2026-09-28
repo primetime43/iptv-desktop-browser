@@ -30,7 +30,7 @@ namespace DesktopApp.Views
         public LiveTvPageViewModel LiveTv { get; } = new();
         public MoviesSeriesPageViewModel Catalog { get; } = new();
         public SchedulerPageViewModel SchedulerPageModel { get; } = new();
-        public SettingsPageViewModel SettingsPageModel { get; } = new();
+        public SettingsPageViewModel SettingsPageModel { get; }
 
         private RecordingStatusWindow? _recordingWindow;
         // NOTE: Duplicate recording fields and OnClosed removed. This is the consolidated file.
@@ -554,6 +554,8 @@ namespace DesktopApp.Views
             _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
             _vodService = vodService ?? throw new ArgumentNullException(nameof(vodService));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
+            SettingsPageModel = new SettingsPageViewModel(new ApplicationSettingsService(),
+                new Dashboard.SettingsInteraction(() => this), _cacheService);
 
             // Set up raw output logging for cache status
             _channelService.SetRawOutputLogger(Log);
@@ -1481,7 +1483,6 @@ namespace DesktopApp.Views
                 SetSelectedNavButton(settingsNavBtn);
             }
 
-            LoadSettingsPage();
         }
 
         private void NavigateToLogs(object sender, RoutedEventArgs e)
@@ -1530,6 +1531,7 @@ namespace DesktopApp.Views
             // Show selected page
             if (FindDashboardElement($"{page}Page") is FrameworkElement targetPage)
                 targetPage.Visibility = Visibility.Visible;
+            if (page == DashboardPage.Settings) SettingsPageModel.Load();
             RefreshCatalogResources();
         }
 

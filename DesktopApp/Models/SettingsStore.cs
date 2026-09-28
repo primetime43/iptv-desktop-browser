@@ -42,23 +42,27 @@ public sealed class SettingsStore
 
     public static void SaveFromSession()
     {
-        try
-        {
-            Directory.CreateDirectory(Folder);
-            var data = new SettingsStore
-            {
-                PreferredPlayer = Session.PreferredPlayer,
-                PlayerExePath = Session.PlayerExePath,
-                PlayerArgsTemplate = string.IsNullOrWhiteSpace(Session.PlayerArgsTemplate) ? null : Session.PlayerArgsTemplate,
-                FfmpegPath = Session.FfmpegPath,
-                RecordingDirectory = Session.RecordingDirectory,
-                FfmpegArgsTemplate = string.IsNullOrWhiteSpace(Session.FfmpegArgsTemplate) ? null : Session.FfmpegArgsTemplate,
-                EpgRefreshIntervalMinutes = (int)Session.EpgRefreshInterval.TotalMinutes,
-                CachingEnabled = Session.CachingEnabled
-            };
-            var json = JsonSerializer.Serialize(data, _jsonOptions);
-            File.WriteAllText(FilePath, json);
-        }
+        try { CaptureSession().Save(); }
         catch { }
+    }
+
+    public static SettingsStore CaptureSession() => new()
+    {
+        PreferredPlayer = Session.PreferredPlayer,
+        PlayerExePath = Session.PlayerExePath,
+        PlayerArgsTemplate = string.IsNullOrWhiteSpace(Session.PlayerArgsTemplate) ? null : Session.PlayerArgsTemplate,
+        FfmpegPath = Session.FfmpegPath,
+        RecordingDirectory = Session.RecordingDirectory,
+        FfmpegArgsTemplate = string.IsNullOrWhiteSpace(Session.FfmpegArgsTemplate) ? null : Session.FfmpegArgsTemplate,
+        EpgRefreshIntervalMinutes = (int)Session.EpgRefreshInterval.TotalMinutes,
+        CachingEnabled = Session.CachingEnabled
+    };
+
+    // Unlike the legacy best-effort helper, an explicit save reports failures to the editor.
+    public void Save()
+    {
+        Directory.CreateDirectory(Folder);
+        var json = JsonSerializer.Serialize(this, _jsonOptions);
+        File.WriteAllText(FilePath, json);
     }
 }

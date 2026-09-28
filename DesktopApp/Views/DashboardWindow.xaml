@@ -414,7 +414,7 @@
             </Grid>
 
             <!-- Settings Page -->
-            <pages:SettingsPageView x:Name="SettingsPage" Visibility="Collapsed" />
+            <pages:SettingsPageView x:Name="SettingsPage" DataContext="{Binding SettingsPageModel}" CacheInspectorRequested="OpenCacheInspector" ExportFavoritesRequested="ExportFavorites_Click" ImportFavoritesRequested="ImportFavorites_Click" Visibility="Collapsed" />
 
             <!-- Logs Page -->
             <Grid x:Name="LogsPage" Visibility="Collapsed">
