@@ -45,8 +45,8 @@ internal static partial class Program
             }
             if (view is SchedulerPageView)
                 Check(Descendants(view).OfType<RecordingFormView>().Single().DataContext == scheduler.NewRecording &&
-                    view.FindName("ScheduledGrid") is DataGrid,
-                    "Scheduler hosts the focused form while recording management keeps its existing bindings");
+                    view.FindName("SchedulerTabs") is TabControl,
+                    "Scheduler hosts the focused form in a bounded tab layout");
             if (view is SettingsPageView)
             {
                 VerifySettingsBindings((SettingsPageView)view, settings);

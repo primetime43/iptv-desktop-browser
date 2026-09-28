@@ -519,8 +519,11 @@ namespace DesktopApp.Views
             _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
             _vodService = vodService ?? throw new ArgumentNullException(nameof(vodService));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
-            SchedulerPageModel = new SchedulerPageViewModel(new RecordingScheduleService(_channelService, _scheduler),
-                new Dashboard.RecordingFormInteraction(() => this));
+            SchedulerPageModel = new SchedulerPageViewModel(
+                new RecordingFormViewModel(new RecordingScheduleService(_channelService, _scheduler),
+                    new Dashboard.RecordingFormInteraction(() => this)),
+                new RecordingManagementViewModel(new RecordingManagementService(_scheduler),
+                    new Dashboard.RecordingManagementInteraction(() => this)));
             Catalog = new MoviesSeriesPageViewModel(_vodService);
             Catalog.Details.MoviePlaybackRequested += TryLaunchVodInPlayer;
             Catalog.Details.EpisodePlaybackRequested += TryLaunchEpisodeInPlayer;
@@ -953,7 +956,7 @@ namespace DesktopApp.Views
         // modify existing OnClosed (search and replace previous implementation) - keep rest of file intact
         protected override void OnClosed(EventArgs e)
         {
-            SchedulerPageModel.NewRecording.Deactivate();
+            SchedulerPageModel.Dispose();
             _globalSearchLoader.Cancel();
             CancelVodRequests();
             StopCatalogLoading();
@@ -1158,42 +1161,8 @@ namespace DesktopApp.Views
         private async Task RunApiCall(string action)
         { if (Session.Mode != SessionMode.Xtream) { Log("API calls disabled in M3U mode.\n"); return; } try { var url = Session.BuildApi(action); Log($"GET {url}\n"); var json = await _http.GetStringAsync(url, _cts.Token); if (json.Length > 50_000) json = json[..50_000] + "...<truncated>"; Log(json + "\n\n"); } catch (OperationCanceledException) { } catch (Exception ex) { Log("ERROR: " + ex.Message + "\n"); } }
 
-        internal void OpenRecordingFolder_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var recordingDir = Session.RecordingDirectory;
-                if (string.IsNullOrEmpty(recordingDir))
-                {
-                    recordingDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyVideos));
-                }
-
-                // Create directory if it doesn't exist
-                if (!Directory.Exists(recordingDir))
-                {
-                    Directory.CreateDirectory(recordingDir);
-                }
-
-                // Open the folder in Windows Explorer
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = $"\"{recordingDir}\"",
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                Log($"Failed to open recording folder: {ex.Message}\n");
-                try
-                {
-                    MessageBox.Show(this, "Unable to open recording folder. Check settings.",
-                        "Folder Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
-                catch { }
-            }
-        }
-
+        internal void OpenRecordingFolder_Click(object sender, RoutedEventArgs e) =>
+            SchedulerPageModel.Recordings.OpenFolderCommand.Execute(null);
         private void OpenRecordingStatus_Click(object sender, RoutedEventArgs e)
         {
             if (_recordingWindow == null || !_recordingWindow.IsVisible)

@@ -14,7 +14,8 @@ internal static partial class Program
         var service = new FormScheduleService();
         var interaction = new FormInteraction();
         var clock = new FormClock();
-        return (new SchedulerPageViewModel(service, interaction, clock), service, interaction, clock);
+        return (new SchedulerPageViewModel(new RecordingFormViewModel(service, interaction, clock),
+            new RecordingManagementViewModel(new ManagementService(), new ManagementInteraction())), service, interaction, clock);
     }
 
     private static void VerifyRecordingForm()

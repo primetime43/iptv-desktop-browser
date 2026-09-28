@@ -30,14 +30,8 @@ public partial class DashboardWindow
         {
             SchedulerPageModel.NewRecording.Activate(Channels);
 
-            LoadScheduledRecordings();
-            LoadSeriesRecordings();
-        }
 
-        private void LoadScheduledRecordings()
-        {
-            if (FindDashboardElement("ScheduledGrid") is DataGrid scheduledGrid)
-                scheduledGrid.ItemsSource = _scheduler.ScheduledRecordings;
+            LoadSeriesRecordings();
         }
 
         // ===================== Series Recording UI Methods =====================
@@ -901,52 +895,6 @@ public partial class DashboardWindow
 
         // Recording Scheduler Properties and Methods
         private readonly RecordingScheduler _scheduler = RecordingScheduler.Instance;
-        internal void RefreshScheduled_Click(object sender, RoutedEventArgs e)
-        {
-            LoadScheduledRecordings();
-        }
-        internal void DeleteCompleted_Click(object sender, RoutedEventArgs e)
-        {
-            var result = MessageBox.Show(
-                "This will delete all completed, failed, and cancelled recordings from the list. Continue?",
-                "Delete Completed Recordings", MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
-            {
-                _scheduler.DeleteCompletedRecordings();
-            }
-        }
-        internal void PropertiesRecording_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
-                return;
-
-            var properties = $"Recording Properties\n\n" +
-                            $"Title: {recording.Title}\n" +
-                            $"Channel: {recording.ChannelName}\n" +
-                            $"Status: {recording.StatusText}\n" +
-                            $"Start Time: {recording.StartTimeLocal}\n" +
-                            $"End Time: {recording.EndTimeLocal}\n" +
-                            $"Duration: {recording.DurationText}\n" +
-                            $"Pre-buffer: {recording.PreBufferMinutes} minutes\n" +
-                            $"Post-buffer: {recording.PostBufferMinutes} minutes\n" +
-                            $"EPG-based: {(recording.IsEpgBased ? "Yes" : "No")}\n" +
-                            $"Output File: {recording.OutputFilePath}\n" +
-                            $"Stream URL: {DesktopApp.Security.DiagnosticRedactor.Redact(recording.StreamUrl)}\n";
-
-            if (recording.ExitCode.HasValue)
-                properties += $"FFmpeg exit code: {recording.ExitCode}\n";
-            if (!string.IsNullOrWhiteSpace(recording.FailureReason))
-                properties += $"Failure details: {recording.FailureReason}\n";
-
-            if (!string.IsNullOrEmpty(recording.Description))
-            {
-                properties += $"Description: {recording.Description}\n";
-            }
-
-            MessageBox.Show(properties, "Recording Properties", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-
         private void OnScheduledRecordingFailed(ScheduledRecording recording)
         {
             if (Dispatcher.HasShutdownStarted) return;
@@ -957,62 +905,5 @@ public partial class DashboardWindow
                 ShowToast("Recording failed", $"{recording.Title}: {summary}", "#DC3545");
             });
         }
-        internal void EditRecording_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
-                return;
-
-            // Simple edit dialog using message boxes for now
-            var editMessage = $"Current recording details:\n\n" +
-                             $"Title: {recording.Title}\n" +
-                             $"Pre-buffer: {recording.PreBufferMinutes} minutes\n" +
-                             $"Post-buffer: {recording.PostBufferMinutes} minutes\n\n" +
-                             $"This is a basic edit confirmation. Would you like to add 1 minute to both pre and post buffer?";
-
-            var result = MessageBox.Show(editMessage, "Edit Recording",
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-            if (result != MessageBoxResult.Yes)
-                return;
-
-            // Update the recording with increased buffer times
-            var updatedRecording = new ScheduledRecording
-            {
-                Id = recording.Id,
-                Title = recording.Title,
-                Description = recording.Description,
-                ChannelId = recording.ChannelId,
-                ChannelName = recording.ChannelName,
-                StreamUrl = recording.StreamUrl,
-                StartTime = recording.StartTime,
-                EndTime = recording.EndTime,
-                Status = recording.Status,
-                OutputFilePath = recording.OutputFilePath,
-                IsEpgBased = recording.IsEpgBased,
-                EpgProgramId = recording.EpgProgramId,
-                PreBufferMinutes = recording.PreBufferMinutes + 1,
-                PostBufferMinutes = recording.PostBufferMinutes + 1,
-                CreatedAt = recording.CreatedAt
-            };
-
-            _scheduler.UpdateRecording(updatedRecording);
-
-            MessageBox.Show("Recording updated successfully!", "Edit Recording",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        internal void CancelRecording_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is not Button button || button.DataContext is not ScheduledRecording recording)
-                return;
-
-            var result = MessageBox.Show($"Cancel recording '{recording.Title}'?", "Cancel Recording",
-                MessageBoxButton.YesNo, MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
-            {
-                _scheduler.CancelRecording(recording.Id);
-            }
-        }
-
         // Favorites page methods
 }

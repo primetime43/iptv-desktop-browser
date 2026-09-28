@@ -1,0 +1,26 @@
+<Window x:Class="DesktopApp.Views.Dashboard.RecordingEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Edit Recording" Width="460" SizeToContent="Height" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="#0D1117" Foreground="#DDE6F2">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/iptv-desktop-browser;component/Views/Dashboard/DashboardResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <StackPanel Margin="24">
+        <TextBlock Text="Recording title" Margin="0,0,0,6" />
+        <TextBox x:Name="TitleBox" Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,16" />
+        <TextBlock Text="Minutes before the program starts" Margin="0,0,0,6" />
+        <TextBox x:Name="PreBufferBox" Text="{Binding PreBuffer, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,16" />
+        <TextBlock Text="Minutes after the program ends" Margin="0,0,0,6" />
+        <TextBox x:Name="PostBufferBox" Text="{Binding PostBuffer, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,0,16" />
+        <TextBlock Text="{Binding ValidationMessage}" Foreground="#F88166" TextWrapping="Wrap" Margin="0,0,0,16" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" Command="{Binding CancelCommand}" IsCancel="True" Padding="16,8" Margin="0,0,8,0" />
+            <Button x:Name="SaveButton" Content="Save" Command="{Binding SaveCommand}" IsDefault="True" Padding="16,8" Background="#28A745" Foreground="White" />
+        </StackPanel>
+    </StackPanel>
+</Window>

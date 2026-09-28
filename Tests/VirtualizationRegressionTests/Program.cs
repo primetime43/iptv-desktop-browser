@@ -35,6 +35,7 @@ internal static partial class Program
             VerifySettingsCommands();
             VerifyMediaDetails();
             Dispatcher.CurrentDispatcher.Invoke(VerifyRecordingForm);
+            Dispatcher.CurrentDispatcher.Invoke(VerifyRecordingManagement);
             Console.WriteLine($"Passed {_passed} virtualization regression checks.");
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }

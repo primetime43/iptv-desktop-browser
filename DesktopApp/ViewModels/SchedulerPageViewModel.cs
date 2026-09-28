@@ -4,12 +4,20 @@ using DesktopApp.Services;
 
 namespace DesktopApp.ViewModels;
 
-public partial class SchedulerPageViewModel : ObservableObject
+public partial class SchedulerPageViewModel : ObservableObject, IDisposable
 {
-    public SchedulerPageViewModel(IRecordingScheduleService service, IRecordingFormInteraction interaction, TimeProvider? clock = null)
+    public SchedulerPageViewModel(RecordingFormViewModel newRecording, RecordingManagementViewModel recordings)
     {
-        NewRecording = new RecordingFormViewModel(service, interaction, clock);
+        NewRecording = newRecording;
+        Recordings = recordings;
     }
 
     public RecordingFormViewModel NewRecording { get; }
+    public RecordingManagementViewModel Recordings { get; }
+
+    public void Dispose()
+    {
+        NewRecording.Deactivate();
+        Recordings.Dispose();
+    }
 }

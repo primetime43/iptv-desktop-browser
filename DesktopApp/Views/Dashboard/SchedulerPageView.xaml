@@ -6,14 +6,16 @@
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </UserControl.Resources>
-  <Grid>
-                <ScrollViewer Margin="16" VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
+  <Grid Margin="16">
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
                         <!-- Header -->
                         <TextBlock Text="Recording Scheduler" Style="{StaticResource HeaderTextStyle}" Margin="0,0,0,16" />
 
                         <!-- Main Content -->
-                        <TabControl Style="{StaticResource SchedulerTabControlStyle}">
+                        <TabControl x:Name="SchedulerTabs" Grid.Row="1" Style="{StaticResource SchedulerTabControlStyle}">
                             <!-- Schedule New Recording Tab -->
                             <TabItem Style="{StaticResource SchedulerTabItemStyle}">
                                 <TabItem.Header>
@@ -33,85 +35,7 @@
                                         <TextBlock Text="Scheduled Recordings" VerticalAlignment="Center" />
                                     </StackPanel>
                                 </TabItem.Header>
-                                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="16">
-                                    <StackPanel>
-                                        <!-- Info Section -->
-                                        <Border Background="#161B22" CornerRadius="6" Padding="16" Margin="0,0,0,16" BorderBrush="#30363D" BorderThickness="1">
-                                            <StackPanel>
-                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                                    <TextBlock Text="►" FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="#17A2B8" />
-                                                    <TextBlock Text="Recording Management" FontSize="16" FontWeight="SemiBold" Foreground="#DDE6F2" VerticalAlignment="Center" />
-                                                </StackPanel>
-                                                <TextBlock Text="View and manage your scheduled recordings. The app automatically checks for recordings to start every 30 seconds." Foreground="#9DB2C7" FontSize="12" TextWrapping="Wrap" />
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Toolbar -->
-                                        <Border Background="#223247" CornerRadius="6" Padding="16" Margin="0,0,0,16" BorderBrush="#30363D" BorderThickness="1">
-                                            <StackPanel Orientation="Horizontal">
-                                                <Button Background="#347DFF" Foreground="White" BorderThickness="0" Padding="16,8" Margin="0,0,12,0" Click="RefreshScheduled_Click">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="↻" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White" />
-                                                        <TextBlock Text="Refresh List" VerticalAlignment="Center" />
-                                                    </StackPanel>
-                                                </Button>
-                                                <Button Background="#DC3545" Foreground="White" BorderThickness="0" Padding="16,8" Margin="0,0,12,0" Click="DeleteCompleted_Click" ToolTip="Remove all completed, failed, and cancelled recordings from the list">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="✖" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White" />
-                                                        <TextBlock Text="Delete Completed" VerticalAlignment="Center" />
-                                                    </StackPanel>
-                                                </Button>
-                                                <Button Background="#28A745" Foreground="White" BorderThickness="0" Padding="16,8" Click="OpenRecordingFolder_Click" ToolTip="Open the directory where recordings are saved">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <TextBlock Text="📂" FontSize="12" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="White" />
-                                                        <TextBlock Text="Open Output Folder" VerticalAlignment="Center" />
-                                                    </StackPanel>
-                                                </Button>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Scheduled Recordings List -->
-                                        <Border Style="{StaticResource CardStyle}">
-                                            <DataGrid x:Name="ScheduledGrid" AutoGenerateColumns="False" Background="Transparent" Foreground="#DDE6F2" GridLinesVisibility="Horizontal" HeadersVisibility="Column" RowBackground="Transparent" AlternatingRowBackground="#182433" BorderThickness="0" CanUserAddRows="False">
-                                                <DataGrid.ColumnHeaderStyle>
-                                                    <Style TargetType="DataGridColumnHeader">
-                                                        <Setter Property="Background" Value="#223247" />
-                                                        <Setter Property="Foreground" Value="#DDE6F2" />
-                                                        <Setter Property="BorderBrush" Value="#30363D" />
-                                                        <Setter Property="Padding" Value="12,8" />
-                                                        <Setter Property="FontWeight" Value="SemiBold" />
-                                                    </Style>
-                                                </DataGrid.ColumnHeaderStyle>
-
-                                                <DataGrid.Columns>
-                                                    <DataGridTextColumn Header="Title" Binding="{Binding Title}" Width="*" />
-                                                    <DataGridTextColumn Header="Channel" Binding="{Binding ChannelName}" Width="120" />
-                                                    <DataGridTextColumn Header="Start Time" Binding="{Binding StartTimeLocal}" Width="140" />
-                                                    <DataGridTextColumn Header="End Time" Binding="{Binding EndTimeLocal}" Width="140" />
-                                                    <DataGridTextColumn Header="Duration" Binding="{Binding DurationText}" Width="80" />
-                                                    <DataGridTemplateColumn Header="Status" Width="100">
-                                                        <DataGridTemplateColumn.CellTemplate>
-                                                            <DataTemplate>
-                                                                <TextBlock Text="{Binding StatusText}" ToolTip="{Binding FailureReason}" ToolTipService.ShowDuration="30000" />
-                                                            </DataTemplate>
-                                                        </DataGridTemplateColumn.CellTemplate>
-                                                    </DataGridTemplateColumn>
-                                                    <DataGridTemplateColumn Header="Actions" Width="180">
-                                                        <DataGridTemplateColumn.CellTemplate>
-                                                            <DataTemplate>
-                                                                <StackPanel Orientation="Horizontal">
-                                                                    <Button Content="Props" Background="#28A745" BorderThickness="0" Padding="8,4" Margin="0,0,4,0" FontSize="9" ToolTip="Show recording properties" Click="PropertiesRecording_Click" />
-                                                                    <Button Content="Edit" Background="#6C757D" BorderThickness="0" Padding="8,4" Margin="0,0,4,0" IsEnabled="{Binding CanEdit}" FontSize="9" Click="EditRecording_Click" />
-                                                                    <Button Content="Cancel" Background="#DC3545" BorderThickness="0" Padding="8,4" FontSize="9" IsEnabled="{Binding CanCancel}" Click="CancelRecording_Click" />
-                                                                </StackPanel>
-                                                            </DataTemplate>
-                                                        </DataGridTemplateColumn.CellTemplate>
-                                                    </DataGridTemplateColumn>
-                                                </DataGrid.Columns>
-                                            </DataGrid>
-                                        </Border>
-                                    </StackPanel>
-                                </ScrollViewer>
+                                <pages:RecordingManagementView DataContext="{Binding SchedulerPageModel.Recordings}" />
                             </TabItem>
 
                             <!-- Series Recordings Tab -->
@@ -184,7 +108,6 @@
                                 </ScrollViewer>
                             </TabItem>
                         </TabControl>
-                    </StackPanel>
-                </ScrollViewer>
+
             </Grid>
 </UserControl>
