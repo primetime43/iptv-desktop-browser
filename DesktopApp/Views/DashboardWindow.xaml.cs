@@ -32,13 +32,13 @@ namespace DesktopApp.Views
         private readonly IChannelService _channelService;
         private readonly IVodService _vodService;
         private readonly ICacheService _cacheService;
-        private readonly ObservableCollection<Category> _categories = new(); public ObservableCollection<Category> Categories => _categories;
-        private readonly ObservableCollection<Channel> _channels = new(); public ObservableCollection<Channel> Channels => _channels;
-        private readonly ObservableCollection<EpgEntry> _upcomingEntries = new(); public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
+        private readonly BulkObservableCollection<Category> _categories = new(); public ObservableCollection<Category> Categories => _categories;
+        private readonly BulkObservableCollection<Channel> _channels = new(); public ObservableCollection<Channel> Channels => _channels;
+        private readonly BulkObservableCollection<EpgEntry> _upcomingEntries = new(); public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
 
         // VOD collections
-        private readonly ObservableCollection<VodCategory> _vodCategories = new(); public ObservableCollection<VodCategory> VodCategories => _vodCategories;
-        private readonly ObservableCollection<VodContent> _vodContent = new(); public ObservableCollection<VodContent> VodContent => _vodContent;
+        private readonly BulkObservableCollection<VodCategory> _vodCategories = new(); public ObservableCollection<VodCategory> VodCategories => _vodCategories;
+        private readonly BulkObservableCollection<VodContent> _vodContent = new(); public ObservableCollection<VodContent> VodContent => _vodContent;
         private bool _hasVodAccess = false;
         public bool HasVodAccess
         {
@@ -256,8 +256,8 @@ namespace DesktopApp.Views
         }
 
         // Series collections
-        private readonly ObservableCollection<SeriesCategory> _seriesCategories = new(); public ObservableCollection<SeriesCategory> SeriesCategories => _seriesCategories;
-        private readonly ObservableCollection<SeriesContent> _seriesContent = new(); public ObservableCollection<SeriesContent> SeriesContent => _seriesContent;
+        private readonly BulkObservableCollection<SeriesCategory> _seriesCategories = new(); public ObservableCollection<SeriesCategory> SeriesCategories => _seriesCategories;
+        private readonly BulkObservableCollection<SeriesContent> _seriesContent = new(); public ObservableCollection<SeriesContent> SeriesContent => _seriesContent;
 
         private string _selectedSeriesCategoryId = string.Empty;
         public string SelectedSeriesCategoryId
@@ -360,6 +360,7 @@ namespace DesktopApp.Views
         private bool _isClosing;
         private readonly CancellationTokenSource _cts = new();
         private readonly LatestRequestLoader _categoryLoader = new();
+        private readonly LatestRequestLoader _globalSearchLoader = new();
         private readonly LatestRequestLoader _vodCategoryLoader = new();
         private readonly LatestRequestLoader _seriesCategoryLoader = new();
         private readonly SelectedDetailsLoader _detailsLoader = new();
@@ -629,8 +630,8 @@ namespace DesktopApp.Views
                     }
                     else
                     {
-                        LoadCategoriesFromPlaylist();
-                        BuildPlaylistAllChannelsIndex();
+                        await LoadCategoriesFromPlaylistAsync();
+                        await BuildPlaylistAllChannelsIndexAsync();
                     }
                 }
                 catch (Exception ex)
@@ -648,18 +649,23 @@ namespace DesktopApp.Views
         }
 
         // ===== Index building for playlist mode (M3U) =====
-        private void BuildPlaylistAllChannelsIndex()
+        private async Task BuildPlaylistAllChannelsIndexAsync()
         {
             if (Session.Mode != SessionMode.M3u)
                 return;
 
-            _allChannelsIndex = Session.PlaylistChannels.Select(p => new Channel
+            var token = _cts.Token;
+            var playlist = Session.PlaylistChannels.ToArray();
+            var index = await Task.Run(() => playlist.Select((p, i) => new Channel
             {
                 Id = p.Id,
+                Number = i + 1,
                 Name = p.Name,
                 Logo = p.Logo,
                 EpgChannelId = p.TvgId
-            }).ToList();
+            }).ToList(), token);
+            token.ThrowIfCancellationRequested();
+            _allChannelsIndex = index;
         }
 
         private bool CategoriesFilter(object? obj)
@@ -845,77 +851,78 @@ namespace DesktopApp.Views
                 if (Session.Mode == SessionMode.Xtream)
                     await LoadAllChannelsIndexAsync();
                 else
-                    BuildPlaylistAllChannelsIndex();
+                    await BuildPlaylistAllChannelsIndexAsync();
             }
-            FilterGlobalChannels();
+            await FilterGlobalChannelsAsync();
         }
 
-        private void FilterGlobalChannels()
+        private async Task FilterGlobalChannelsAsync()
         {
             if (!IsGlobalSearchActive || _cts.IsCancellationRequested || _allChannelsIndex == null) return;
-            string query = SearchQuery.Trim();
-            _channels.Clear();
-            if (query.Length == 0)
+            var query = SearchQuery.Trim();
+            var index = _allChannelsIndex;
+            await _globalSearchLoader.LoadAsync(token => Task.Run(() =>
             {
-                ChannelsCountText = "0 channels";
-                return; // nothing to show until user types
-            }
-            // Search by channel number if query is numeric, otherwise search by name/title
-            IEnumerable<Channel> filtered;
-            if (int.TryParse(query, out int searchNumber))
+                var numeric = int.TryParse(query, out var number);
+                var matches = new List<Channel>();
+                foreach (var channel in index)
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (numeric ? channel.Number == number :
+                        channel.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                        channel.NowTitle?.Contains(query, StringComparison.OrdinalIgnoreCase) == true)
+                        matches.Add(channel);
+                    if (matches.Count == 1000) break;
+                }
+                return matches;
+            }, token), matches =>
             {
-                // Exact channel number match
-                filtered = _allChannelsIndex.Where(c => c.Number == searchNumber);
-            }
-            else
-            {
-                // Text search: name or current program title
-                filtered = _allChannelsIndex.Where(c => c.Name?.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0 || (!string.IsNullOrWhiteSpace(c.NowTitle) && c.NowTitle.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0));
-            }
-            var matches = filtered.Take(1000).ToList(); // safeguard huge lists
-            int channelNumber = 1;
-            foreach (var m in matches)
-            {
-                m.Number = channelNumber++;
-                _channels.Add(m);
-            }
-            UpdateChannelsFavoriteStatus();
-            ChannelsCountText = matches.Count.ToString() + " channels";
-            ChannelsCollectionView.Refresh();
-            // Lazy load logos for shown subset
-            ScheduleCatalogRefresh();
+                for (var i = 0; i < matches.Count; i++) matches[i].Number = i + 1;
+                _channels.ReplaceAll(matches);
+                UpdateChannelsFavoriteStatus();
+                ChannelsCountText = $"{matches.Count} channels";
+                ScheduleCatalogRefresh();
+            }, ex => Log($"ERROR filtering channels: {ex.Message}\n"), () => { },
+                () => IsGlobalSearchActive && SearchQuery.Trim() == query && ReferenceEquals(index, _allChannelsIndex), _cts.Token);
         }
-
         private async Task LoadAllChannelsIndexAsync()
         {
             if (_allChannelsIndexLoading || _allChannelsIndexLoaded || Session.Mode != SessionMode.Xtream) return;
+            var token = _cts.Token;
             try
             {
                 _allChannelsIndexLoading = true;
                 OnPropertyChanged(nameof(IsSearchLoading));
                 SetGuideLoading(true);
                 var url = Session.BuildApi("get_live_streams"); Log($"GET {url} (index all channels)\n");
-                var json = await _http.GetStringAsync(url, _cts.Token); Log("(length=" + json.Length + ")\n\n");
-                var list = new List<Channel>();
-                try
+                var json = await _http.GetStringAsync(url, token); Log("(length=" + json.Length + ")\n\n");
+                var prepared = await Task.Run(() =>
                 {
-                    using var doc = JsonDocument.Parse(json);
-                    if (doc.RootElement.ValueKind == JsonValueKind.Array)
+                    var list = new List<Channel>();
+                    try
                     {
-                        foreach (var el in doc.RootElement.EnumerateArray())
+                        using var doc = JsonDocument.Parse(json);
+                        if (doc.RootElement.ValueKind == JsonValueKind.Array)
                         {
-                            list.Add(new Channel
+                            foreach (var el in doc.RootElement.EnumerateArray())
                             {
-                                Id = el.TryGetProperty("stream_id", out var idEl) && idEl.TryGetInt32(out var sid) ? sid : 0,
-                                Name = el.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
-                                Logo = el.TryGetProperty("stream_icon", out var iconEl) ? iconEl.GetString() : null,
-                                EpgChannelId = el.TryGetProperty("epg_channel_id", out var epgEl) ? epgEl.GetString() : null
-                            });
+                                token.ThrowIfCancellationRequested();
+                                list.Add(new Channel
+                                {
+                                    Id = el.TryGetProperty("stream_id", out var idEl) && idEl.TryGetInt32(out var sid) ? sid : 0,
+                                    Name = el.TryGetProperty("name", out var nameEl) ? nameEl.GetString() ?? string.Empty : string.Empty,
+                                    Logo = el.TryGetProperty("stream_icon", out var iconEl) ? iconEl.GetString() : null,
+                                    EpgChannelId = el.TryGetProperty("epg_channel_id", out var epgEl) ? epgEl.GetString() : null
+                                });
+                            }
                         }
                     }
-                }
-                catch (Exception ex) { Log("PARSE ERROR all channels index: " + ex.Message + "\n"); }
-                _allChannelsIndex = list;
+                    catch (OperationCanceledException) { throw; }
+                    catch (Exception ex) { Log("PARSE ERROR all channels index: " + ex.Message + "\n"); }
+                    return list;
+                }, token);
+                token.ThrowIfCancellationRequested();
+                _allChannelsIndex = prepared;
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { Log("ERROR loading all channels index: " + ex.Message + "\n"); }
@@ -1088,16 +1095,18 @@ namespace DesktopApp.Views
         }
 
         // ===================== Categories / Channels =====================
-        private void LoadCategoriesFromPlaylist()
+        private async Task LoadCategoriesFromPlaylistAsync()
         {
-            var groups = Session.PlaylistChannels.GroupBy(p => string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category)
+            var token = _cts.Token;
+            var playlist = Session.PlaylistChannels.ToArray();
+            var groups = await Task.Run(() => playlist.GroupBy(p => string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category)
                 .OrderBy(g => g.Key)
-                .Select(g => new Category { Id = g.Key, Name = g.Key, ParentId = 0, ImageUrl = null }).ToList();
+                .Select(g => new Category { Id = g.Key, Name = g.Key, ParentId = 0, ImageUrl = null }).ToList(), token);
+            token.ThrowIfCancellationRequested();
 
             // Add Favorites as the first category
-            _categories.Clear();
-            _categories.Add(new Category { Id = "⭐ Favorites", Name = "⭐ Favorites", ParentId = 0, ImageUrl = null });
-            foreach (var c in groups) _categories.Add(c);
+            groups.Insert(0, new Category { Id = "⭐ Favorites", Name = "⭐ Favorites" });
+            _categories.ReplaceAll(groups);
             CategoriesCountText = _categories.Count + " categories";
             ApplySearch();
         }
@@ -1109,13 +1118,8 @@ namespace DesktopApp.Views
                 Log("Loading categories using ChannelService...\n");
                 var categories = await _channelService.LoadCategoriesAsync(_cts.Token);
 
-                _categories.Clear();
-                // Add Favorites as the first category
-                _categories.Add(new Category { Id = "⭐ Favorites", Name = "⭐ Favorites", ParentId = 0, ImageUrl = null });
-                foreach (var c in categories)
-                {
-                    _categories.Add(c);
-                }
+                categories.Insert(0, new Category { Id = "⭐ Favorites", Name = "⭐ Favorites" });
+                _categories.ReplaceAll(categories);
 
                 CategoriesCountText = $"{_categories.Count} categories";
                 ApplySearch();
@@ -1163,26 +1167,32 @@ namespace DesktopApp.Views
                     SelectedChannel = null;
                     _catalogResources?.Cancel();
                     Log($"Loading channels for category: {cat.Name}\n");
-                    if (cat.Id == "⭐ Favorites") return GetFavoriteCategoryChannels();
-                    if (Session.Mode == SessionMode.M3u)
+                    var favorites = Session.GetFavoriteChannels().Select(f => f.Id).ToHashSet();
+                    List<Channel> channels;
+                    if (cat.Id == "⭐ Favorites") channels = GetFavoriteCategoryChannels();
+                    else if (Session.Mode == SessionMode.M3u)
                     {
-                        return Session.PlaylistChannels
+                        var playlist = Session.PlaylistChannels.ToArray();
+                        channels = await Task.Run(() => playlist
                             .Where(p => (string.IsNullOrWhiteSpace(p.Category) ? "Other" : p.Category) == cat.Id)
                             .Select(p => new Channel { Id = p.Id, Name = p.Name, Logo = p.Logo, EpgChannelId = p.TvgId })
-                            .ToList();
+                            .ToList(), token);
                     }
-                    return await _channelService.LoadChannelsForCategoryAsync(cat, token);
+                    else channels = await _channelService.LoadChannelsForCategoryAsync(cat, token);
+                    return await Task.Run(() =>
+                    {
+                        for (var i = 0; i < channels.Count; i++)
+                        {
+                            token.ThrowIfCancellationRequested();
+                            channels[i].Number = i + 1;
+                            channels[i].IsFavorite = favorites.Contains(channels[i].Id);
+                        }
+                        return channels;
+                    }, token);
                 },
                 channels =>
                 {
-                    _channels.Clear();
-                    int channelNumber = 1;
-                    foreach (var channel in channels)
-                    {
-                        channel.Number = channelNumber++;
-                        _channels.Add(channel);
-                    }
-                    UpdateChannelsFavoriteStatus();
+                    _channels.ReplaceAll(channels);
                     ChannelsCountText = cat.Id == "⭐ Favorites"
                         ? $"{channels.Count} favorite channels" : $"{channels.Count} channels";
                     Log($"Loaded {channels.Count} channels for category: {cat.Name}\n");
@@ -1190,7 +1200,8 @@ namespace DesktopApp.Views
                     ScheduleCatalogRefresh();
                     if (Session.Mode == SessionMode.M3u)
                         UpdateChannelsEpgFromXmltvBatch(channels);
-                    ApplySearch();
+                    var count = ((CollectionView)ChannelsCollectionView).Count;
+                    ChannelsCountText = cat.Id == "⭐ Favorites" ? $"{count} favorite channels" : $"{count} channels";
                 },
                 ex => Log("ERROR loading channels: " + ex.Message + "\n"),
                 () =>
@@ -1475,6 +1486,7 @@ namespace DesktopApp.Views
         // modify existing OnClosed (search and replace previous implementation) - keep rest of file intact
         protected override void OnClosed(EventArgs e)
         {
+            _globalSearchLoader.Cancel();
             CancelVodRequests();
             StopCatalogLoading();
             _scheduler.RecordingFailed -= OnScheduledRecordingFailed;
@@ -1685,9 +1697,7 @@ namespace DesktopApp.Views
                 var parsed = await _vodService.LoadVodCategoriesAsync(_cts.Token);
 
                 // Populate local collection for UI binding
-                _vodCategories.Clear();
-                foreach (var cat in parsed)
-                    _vodCategories.Add(cat);
+                _vodCategories.ReplaceAll(parsed);
 
                 // Also populate session collection
                 Session.VodCategories.Clear();
@@ -1714,8 +1724,7 @@ namespace DesktopApp.Views
             {
                 var parsed = await _vodService.LoadSeriesCategoriesAsync(_cts.Token);
 
-                _seriesCategories.Clear();
-                foreach (var c in parsed) _seriesCategories.Add(c);
+                _seriesCategories.ReplaceAll(parsed);
                 Session.SeriesCategories.Clear();
                 Session.SeriesCategories.AddRange(parsed);
             }
@@ -1750,21 +1759,23 @@ namespace DesktopApp.Views
             ShowToast("📽️ Loading Movies", "Fetching movie list...", "#347DFF");
 
             ShowLoadingOverlay("MoviesLoadingOverlay");
+            var previousCatalog = Session.VodContent.ToArray();
             await _vodCategoryLoader.LoadAsync(
-                token => _vodService.LoadVodContentAsync(categoryId, token),
-                parsed =>
+                async token =>
+                {
+                    var parsed = await _vodService.LoadVodContentAsync(categoryId, token);
+                    return await Task.Run(() => (Parsed: parsed,
+                        Catalog: previousCatalog.Where(v => v.CategoryId != categoryId).Concat(parsed).ToList()), token);
+                },
+                result =>
             {
                 // Add to session
-                var existing = Session.VodContent.Where(v => v.CategoryId != categoryId).ToList();
                 Session.VodContent.Clear();
-                Session.VodContent.AddRange(existing);
-                Session.VodContent.AddRange(parsed);
+                Session.VodContent.AddRange(result.Catalog);
 
                 // Update UI collection
-                _vodContent.Clear();
-                foreach (var v in parsed) _vodContent.Add(v);
-                VodContentCollectionView.Refresh();
-                var filteredVodCount = _vodContent.Count(v => VodContentFilter(v));
+                _vodContent.ReplaceAll(result.Parsed);
+                var filteredVodCount = ((CollectionView)VodContentCollectionView).Count;
                 VodCountText = $"{filteredVodCount} movies";
 
                 // Show success toast
@@ -1836,10 +1847,8 @@ namespace DesktopApp.Views
                 Session.SeriesContent.AddRange(parsed);
 
                 // Update UI collection
-                _seriesContent.Clear();
-                foreach (var s in parsed) _seriesContent.Add(s);
-                SeriesContentCollectionView.Refresh();
-                var filteredSeriesCount = _seriesContent.Count(s => SeriesContentFilter(s));
+                _seriesContent.ReplaceAll(parsed);
+                var filteredSeriesCount = ((CollectionView)SeriesContentCollectionView).Count;
                 SeriesCountText = $"{filteredSeriesCount} series";
                 ScheduleCatalogRefresh();
 

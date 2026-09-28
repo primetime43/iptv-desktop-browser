@@ -49,7 +49,13 @@ public partial class ChannelService : IChannelService
         _rawOutputLogger = logger;
     }
 
-    public async Task<List<Category>> LoadCategoriesAsync(CancellationToken cancellationToken = default)
+    public Task<List<Category>> LoadCategoriesAsync(CancellationToken cancellationToken = default) =>
+        Task.Run(() => LoadCategoriesCoreAsync(cancellationToken), cancellationToken);
+
+    public Task<List<Channel>> LoadChannelsForCategoryAsync(Category category, CancellationToken cancellationToken = default) =>
+        Task.Run(() => LoadChannelsForCategoryCoreAsync(category, cancellationToken), cancellationToken);
+
+    private async Task<List<Category>> LoadCategoriesCoreAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -95,6 +101,7 @@ public partial class ChannelService : IChannelService
             {
                 foreach (var item in jsonCategories)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var category = new Category
                     {
                         Id = item.GetProperty("category_id").GetString() ?? "",
@@ -122,7 +129,7 @@ public partial class ChannelService : IChannelService
         }
     }
 
-    public async Task<List<Channel>> LoadChannelsForCategoryAsync(Category category, CancellationToken cancellationToken = default)
+    private async Task<List<Channel>> LoadChannelsForCategoryCoreAsync(Category category, CancellationToken cancellationToken)
     {
         try
         {
@@ -171,6 +178,7 @@ public partial class ChannelService : IChannelService
             {
                 foreach (var item in jsonChannels)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var channel = new Channel
                     {
                         Id = item.GetProperty("stream_id").GetInt32(),

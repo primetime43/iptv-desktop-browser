@@ -85,8 +85,7 @@ public partial class DashboardWindow
         var upcoming = SelectedChannel?.EpgSchedule is { } schedule && schedule.IsStillValid(now)
             ? schedule.Programs!.Where(p => p.StartUtc > now).OrderBy(p => p.StartUtc).Take(10).ToList() : [];
         if (_upcomingEntries.SequenceEqual(upcoming)) return;
-        _upcomingEntries.Clear();
-        foreach (var program in upcoming) _upcomingEntries.Add(program);
+        _upcomingEntries.ReplaceAll(upcoming);
     }
 
     private void StopCatalogLoading()
