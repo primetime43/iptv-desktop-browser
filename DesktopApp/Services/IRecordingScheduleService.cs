@@ -19,8 +19,11 @@ public sealed class RecordingScheduleService(IChannelService channels, Recording
         cancellationToken.ThrowIfCancellationRequested();
         if (Session.Mode == SessionMode.M3u)
         {
-            var programs = !string.IsNullOrWhiteSpace(channel.EpgChannelId) &&
-                Session.M3uEpgByChannel.TryGetValue(channel.EpgChannelId, out var entries)
+            var epgId = channel.EpgChannelId;
+            if (string.IsNullOrWhiteSpace(epgId))
+                epgId = Session.PlaylistChannels.FirstOrDefault(entry => entry.Id == channel.Id)?.TvgId;
+            var programs = !string.IsNullOrWhiteSpace(epgId) &&
+                Session.M3uEpgByChannel.TryGetValue(epgId, out var entries)
                 ? entries.ToList() : new List<EpgEntry>();
             return Task.FromResult(programs);
         }

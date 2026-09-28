@@ -71,7 +71,7 @@
 
                                         <!-- Series Recordings List -->
                                         <Border Style="{StaticResource CardStyle}">
-                                            <DataGrid x:Name="SeriesGrid" AutoGenerateColumns="False" Background="Transparent" Foreground="#DDE6F2" GridLinesVisibility="Horizontal" HeadersVisibility="Column" RowBackground="Transparent" AlternatingRowBackground="#182433" BorderThickness="0" CanUserAddRows="False">
+                                            <DataGrid x:Name="SeriesGrid" IsReadOnly="True" AutoGenerateColumns="False" Background="Transparent" Foreground="#DDE6F2" GridLinesVisibility="Horizontal" HeadersVisibility="Column" RowBackground="Transparent" AlternatingRowBackground="#182433" BorderThickness="0" CanUserAddRows="False">
                                                 <DataGrid.ColumnHeaderStyle>
                                                     <Style TargetType="DataGridColumnHeader">
                                                         <Setter Property="Background" Value="#223247" />

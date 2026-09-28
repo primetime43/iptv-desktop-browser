@@ -137,6 +137,24 @@ await noGuideId.Service.LoadEpgForChannelAsync(noGuideId.Channel);
 Check(noGuideId.Http.Requests == 1 && noGuideId.Channel.NowTitle == "Selected channel guide",
     "Selected channels can load the shared guide by stream ID without an optional EPG identifier");
 
+// Series dialogs now share this parser: retain aliases, UTC strings, numeric strings,
+// and malformed-entry tolerance previously provided by the dashboard's duplicate parser.
+h = Create();
+h.Http.Response = Guide(
+    new { name = "Date show", start = "2030-01-01 12:10:00", end = "2030-01-01 12:40:00", desc = "Details" },
+    new { programme = "Offset show", start = "2030-01-01T14:00:00+01:00", stop = "2030-01-01T14:30:00+01:00" },
+    new { program = "Timestamp show", start = origin.AddMinutes(60).ToUnixTimeSeconds().ToString(), end_timestamp = origin.AddMinutes(90).ToUnixTimeSeconds() },
+    new { title = "Fallback show", start_timestamp = "bad", start = "2030-01-01 14:00:00", stop_timestamp = "bad", end = "2030-01-01 14:30:00" },
+    new { title = "Broken", start = "not a date", end = "nope" },
+    new { title = "Overflow", start_timestamp = long.MaxValue, stop_timestamp = long.MaxValue });
+await h.Service.LoadEpgForChannelAsync(h.Channel);
+var tolerant = h.Channel.EpgSchedule!.Programs!;
+Check(tolerant.Count == 4, "Shared guide parser retains series aliases and skips malformed entries");
+Check(tolerant.Single(p => p.Title == "Date show").StartUtc == origin.AddMinutes(10).UtcDateTime, "Provider date strings without offsets are interpreted as UTC");
+Check(tolerant.Single(p => p.Title == "Offset show").StartUtc == origin.AddHours(1).UtcDateTime, "Explicit date offsets are respected");
+Check(tolerant.Single(p => p.Title == "Timestamp show").EndUtc == origin.AddMinutes(90).UtcDateTime, "Mixed numeric and string timestamps support end_timestamp");
+Check(tolerant.Single(p => p.Title == "Fallback show").StartUtc == origin.AddHours(2).UtcDateTime, "Invalid timestamp fields fall back to date aliases");
+
 Console.WriteLine($"Passed {passed} EPG regression checks.");
 
 Harness Create()

@@ -20,7 +20,7 @@ internal static partial class Program
     [STAThread]
     private static void Main()
     {
-        var app = new Application();
+        var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
         var resources = new ResourceDictionary
         {
             Source = new Uri("/iptv-desktop-browser;component/Controls/CatalogStyles.xaml", UriKind.Relative)
@@ -36,6 +36,7 @@ internal static partial class Program
             VerifyMediaDetails();
             Dispatcher.CurrentDispatcher.Invoke(VerifyRecordingForm);
             Dispatcher.CurrentDispatcher.Invoke(VerifyRecordingManagement);
+            Dispatcher.CurrentDispatcher.Invoke(VerifySeriesRecordingDialogs);
             Console.WriteLine($"Passed {_passed} virtualization regression checks.");
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }

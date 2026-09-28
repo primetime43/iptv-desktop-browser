@@ -51,8 +51,9 @@ public partial class ChannelService
             foreach (var item in listings.EnumerateArray())
             {
                 if (item.ValueKind != JsonValueKind.Object) continue;
-                var start = GetUnixTimestamp(item, "start_timestamp");
-                var end = GetUnixTimestamp(item, "stop_timestamp");
+                cancellationToken.ThrowIfCancellationRequested();
+                var start = GetGuideTime(item, "start_timestamp", "start");
+                var end = GetGuideTime(item, "stop_timestamp", "end_timestamp", "stop", "end");
                 if (start == DateTime.MinValue || end <= start) continue;
                 var title = DecodeMaybeBase64(TryGetString(item, "title", "name", "programme", "program"));
                 if (string.IsNullOrWhiteSpace(title)) continue;
@@ -93,6 +94,21 @@ public partial class ChannelService
         channel.EpgSchedule = data;
         channel.NextEpgRefreshUtc = data.ExpiresUtc;
         channel.RefreshCurrentProgram(_clock.GetUtcNow().UtcDateTime);
+    }
+
+    // Providers mix numeric/string timestamps and UTC date strings. Keep the
+    // tolerant series-dialog formats in this shared parser instead of a second HTTP path.
+    private static DateTime GetGuideTime(JsonElement item, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var unix = GetUnixTimestamp(item, name);
+            if (unix != DateTime.MinValue) return unix;
+            if (item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String &&
+                DateTimeOffset.TryParse(value.GetString(), System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal, out var date)) return date.UtcDateTime;
+        }
+        return DateTime.MinValue;
     }
 
     private DateTime GetScheduleExpiration(List<EpgEntry> programs, DateTime nowUtc)
