@@ -6,6 +6,7 @@ The dashboard is being migrated in stages. The running UI uses these page views 
 | --- | --- | --- |
 | Live TV | `LiveTvPageViewModel` | `DashboardWindow.LiveTv.cs` |
 | Movies and series | `MoviesSeriesPageViewModel` | `DashboardWindow.MoviesSeries.cs` |
+| Movie/series details | `MediaDetailsViewModel` | `MediaDetailsView` bindings and playback request events |
 | Scheduler | `SchedulerPageViewModel` | `DashboardWindow.Scheduler.cs` |
 | Settings | `SettingsPageViewModel` | Bound commands; `SettingsInteraction` handles Windows dialogs/processes |
 
@@ -17,8 +18,12 @@ Settings binds directly to `SettingsPageViewModel`. The model owns the editable 
 
 The Settings view raises host events for favorites import/export and opening the shared cache inspector. It does not reference `DashboardWindow`. Navigation activates the settings editor through `SettingsPageModel.Load()`, including programmatic page changes. Log controls belong to the separate Logs page; their existing handlers are now in `DashboardWindow.Logs.cs`.
 
+`MoviesSeriesPageViewModel.Details` owns the single movie/series selection and its explicit empty/loading/ready/failed state. `MediaDetailsView` binds directly to that model, with no window lookup or per-title property-change subscriptions. The model uses `IVodService` and `SelectedDetailsLoader` for detached, guarded requests, shares repeated selections, and supplies a retry command. Content-type commands clear obsolete details; category changes, page departures, and window closure clear them through the existing shell lifecycle. Playback commands raise typed requests handled by the shell's existing player integration.
+
+Details metadata, season headers, and episodes form one flat list with a WPF recycling panel. A single batch replaces its rows, and scrolling realizes only nearby episode controls. Keep this list out of an outer `ScrollViewer` or `StackPanel`, which would remove its bounded viewport. Episode commands reject stale rows from a previously selected series.
+
 Continue the migration by moving one interaction at a time into a page-model command, binding the view to it, and removing its forwarding handler and control lookup. Scheduler dialogs and playback/recording interactions still use the compatibility path. Avoid creating a second copy of page state in the shell or adding new behavior to the legacy, unused `DashboardViewModel`.
 
 Catalog parsing and preparation run in background work. UI collections use `BulkObservableCollection.ReplaceAll`, which emits one WPF-compatible reset. Keep cancellation and current-selection checks around result application; never mutate an already-bound model from background work.
 
-`VirtualizationRegressionTests` loads the compiled page views and production templates, checks page-model bindings, and verifies bulk collection filtering/sorting. It also exercises settings commands, two-way form bindings, validation, save failures, canceled dialogs, and cache-clear failure/retry. `CatalogLoadingRegressionTests` exercises background preparation, request cancellation, thumbnails, and guide loading without a provider account.
+`VirtualizationRegressionTests` loads the compiled page views and production templates, checks page-model bindings, and verifies bulk collection filtering/sorting. It also exercises settings commands and failure recovery, details request races/retries/cancellation, and a compiled details view containing 10,000 episodes. `CatalogLoadingRegressionTests` exercises background preparation, request cancellation, thumbnails, and guide loading without a provider account.

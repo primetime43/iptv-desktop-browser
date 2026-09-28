@@ -13,7 +13,7 @@ internal static partial class Program
     private static void VerifyExtractedPages(Application app)
     {
         var live = new LiveTvPageViewModel();
-        var catalog = new MoviesSeriesPageViewModel();
+        var catalog = new MoviesSeriesPageViewModel(new DetailsVodService());
         var scheduler = new SchedulerPageViewModel();
         var settings = CreateSettingsFixture().Model;
         var context = new { LiveTv = live, Catalog = catalog, SchedulerPageModel = scheduler, SettingsPageModel = settings,
@@ -33,9 +33,16 @@ internal static partial class Program
                 Check(((ItemsControl)view.FindName("ChannelsGridView")).Items.Count == 1,
                     "Live TV view binds its page model's collection view across the new namescope");
             if (view is MoviesSeriesPageView)
+            {
                 Check(((ItemsControl)view.FindName("MoviesGridView")).Items.Count == 1 &&
                     ((ItemsControl)view.FindName("SeriesGridView")).Items.Count == 1,
                     "Movie and series views bind separate collections owned by the catalog model");
+                Check(ReferenceEquals(((Button)view.FindName("MoviesViewBtn")).Command, catalog.ShowMoviesCommand) &&
+                    ReferenceEquals(((Button)view.FindName("SeriesViewBtn")).Command, catalog.ShowSeriesCommand),
+                    "Catalog content-type buttons bind to page model commands");
+                Check(Descendants(view).OfType<MediaDetailsView>().Single().DataContext == catalog.Details,
+                    "The nested details view receives its focused model");
+            }
             if (view is SchedulerPageView)
                 Check(view.FindName("ChannelCombo") is ComboBox && view.FindName("ScheduledGrid") is DataGrid,
                     "Scheduler controls remain accessible to the gradual migration adapter");

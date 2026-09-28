@@ -28,7 +28,7 @@ namespace DesktopApp.Views
     {
         public DashboardNavigationViewModel Navigation { get; } = new();
         public LiveTvPageViewModel LiveTv { get; } = new();
-        public MoviesSeriesPageViewModel Catalog { get; } = new();
+        public MoviesSeriesPageViewModel Catalog { get; }
         public SchedulerPageViewModel SchedulerPageModel { get; } = new();
         public SettingsPageViewModel SettingsPageModel { get; }
 
@@ -243,24 +243,7 @@ namespace DesktopApp.Views
             }
         }
 
-        private VodContent? _selectedVodContent { get => Catalog.SelectedMovie; set => Catalog.SelectedMovie = value; }
-        public VodContent? SelectedVodContent
-        {
-            get => _selectedVodContent;
-            set
-            {
-                if (value != _selectedVodContent)
-                {
-                    _detailsLoader.Cancel();
-                    _selectedVodContent = value;
-                    OnPropertyChanged();
-                    if (value != null)
-                    {
-                        _ = LoadVodDetailsAsync(value);
-                    }
-                }
-            }
-        }
+        public VodContent? SelectedVodContent => Catalog.SelectedMovie;
 
         // Series collections
         private BulkObservableCollection<SeriesCategory> _seriesCategories => Catalog.SeriesCategories; public ObservableCollection<SeriesCategory> SeriesCategories => _seriesCategories;
@@ -281,24 +264,7 @@ namespace DesktopApp.Views
             }
         }
 
-        private SeriesContent? _selectedSeriesContent { get => Catalog.SelectedSeries; set => Catalog.SelectedSeries = value; }
-        public SeriesContent? SelectedSeriesContent
-        {
-            get => _selectedSeriesContent;
-            set
-            {
-                if (value != _selectedSeriesContent)
-                {
-                    _detailsLoader.Cancel();
-                    _selectedSeriesContent = value;
-                    OnPropertyChanged();
-                    if (value != null)
-                    {
-                        _ = LoadSeriesDetailsAsync(value);
-                    }
-                }
-            }
-        }
+        public SeriesContent? SelectedSeriesContent => Catalog.SelectedSeries;
 
         private Channel? _selectedChannel { get => LiveTv.SelectedChannel; set => LiveTv.SelectedChannel = value; }
         public Channel? SelectedChannel
@@ -370,7 +336,6 @@ namespace DesktopApp.Views
         private LatestRequestLoader _globalSearchLoader => LiveTv.SearchRequests;
         private LatestRequestLoader _vodCategoryLoader => Catalog.MovieRequests;
         private LatestRequestLoader _seriesCategoryLoader => Catalog.SeriesRequests;
-        private SelectedDetailsLoader _detailsLoader => Catalog.DetailRequests;
         private bool IsSeriesCatalog => Catalog.ContentType == CatalogContentType.Series;
 
         // Buffer for log messages during startup before UI is ready
@@ -554,6 +519,10 @@ namespace DesktopApp.Views
             _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
             _vodService = vodService ?? throw new ArgumentNullException(nameof(vodService));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
+            Catalog = new MoviesSeriesPageViewModel(_vodService);
+            Catalog.Details.MoviePlaybackRequested += TryLaunchVodInPlayer;
+            Catalog.Details.EpisodePlaybackRequested += TryLaunchEpisodeInPlayer;
+            Catalog.Details.LoadFailed += error => Log($"ERROR loading details: {error.Message}\n");
             SettingsPageModel = new SettingsPageViewModel(new ApplicationSettingsService(),
                 new Dashboard.SettingsInteraction(() => this), _cacheService);
 
@@ -568,6 +537,13 @@ namespace DesktopApp.Views
             };
             Catalog.PropertyChanged += (_, e) =>
             {
+                if (e.PropertyName is nameof(Catalog.SelectedMovie) or nameof(Catalog.SelectedSeries))
+                {
+                    OnPropertyChanged(nameof(SelectedVodContent));
+                    OnPropertyChanged(nameof(SelectedSeriesContent));
+                    ScheduleCatalogRefresh();
+                    return;
+                }
                 if (e.PropertyName != nameof(Catalog.ContentType)) return;
                 CancelVodRequests();
                 ApplyCatalogView();

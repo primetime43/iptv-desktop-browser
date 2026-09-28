@@ -26,364 +26,9 @@ namespace DesktopApp.Views;
 
 public partial class DashboardWindow
 {
-        // VOD Details Panel Methods
-        private VodContent? _currentSubscribedVod;
+        private void ClearVodDetailsPanel() => Catalog.Details.Clear();
 
-        private void ClearVodDetailsPanel()
-        {
-            // Clear selections
-            SelectedVodContent = null;
-            SelectedSeriesContent = null;
-
-            // Unsubscribe from property changes
-            if (_currentSubscribedVod != null)
-            {
-                _currentSubscribedVod.PropertyChanged -= VodContent_PropertyChanged;
-                _currentSubscribedVod = null;
-            }
-            if (_currentSubscribedSeries != null)
-            {
-                _currentSubscribedSeries.PropertyChanged -= SeriesContent_PropertyChanged;
-                _currentSubscribedSeries = null;
-            }
-
-            // Reset UI to show placeholder
-            if (FindDashboardElement("VodDetailsPlaceholder") is TextBlock placeholder)
-            {
-                placeholder.Text = "Select a movie or series to view details";
-                placeholder.Visibility = Visibility.Visible;
-            }
-
-            if (FindDashboardElement("VodDetailsContent") is StackPanel content)
-            {
-                content.Visibility = Visibility.Collapsed;
-            }
-
-            // Hide episodes section when clearing
-            HideEpisodesUI();
-
-            // Hide actions panel when clearing
-            if (FindDashboardElement("VodActionsPanel") is StackPanel actionsPanel)
-                actionsPanel.Visibility = Visibility.Collapsed;
-        }
-
-        private void ShowVodDetailsPanel(VodContent vod)
-        {
-            try
-            {
-                // Unsubscribe from previous VOD property changes
-                if (_currentSubscribedVod != null)
-                {
-                    _currentSubscribedVod.PropertyChanged -= VodContent_PropertyChanged;
-                }
-
-                // Subscribe to this VOD's property changes
-                _currentSubscribedVod = vod;
-                vod.PropertyChanged += VodContent_PropertyChanged;
-
-                // If details are already loaded, show them immediately
-                if (vod.DetailsLoaded)
-                {
-                    DisplayVodDetailsPanel(vod);
-                    return;
-                }
-
-                // Show loading state
-                if (FindDashboardElement("VodDetailsPlaceholder") is TextBlock placeholder)
-                {
-                    placeholder.Text = "Loading details...";
-                    placeholder.Visibility = Visibility.Visible;
-                }
-
-                if (FindDashboardElement("VodDetailsContent") is StackPanel content)
-                    content.Visibility = Visibility.Collapsed;
-
-                // Start loading details in background (fire and forget)
-                _ = LoadVodDetailsAsync(vod);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error showing VOD details: {ex.Message}");
-                // Show error state
-                if (FindDashboardElement("VodDetailsPlaceholder") is TextBlock placeholder)
-                {
-                    placeholder.Text = "Failed to load details";
-                    placeholder.Visibility = Visibility.Visible;
-                }
-                if (FindDashboardElement("VodDetailsContent") is StackPanel content)
-                    content.Visibility = Visibility.Collapsed;
-            }
-        }
-
-        private void VodContent_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == "DetailsLoaded" &&
-                sender is VodContent vod && vod.DetailsLoaded && ReferenceEquals(vod, this.SelectedVodContent))
-            {
-                // Details have been loaded for the currently selected VOD, update UI
-                Dispatcher.Invoke(() => DisplayVodDetailsPanel(vod));
-            }
-        }
-
-        private void DisplayVodDetailsPanel(VodContent vod)
-        {
-            if (_isClosing || _cts.IsCancellationRequested || IsSeriesCatalog ||
-                !ReferenceEquals(vod, SelectedVodContent)) return;
-            // Hide placeholder, show content
-            if (FindDashboardElement("VodDetailsPlaceholder") is TextBlock placeholder)
-                placeholder.Visibility = Visibility.Collapsed;
-
-            if (FindDashboardElement("VodDetailsContent") is StackPanel content)
-                content.Visibility = Visibility.Visible;
-
-            // Set title
-            if (FindDashboardElement("VodDetailsTitle") is TextBlock title)
-                title.Text = vod.Name ?? "Unknown";
-
-            // Update all detail fields
-            UpdateVodDetailsDisplay(vod);
-        }
-
-        private void UpdateVodDetailsDisplay(VodContent vod)
-        {
-            // Only update if details are actually loaded
-            if (!vod.DetailsLoaded)
-            {
-                // Keep showing loading state
-                return;
-            }
-
-            // Update all fields with loaded data
-            if (FindDashboardElement("VodDetailsYear") is TextBlock year)
-                year.Text = !string.IsNullOrWhiteSpace(vod.ReleaseDate) ? vod.DisplayYear : "";
-
-            if (FindDashboardElement("VodDetailsDuration") is TextBlock duration)
-                duration.Text = !string.IsNullOrWhiteSpace(vod.Duration) ? vod.DisplayDuration : "";
-
-            if (FindDashboardElement("VodDetailsRating") is TextBlock rating)
-                rating.Text = !string.IsNullOrWhiteSpace(vod.Rating) ? vod.Rating : "";
-
-            if (FindDashboardElement("VodDetailsGenre") is TextBlock genre)
-                genre.Text = !string.IsNullOrWhiteSpace(vod.Genre) ? vod.Genre : "";
-
-            if (FindDashboardElement("VodDetailsCast") is TextBlock cast)
-                cast.Text = !string.IsNullOrWhiteSpace(vod.Cast) ? vod.Cast : "";
-
-            if (FindDashboardElement("VodDetailsDirector") is TextBlock director)
-                director.Text = !string.IsNullOrWhiteSpace(vod.Director) ? vod.Director : "";
-
-            if (FindDashboardElement("VodDetailsPlot") is TextBlock plot)
-                plot.Text = !string.IsNullOrWhiteSpace(vod.Plot) ? vod.Plot : "No plot available";
-
-            // Hide episodes section for movies
-            HideEpisodesUI();
-
-            // Show play button for movies only
-            if (FindDashboardElement("VodActionsPanel") is StackPanel actionsPanel)
-                actionsPanel.Visibility = Visibility.Visible;
-        }
-
-        private SeriesContent? _currentSubscribedSeries;
-
-        private void ShowSeriesDetailsPanel(SeriesContent series)
-        {
-            try
-            {
-                // Unsubscribe from previous series property changes
-                if (_currentSubscribedSeries != null)
-                {
-                    _currentSubscribedSeries.PropertyChanged -= SeriesContent_PropertyChanged;
-                }
-
-                // Subscribe to this series' property changes
-                _currentSubscribedSeries = series;
-                series.PropertyChanged += SeriesContent_PropertyChanged;
-
-                // If details are already loaded, show them immediately
-                if (series.DetailsLoaded)
-                {
-                    DisplaySeriesDetailsPanel(series);
-                    return;
-                }
-
-                // Show loading state
-                if (FindDashboardElement("VodDetailsPlaceholder") is TextBlock placeholder)
-                {
-                    placeholder.Text = "Loading details...";
-                    placeholder.Visibility = Visibility.Visible;
-                }
-
-                if (FindDashboardElement("VodDetailsContent") is StackPanel content)
-                    content.Visibility = Visibility.Collapsed;
-
-                // Start loading details in background (fire and forget)
-                _ = LoadSeriesDetailsAsync(series);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Error showing series details: {ex.Message}");
-                // Show error state
-                if (FindDashboardElement("VodDetailsPlaceholder") is TextBlock placeholder)
-                {
-                    placeholder.Text = "Failed to load details";
-                    placeholder.Visibility = Visibility.Visible;
-                }
-                if (FindDashboardElement("VodDetailsContent") is StackPanel content)
-                    content.Visibility = Visibility.Collapsed;
-            }
-        }
-
-        private void SeriesContent_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == "DetailsLoaded" &&
-                sender is SeriesContent series && series.DetailsLoaded && ReferenceEquals(series, this.SelectedSeriesContent))
-            {
-                // Details have been loaded for the currently selected series, update UI
-                Dispatcher.Invoke(() => DisplaySeriesDetailsPanel(series));
-            }
-        }
-
-        private void DisplaySeriesDetailsPanel(SeriesContent series)
-        {
-            if (_isClosing || _cts.IsCancellationRequested || !IsSeriesCatalog ||
-                !ReferenceEquals(series, SelectedSeriesContent)) return;
-            // Hide placeholder, show content
-            if (FindDashboardElement("VodDetailsPlaceholder") is TextBlock placeholder)
-                placeholder.Visibility = Visibility.Collapsed;
-
-            if (FindDashboardElement("VodDetailsContent") is StackPanel content)
-                content.Visibility = Visibility.Visible;
-
-            // Set title
-            if (FindDashboardElement("VodDetailsTitle") is TextBlock title)
-                title.Text = series.Name ?? "Unknown";
-
-            // Update all detail fields
-            UpdateSeriesDetailsDisplay(series);
-        }
-
-        private void UpdateSeriesDetailsDisplay(SeriesContent series)
-        {
-            // Only update if details are actually loaded
-            if (!series.DetailsLoaded)
-            {
-                // Keep showing loading state
-                return;
-            }
-
-            // Update all fields with loaded data
-            if (FindDashboardElement("VodDetailsYear") is TextBlock year)
-                year.Text = !string.IsNullOrWhiteSpace(series.ReleaseDate) ? series.DisplayYear : "";
-
-            if (FindDashboardElement("VodDetailsDuration") is TextBlock duration)
-                duration.Text = series.SeasonCount > 0 ? series.DisplayDuration : "";
-
-            if (FindDashboardElement("VodDetailsRating") is TextBlock rating)
-                rating.Text = !string.IsNullOrWhiteSpace(series.Rating) ? series.Rating : "";
-
-            if (FindDashboardElement("VodDetailsGenre") is TextBlock genre)
-                genre.Text = !string.IsNullOrWhiteSpace(series.Genre) ? series.Genre : "";
-
-            if (FindDashboardElement("VodDetailsCast") is TextBlock cast)
-                cast.Text = !string.IsNullOrWhiteSpace(series.Cast) ? series.Cast : "";
-
-            if (FindDashboardElement("VodDetailsDirector") is TextBlock director)
-                director.Text = !string.IsNullOrWhiteSpace(series.Director) ? series.Director : "";
-
-            if (FindDashboardElement("VodDetailsPlot") is TextBlock plot)
-                plot.Text = !string.IsNullOrWhiteSpace(series.Plot) ? series.Plot : "No plot available";
-
-            // Hide play button for TV shows (use episodes instead)
-            if (FindDashboardElement("VodActionsPanel") is StackPanel actionsPanel)
-                actionsPanel.Visibility = Visibility.Collapsed;
-
-            // Show episodes section for series and populate it
-            PopulateEpisodesUI(series);
-        }
-
-        private void PopulateEpisodesUI(SeriesContent series)
-        {
-            // Show episodes section
-            if (FindDashboardElement("EpisodesSection") is Border episodesSection)
-                episodesSection.Visibility = Visibility.Visible;
-
-            // Clear existing episodes
-            if (FindDashboardElement("SeasonsPanel") is StackPanel seasonsPanel)
-            {
-                seasonsPanel.Children.Clear();
-
-                foreach (var season in series.Seasons)
-                {
-                    // Create season header
-                    var seasonHeader = new Border
-                    {
-                        Background = new SolidColorBrush(Color.FromRgb(0x22, 0x32, 0x47)),
-                        CornerRadius = new CornerRadius(4),
-                        Margin = new Thickness(0, 4, 0, 2),
-                        Padding = new Thickness(8, 4, 8, 4)
-                    };
-
-                    var seasonHeaderText = new TextBlock
-                    {
-                        Text = $"{season.DisplayName} ({season.Episodes.Count} episodes)",
-                        FontWeight = FontWeights.SemiBold,
-                        Foreground = new SolidColorBrush(Color.FromRgb(0xDD, 0xE6, 0xF2)),
-                        FontSize = 12
-                    };
-
-                    seasonHeader.Child = seasonHeaderText;
-                    seasonsPanel.Children.Add(seasonHeader);
-
-                    // Create episodes list
-                    foreach (var episode in season.Episodes)
-                    {
-                        var episodeButton = new Button
-                        {
-                            Content = episode.DisplayTitle,
-                            Margin = new Thickness(8, 1, 0, 1),
-                            Padding = new Thickness(8, 4, 8, 4),
-                            Background = Brushes.Transparent,
-                            Foreground = new SolidColorBrush(Color.FromRgb(0x9D, 0xB2, 0xC7)),
-                            BorderBrush = Brushes.Transparent,
-                            BorderThickness = new Thickness(0),
-                            HorizontalAlignment = HorizontalAlignment.Stretch,
-                            HorizontalContentAlignment = HorizontalAlignment.Left,
-                            FontSize = 11,
-                            Cursor = System.Windows.Input.Cursors.Hand
-                        };
-
-                        episodeButton.Click += (s, e) => TryLaunchEpisodeInPlayer(episode);
-                        seasonsPanel.Children.Add(episodeButton);
-                    }
-                }
-            }
-        }
-
-        private void HideEpisodesUI()
-        {
-            // Hide episodes section
-            if (FindDashboardElement("EpisodesSection") is Border episodesSection)
-                episodesSection.Visibility = Visibility.Collapsed;
-
-            // Clear episodes
-            if (FindDashboardElement("SeasonsPanel") is StackPanel seasonsPanel)
-                seasonsPanel.Children.Clear();
-        }
-
-        internal void VodPlayButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (SelectedVodContent != null)
-            {
-                TryLaunchVodInPlayer(SelectedVodContent);
-            }
-            else if (SelectedSeriesContent != null)
-            {
-                TryLaunchSeriesInPlayer(SelectedSeriesContent);
-            }
-        }
-
-
-        // Profile page methods
+        // Catalog navigation and loading remain in the shell during the gradual migration.
         internal void VodCategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (sender is not ComboBox combo) return;
@@ -392,15 +37,6 @@ public partial class DashboardWindow
                 SelectedSeriesCategoryId = (combo.SelectedItem as SeriesCategory)?.CategoryId ?? string.Empty;
             else
                 SelectedVodCategoryId = (combo.SelectedItem as VodCategory)?.CategoryId ?? string.Empty;
-        }
-
-        internal void ShowMoviesView_Click(object sender, RoutedEventArgs e) => ChangeCatalogType(CatalogContentType.Movies);
-        internal void ShowSeriesView_Click(object sender, RoutedEventArgs e) => ChangeCatalogType(CatalogContentType.Series);
-
-        private void ChangeCatalogType(CatalogContentType type)
-        {
-            if (Catalog.ContentType == type) ApplyCatalogView();
-            else Catalog.ContentType = type;
         }
 
         private void ApplyCatalogView()
@@ -438,11 +74,8 @@ public partial class DashboardWindow
             }
             else
             {
-                SelectedSeriesContent = series;
+                _ = Catalog.Details.SelectAsync(series, _cts.Token);
                 _lastSeriesClickTime = now;
-
-                // Update details panel
-                ShowSeriesDetailsPanel(series);
             }
         }
 
@@ -501,7 +134,6 @@ public partial class DashboardWindow
         {
             _vodCategoryLoader.Cancel();
             _seriesCategoryLoader.Cancel();
-            _detailsLoader.Cancel();
             IsLoadingVodContent = false;
             IsLoadingSeriesContent = false;
             HideLoadingOverlay("MoviesLoadingOverlay");
@@ -628,21 +260,6 @@ public partial class DashboardWindow
         }
 
 
-        private Task LoadSeriesDetailsAsync(SeriesContent content)
-        {
-            if (Session.Mode != SessionMode.Xtream) return Task.CompletedTask;
-            return _detailsLoader.LoadAsync(content,
-                (snapshot, token) => _vodService.LoadSeriesDetailsAsync(snapshot, token),
-                (target, details) => target.ApplyDetails(details),
-                ex => Log($"ERROR loading details: {ex.Message}\n"),
-                () => IsSeriesCatalog && ReferenceEquals(content, SelectedSeriesContent), _cts.Token);
-        }
-
-        private void VodCategory_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            // Handled by SelectedVodCategoryId property change
-        }
-
         internal void VodContent_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not FrameworkElement fe || fe.DataContext is not VodContent vod)
@@ -659,34 +276,13 @@ public partial class DashboardWindow
             }
             else
             {
-                SelectedVodContent = vod;
+                _ = Catalog.Details.SelectAsync(vod, _cts.Token);
                 _lastVodClickTime = now;
-
-                // Update details panel
-                ShowVodDetailsPanel(vod);
             }
         }
 
         private DateTime _lastVodClickTime;
         private DateTime _lastSeriesClickTime;
-
-        private void VodPlay_Click(object sender, RoutedEventArgs e)
-        {
-            if (SelectedVodContent != null)
-            {
-                TryLaunchVodInPlayer(SelectedVodContent);
-            }
-        }
-
-        private Task LoadVodDetailsAsync(VodContent content)
-        {
-            if (Session.Mode != SessionMode.Xtream) return Task.CompletedTask;
-            return _detailsLoader.LoadAsync(content,
-                (snapshot, token) => _vodService.LoadVodDetailsAsync(snapshot, token),
-                (target, details) => target.ApplyDetails(details),
-                ex => Log($"ERROR loading details: {ex.Message}\n"),
-                () => !IsSeriesCatalog && ReferenceEquals(content, SelectedVodContent), _cts.Token);
-        }
 
         private void TryLaunchVodInPlayer(VodContent vod)
         {
@@ -769,13 +365,13 @@ public partial class DashboardWindow
 
                 // Switch to VOD page and series view
                 ShowPage(DashboardPage.Vod);
-                SetSelectedNavButton(FindDashboardElement("VodNavBtn") as Button);
 
                 // Switch to series view if not already there
-                ShowSeriesView_Click(null!, null!);
+                if (Catalog.ContentType != CatalogContentType.Series)
+                    Catalog.ContentType = CatalogContentType.Series;
 
                 // Select the series - this will trigger episode loading
-                SelectedSeriesContent = series;
+                _ = Catalog.Details.SelectAsync(series, _cts.Token);
             }
             catch (Exception ex)
             {
