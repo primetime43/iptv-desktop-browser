@@ -1,11 +1,15 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using DesktopApp.Models;
+using DesktopApp.Services;
 
 namespace DesktopApp.ViewModels;
 
 public partial class SchedulerPageViewModel : ObservableObject
 {
-    public BulkObservableCollection<Channel> Channels { get; } = new();
-    [ObservableProperty] private Channel? _selectedChannel;
-    [ObservableProperty] private EpgEntry? _selectedProgram;
+    public SchedulerPageViewModel(IRecordingScheduleService service, IRecordingFormInteraction interaction, TimeProvider? clock = null)
+    {
+        NewRecording = new RecordingFormViewModel(service, interaction, clock);
+    }
+
+    public RecordingFormViewModel NewRecording { get; }
 }

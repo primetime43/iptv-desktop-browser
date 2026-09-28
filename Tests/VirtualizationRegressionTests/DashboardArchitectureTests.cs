@@ -14,7 +14,7 @@ internal static partial class Program
     {
         var live = new LiveTvPageViewModel();
         var catalog = new MoviesSeriesPageViewModel(new DetailsVodService());
-        var scheduler = new SchedulerPageViewModel();
+        var scheduler = CreateRecordingFixture().Page;
         var settings = CreateSettingsFixture().Model;
         var context = new { LiveTv = live, Catalog = catalog, SchedulerPageModel = scheduler, SettingsPageModel = settings,
             TileWidth = 180d, TileHeight = 150d, VodTileHeight = 240d };
@@ -44,8 +44,9 @@ internal static partial class Program
                     "The nested details view receives its focused model");
             }
             if (view is SchedulerPageView)
-                Check(view.FindName("ChannelCombo") is ComboBox && view.FindName("ScheduledGrid") is DataGrid,
-                    "Scheduler controls remain accessible to the gradual migration adapter");
+                Check(Descendants(view).OfType<RecordingFormView>().Single().DataContext == scheduler.NewRecording &&
+                    view.FindName("ScheduledGrid") is DataGrid,
+                    "Scheduler hosts the focused form while recording management keeps its existing bindings");
             if (view is SettingsPageView)
             {
                 VerifySettingsBindings((SettingsPageView)view, settings);
@@ -68,8 +69,8 @@ internal static partial class Program
         Check(catalog.ContentType == CatalogContentType.Series && catalog.Movies.Count == 1 && catalog.Series.Count == 1,
             "Content type is independent of button colors, layout visibility, and catalog data");
         live.SelectedChannel = live.Channels[0];
-        scheduler.SelectedChannel = new Channel { Id = 99 };
-        Check(live.SelectedChannel.Id == 1 && scheduler.SelectedChannel.Id == 99,
+        scheduler.NewRecording.SelectedChannel = new Channel { Id = 99 };
+        Check(live.SelectedChannel.Id == 1 && scheduler.NewRecording.SelectedChannel.Id == 99,
             "Scheduler and live selection state are independent");
     }
 

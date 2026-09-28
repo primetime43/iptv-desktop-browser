@@ -29,7 +29,7 @@ namespace DesktopApp.Views
         public DashboardNavigationViewModel Navigation { get; } = new();
         public LiveTvPageViewModel LiveTv { get; } = new();
         public MoviesSeriesPageViewModel Catalog { get; }
-        public SchedulerPageViewModel SchedulerPageModel { get; } = new();
+        public SchedulerPageViewModel SchedulerPageModel { get; }
         public SettingsPageViewModel SettingsPageModel { get; }
 
         private RecordingStatusWindow? _recordingWindow;
@@ -519,6 +519,8 @@ namespace DesktopApp.Views
             _channelService = channelService ?? throw new ArgumentNullException(nameof(channelService));
             _vodService = vodService ?? throw new ArgumentNullException(nameof(vodService));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
+            SchedulerPageModel = new SchedulerPageViewModel(new RecordingScheduleService(_channelService, _scheduler),
+                new Dashboard.RecordingFormInteraction(() => this));
             Catalog = new MoviesSeriesPageViewModel(_vodService);
             Catalog.Details.MoviePlaybackRequested += TryLaunchVodInPlayer;
             Catalog.Details.EpisodePlaybackRequested += TryLaunchEpisodeInPlayer;
@@ -951,6 +953,7 @@ namespace DesktopApp.Views
         // modify existing OnClosed (search and replace previous implementation) - keep rest of file intact
         protected override void OnClosed(EventArgs e)
         {
+            SchedulerPageModel.NewRecording.Deactivate();
             _globalSearchLoader.Cancel();
             CancelVodRequests();
             StopCatalogLoading();
@@ -1438,8 +1441,6 @@ namespace DesktopApp.Views
                 SetSelectedNavButton(schedulerNavBtn);
             }
 
-            // Initialize the scheduler when navigating to it
-            InitializeScheduler();
         }
 
         private void NavigateToProfile(object sender, RoutedEventArgs e)
@@ -1491,6 +1492,8 @@ namespace DesktopApp.Views
         private void ApplyActivePage()
         {
             var page = Navigation.ActivePage;
+            if (page == DashboardPage.Scheduler) InitializeScheduler();
+            else SchedulerPageModel.NewRecording.Deactivate();
             if (page != DashboardPage.Vod) CancelVodRequests();
 
             // Hide all pages
