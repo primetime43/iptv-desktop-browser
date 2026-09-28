@@ -148,9 +148,14 @@ public partial class ChannelService : IChannelService
                 var cachedChannels = await _cacheService.GetDataAsync<List<Channel>>(cacheKey, cancellationToken);
                 if (cachedChannels != null)
                 {
-                    // Old channel-list caches may contain an already-loaded snapshot.
-                    foreach (var channel in cachedChannels)
-                        channel.RefreshCurrentProgram(_clock.GetUtcNow().UtcDateTime);
+                    // Cache entries may still be bound to another view. Background preparation
+                    // must not change their properties or carry an old now-playing snapshot.
+                    cachedChannels = cachedChannels.Select(channel => new Channel
+                    {
+                        Id = channel.Id, Name = channel.Name, Logo = channel.Logo,
+                        EpgChannelId = channel.EpgChannelId
+                    }).ToList();
+                    cancellationToken.ThrowIfCancellationRequested();
                     var cacheHitMsg = $"📱 CACHE HIT: Loaded {cachedChannels.Count} channels from CACHE for category: {category.Name} (no API call needed)";
                     _logger.LogInformation(cacheHitMsg);
                     _rawOutputLogger?.Invoke(cacheHitMsg + "\n");

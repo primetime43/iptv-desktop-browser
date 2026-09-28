@@ -1,0 +1,291 @@
+<UserControl xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="DesktopApp.Views.Dashboard.MoviesSeriesPageView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/iptv-desktop-browser;component/Views/Dashboard/DashboardResources.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+  <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Page Header -->
+                <Grid Grid.Row="0" Margin="16,16,16,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="200" />
+                        <ColumnDefinition Width="250" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="0" Text="Video on Demand" Style="{StaticResource HeaderTextStyle}" />
+                    <Button Grid.Column="1" x:Name="MoviesViewBtn" Content="Movies" Margin="32,0,8,0" Padding="12,6" Background="#223247" Foreground="#FFDDE6F2" BorderThickness="0" Click="ShowMoviesView_Click" />
+                    <Button Grid.Column="2" x:Name="SeriesViewBtn" Content="TV Series" Margin="0,0,16,0" Padding="12,6" Background="Transparent" Foreground="#9DB2C7" BorderThickness="0" Click="ShowSeriesView_Click" />
+                    <ComboBox Grid.Column="3" x:Name="VodCategoryCombo" Height="32" Margin="16,0,16,0" DisplayMemberPath="CategoryName" SelectedValuePath="CategoryId" ItemsSource="{Binding Catalog.MovieCategoriesView}" Tag="Select category..." SelectionChanged="VodCategoryCombo_SelectionChanged" />
+                    <Grid Grid.Column="4" Margin="0,0,16,0">
+                        <TextBox x:Name="VodSearchBox" Height="32" Margin="0,0,0,0" Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D" Padding="8,6" VerticalContentAlignment="Center" Text="{Binding VodSearchQuery, UpdateSourceTrigger=PropertyChanged}" Tag="Search movies and series..." />
+                        <TextBlock Text="Search movies and series..." IsHitTestVisible="False" Foreground="#667788" Margin="8,0,0,0" VerticalAlignment="Center">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Text, ElementName=VodSearchBox}" Value="">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+
+                    <!-- VOD View Mode Toggle Buttons -->
+                    <StackPanel Grid.Column="6" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Border Background="#161B22" CornerRadius="4" Padding="2">
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="VodGridViewBtn" Content="⊞" Width="32" Height="32" Margin="0,0,2,0" ToolTip="Grid View" Click="VodGridView_Click" Background="Transparent" Foreground="#FFDDE6F2" BorderThickness="0" FontSize="14" />
+                                <Button x:Name="VodListViewBtn" Content="☰" Width="32" Height="32" ToolTip="List View" Click="VodListView_Click" Background="Transparent" Foreground="#FFDDE6F2" BorderThickness="0" FontSize="14" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- VOD Tile Size Selector -->
+                        <ComboBox x:Name="VodTileSizeCombo" Width="80" Height="32" Margin="8,0,0,0" SelectionChanged="TileSize_SelectionChanged" Background="#21262D" BorderBrush="#30363D" Foreground="#FFDDE6F2">
+                            <ComboBoxItem Content="S" Tag="Small" />
+                            <ComboBoxItem Content="M" Tag="Medium" />
+                            <ComboBoxItem Content="L" Tag="Large" />
+                        </ComboBox>
+                    </StackPanel>
+                </Grid>
+
+                <!-- Content Area with Right Panel -->
+                <Grid Grid.Row="1" Margin="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="320" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left: VOD Grid -->
+                    <Grid Grid.Column="0">
+                        <!-- Movies Grid View -->
+                        <ItemsControl x:Name="MoviesGridView" Visibility="Visible" Style="{StaticResource PosterGridCatalogStyle}" ItemsSource="{Binding Catalog.MoviesView}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}" Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType=Window}}" Height="{Binding VodTileHeight, RelativeSource={RelativeSource AncestorType=Window}}" MouseLeftButtonDown="VodContent_Click" Cursor="Hand" Margin="8">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="140" />
+                                                    <RowDefinition Height="*" />
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Movie Poster -->
+                                                <Border Grid.Row="0" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                                        <TextBlock Text="🎬" FontSize="28" Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}" />
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Movie Info (Title only) -->
+                                                <StackPanel Grid.Row="1" Margin="8" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Bold" Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="60" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" TextAlignment="Center" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                        <!-- Movies List View -->
+                        <ItemsControl x:Name="MoviesListView" Visibility="Collapsed" Style="{StaticResource CatalogListStyle}" ItemsSource="{Binding Catalog.MoviesView}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8" Padding="12" MouseLeftButtonDown="VodContent_Click" Cursor="Hand">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="80" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Movie Poster -->
+                                                <Border Grid.Column="0" Width="60" Height="80" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform" />
+                                                        <TextBlock Text="🎬" FontSize="20" Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}" />
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Movie Info -->
+                                                <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold" Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Plot}" FontSize="12" Foreground="#9DB2C7" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
+                                                </StackPanel>
+
+                                                <!-- Movie Metadata -->
+                                                <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                                    <TextBlock Text="{Binding ReleaseDate}" FontSize="11" Foreground="#667788" HorizontalAlignment="Right" />
+                                                    <TextBlock Text="{Binding Duration}" FontSize="11" Foreground="#667788" HorizontalAlignment="Right" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                        <!-- Movies Loading Overlay -->
+                        <Grid x:Name="MoviesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="40" Height="40">
+                                    <Ellipse Width="32" Height="32" Stroke="#347DFF" StrokeThickness="3" StrokeDashArray="50.26" RenderTransformOrigin="0.5,0.5">
+                                        <Ellipse.RenderTransform>
+                                            <RotateTransform />
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                                <TextBlock Text="Loading movies..." Style="{StaticResource LoadingTextStyle}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Series Grid View -->
+                        <ItemsControl x:Name="SeriesGridView" Visibility="Collapsed" Style="{StaticResource PosterGridCatalogStyle}" ItemsSource="{Binding Catalog.SeriesView}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}" Width="{Binding TileWidth, RelativeSource={RelativeSource AncestorType=Window}}" Height="{Binding VodTileHeight, RelativeSource={RelativeSource AncestorType=Window}}" MouseLeftButtonDown="SeriesContent_Click" Cursor="Hand" Margin="8">
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="140" />
+                                                    <RowDefinition Height="*" />
+                                                </Grid.RowDefinitions>
+
+                                                <!-- Series Poster -->
+                                                <Border Grid.Row="0" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                                        <TextBlock Text="📺" FontSize="28" Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}" />
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Series Info (Title only) -->
+                                                <StackPanel Grid.Row="1" Margin="8" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Bold" Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="60" TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" TextAlignment="Center" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                        <!-- Series List View -->
+                        <ItemsControl x:Name="SeriesListView" Visibility="Collapsed" Style="{StaticResource CatalogListStyle}" ItemsSource="{Binding Catalog.SeriesView}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8" Padding="12" MouseLeftButtonDown="SeriesContent_Click" Cursor="Hand">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="80" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Series Poster -->
+                                                <Border Grid.Column="0" Width="60" Height="80" Background="#223247" CornerRadius="4">
+                                                    <Grid>
+                                                        <Image Source="{Binding PosterImage}" Stretch="Uniform" />
+                                                        <TextBlock Text="📺" FontSize="20" Foreground="#4B5E71" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding PosterImage, Converter={StaticResource NullToVisibilityConverter}}" />
+                                                    </Grid>
+                                                </Border>
+
+                                                <!-- Series Info -->
+                                                <StackPanel Grid.Column="1" Margin="16,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold" Foreground="#FFDDE6F2" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Plot}" FontSize="12" Foreground="#9DB2C7" TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis" Margin="0,4,0,0" />
+                                                </StackPanel>
+
+                                                <!-- Series Metadata -->
+                                                <StackPanel Grid.Column="2" Orientation="Vertical" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                                    <TextBlock Text="{Binding ReleaseDate}" FontSize="11" Foreground="#667788" HorizontalAlignment="Right" />
+                                                    <TextBlock Text="{Binding Genre}" FontSize="11" Foreground="#667788" HorizontalAlignment="Right" Margin="0,2,0,0" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                        <!-- Series Loading Overlay -->
+                        <Grid x:Name="SeriesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid Width="40" Height="40">
+                                    <Ellipse Width="32" Height="32" Stroke="#347DFF" StrokeThickness="3" StrokeDashArray="50.26" RenderTransformOrigin="0.5,0.5">
+                                        <Ellipse.RenderTransform>
+                                            <RotateTransform />
+                                        </Ellipse.RenderTransform>
+                                    </Ellipse>
+                                </Grid>
+                                <TextBlock Text="Loading series..." Style="{StaticResource LoadingTextStyle}" />
+                            </StackPanel>
+                        </Grid>
+                    </Grid>
+
+                    <!-- Right: VOD Details Panel -->
+                    <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="16,0,0,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel x:Name="VodDetailsPanel" Margin="16">
+                                <!-- Default state -->
+                                <TextBlock x:Name="VodDetailsPlaceholder" Text="Select a movie or series to view details" FontSize="14" Foreground="#8BA1B9" TextAlignment="Center" VerticalAlignment="Center" Margin="0,50,0,0" />
+
+                                <!-- VOD Details (Hidden by default) -->
+                                <StackPanel x:Name="VodDetailsContent" Visibility="Collapsed">
+                                    <!-- Title -->
+                                    <TextBlock x:Name="VodDetailsTitle" FontSize="18" FontWeight="Bold" Foreground="#FFDDE6F2" TextWrapping="Wrap" Margin="0,0,0,8" />
+
+                                    <!-- Basic Info (Year, Runtime, Rating) -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                                        <TextBlock x:Name="VodDetailsYear" FontSize="12" Foreground="#9DB2C7" Margin="0,0,16,0" />
+                                        <TextBlock x:Name="VodDetailsDuration" FontSize="12" Foreground="#9DB2C7" Margin="0,0,16,0" />
+                                        <TextBlock Text="⭐" FontSize="14" Margin="0,0,4,0" Foreground="#FFD700" />
+                                        <TextBlock x:Name="VodDetailsRating" FontSize="12" Foreground="#9DB2C7" />
+                                    </StackPanel>
+
+                                    <!-- Genre -->
+                                    <TextBlock Text="Genre:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4" />
+                                    <TextBlock x:Name="VodDetailsGenre" FontSize="12" Foreground="#FFDDE6F2" TextWrapping="Wrap" Margin="0,0,0,16" />
+
+                                    <!-- Cast (lazy loaded) -->
+                                    <TextBlock Text="Cast:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4" />
+                                    <TextBlock x:Name="VodDetailsCast" FontSize="12" Foreground="#FFDDE6F2" TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..." />
+
+                                    <!-- Director (lazy loaded) -->
+                                    <TextBlock Text="Director:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4" />
+                                    <TextBlock x:Name="VodDetailsDirector" FontSize="12" Foreground="#FFDDE6F2" TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..." />
+
+                                    <!-- Plot (lazy loaded) -->
+                                    <TextBlock Text="Plot:" FontSize="12" FontWeight="SemiBold" Foreground="#8BA1B9" Margin="0,0,0,4" />
+                                    <TextBlock x:Name="VodDetailsPlot" FontSize="12" Foreground="#FFDDE6F2" TextWrapping="Wrap" Margin="0,0,0,16" Text="Loading..." />
+
+                                    <!-- Episodes Section (for TV Shows only) -->
+                                    <Border x:Name="EpisodesSection" Background="#182433" CornerRadius="6" BorderBrush="#223247" BorderThickness="1" Padding="12" Margin="0,0,0,16" Visibility="Collapsed">
+                                        <StackPanel>
+                                            <TextBlock Text="📺 Episodes" FontSize="14" FontWeight="Bold" Foreground="#F0F6FC" Margin="0,0,0,12" />
+                                            <StackPanel x:Name="SeasonsPanel">
+                                                <!-- Seasons and Episodes will be populated in code-behind -->
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Actions (Movies only) -->
+                                    <StackPanel x:Name="VodActionsPanel" Margin="0,16,0,0" Visibility="Collapsed">
+                                        <Button x:Name="VodPlayButton" Content="▶ Play" Background="#28A745" Foreground="White" Padding="12,8" Click="VodPlayButton_Click" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+            </Grid>
+</UserControl>

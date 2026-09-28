@@ -118,6 +118,7 @@ internal static partial class Program
         await VerifyBackoffAndAccounts();
         await VerifyMemoryImages();
         await VerifyThumbnailCaching();
+        await VerifyBackgroundCatalogs();
     }
 
     private static async Task VerifyBackoffAndAccounts()

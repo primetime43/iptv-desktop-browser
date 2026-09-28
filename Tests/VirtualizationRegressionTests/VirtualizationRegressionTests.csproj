@@ -10,5 +10,6 @@
   <ItemGroup>
     <ProjectReference Include="../../DesktopApp/DesktopApp.csproj" />
     <None Include="../../DesktopApp/Views/DashboardWindow.xaml" Link="DashboardWindow.xaml" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../DesktopApp/Views/Dashboard/*.xaml" Link="Dashboard/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

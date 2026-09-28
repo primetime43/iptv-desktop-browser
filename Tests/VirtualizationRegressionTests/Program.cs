@@ -13,7 +13,7 @@ using System.Windows.Threading;
 using DesktopApp.Controls;
 using DesktopApp.Models;
 
-internal static class Program
+internal static partial class Program
 {
     private static int _passed;
 
@@ -30,6 +30,8 @@ internal static class Program
             foreach (var style in new[] { "ChannelGridCatalogStyle", "PosterGridCatalogStyle", "CatalogListStyle" })
                 VerifyCatalog(resources, style);
             VerifyDashboardTemplates(app);
+            VerifyExtractedPages(app);
+            VerifyBulkCollections();
             Console.WriteLine($"Passed {_passed} virtualization regression checks.");
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }
@@ -38,7 +40,8 @@ internal static class Program
 
     private static void VerifyCatalog(ResourceDictionary resources, string style)
     {
-        var data = new ObservableCollection<string>(Enumerable.Range(0, 10000).Select(i => $"Item {i}"));
+        var data = new BulkObservableCollection<string>();
+        data.ReplaceAll(Enumerable.Range(0, 10000).Select(i => $"Item {i}"));
         var view = new ListCollectionView(data);
         var sizing = new Sizing();
         var control = new ItemsControl
@@ -144,6 +147,12 @@ internal static class Program
         control.Visibility = Visibility.Visible;
         Layout(control);
         Check(Children(panel).Count() == 1, "Hiding and restoring a view retains correct content");
+        view.Filter = null;
+        data.ReplaceAll(Enumerable.Range(0, 10000).Select(i => $"Batch {i}"));
+        Layout(control);
+        Check(Children(panel).Count() is > 0 and < 100 &&
+            control.ItemContainerGenerator.ContainerFromIndex(0) is FrameworkElement batch && (string)batch.DataContext == "Batch 0",
+            "One bulk reset replaces a large catalog without stale containers or losing virtualization");
     }
 
     private static void Layout(FrameworkElement control, double width = 640, double height = 400)
@@ -161,14 +170,15 @@ internal static class Program
     {
         XNamespace wpf = "http://schemas.microsoft.com/winfx/2006/xaml/presentation";
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
-        var dashboard = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "DashboardWindow.xaml"));
         app.Resources["NullToVisibilityConverter"] = new DesktopApp.Converters.NullToVisibilityConverter();
-        var dictionary = new XElement(dashboard.Descendants(wpf + "ResourceDictionary").First());
+        var dictionary = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Dashboard", "DashboardResources.xaml")).Root!;
         dictionary.SetAttributeValue(XNamespace.Xmlns + "x", x.NamespaceName);
         dictionary.Descendants(wpf + "ResourceDictionary").Single().SetAttributeValue("Source",
             "/iptv-desktop-browser;component/Controls/CatalogStyles.xaml");
         foreach (var name in new[] { "ChannelsGridView", "ChannelsListView", "MoviesGridView", "MoviesListView", "SeriesGridView", "SeriesListView" })
         {
+            var dashboard = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "Dashboard",
+                name.StartsWith("Channels") ? "LiveTvPageView.xaml" : "MoviesSeriesPageView.xaml"));
             var element = new XElement(dashboard.Descendants(wpf + "ItemsControl").Single(e => (string?)e.Attribute(x + "Name") == name));
             element.SetAttributeValue(XNamespace.Xmlns + "x", x.NamespaceName);
             element.SetAttributeValue("ItemsSource", null);

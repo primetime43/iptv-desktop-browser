@@ -1,6 +1,7 @@
 using DesktopApp.Controls;
 using DesktopApp.Models;
 using DesktopApp.Services;
+using DesktopApp.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -49,16 +50,24 @@ public partial class DashboardWindow
     private List<CatalogViewportItem> ReadCatalogViewport()
     {
         var items = new List<CatalogViewportItem>();
-        foreach (var name in new[] { "ChannelsGridView", "ChannelsListView", "MoviesGridView", "MoviesListView", "SeriesGridView", "SeriesListView", "FavoritesChannelsControl" })
+        var controls = Navigation.ActivePage switch
+        {
+            DashboardPage.LiveTv => new[] { "ChannelsGridView", "ChannelsListView" },
+            DashboardPage.Favorites => ["FavoritesChannelsControl"],
+            DashboardPage.Vod when !IsSeriesCatalog => ["MoviesGridView", "MoviesListView"],
+            DashboardPage.Vod => ["SeriesGridView", "SeriesListView"],
+            _ => []
+        };
+        foreach (var name in controls)
         {
             if ((name.StartsWith("Movies") && IsLoadingVodContent) || (name.StartsWith("Series") && IsLoadingSeriesContent)) continue;
-            if (FindName(name) is ItemsControl control) items.AddRange(CatalogViewport.Read(control));
+            if (FindDashboardElement(name) is ItemsControl control) items.AddRange(CatalogViewport.Read(control));
         }
-        if ((ChannelsGridView.IsVisible || ChannelsListView.IsVisible) && SelectedChannel != null)
+        if (Navigation.ActivePage == DashboardPage.LiveTv && SelectedChannel != null)
             AddSelected(SelectedChannel);
-        if (!IsLoadingVodContent && (MoviesGridView.IsVisible || MoviesListView.IsVisible) && SelectedVodContent != null)
+        if (Navigation.ActivePage == DashboardPage.Vod && !IsSeriesCatalog && !IsLoadingVodContent && SelectedVodContent != null)
             AddSelected(SelectedVodContent);
-        if (!IsLoadingSeriesContent && (SeriesGridView.IsVisible || SeriesListView.IsVisible) && SelectedSeriesContent != null)
+        if (Navigation.ActivePage == DashboardPage.Vod && IsSeriesCatalog && !IsLoadingSeriesContent && SelectedSeriesContent != null)
             AddSelected(SelectedSeriesContent);
         return items.OrderBy(i => i.Priority).DistinctBy(i => i.Item).ToList();
 

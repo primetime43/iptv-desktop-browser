@@ -121,3 +121,5 @@ dotnet run --project Tests/VirtualizationRegressionTests/VirtualizationRegressio
 dotnet run --project Tests/CatalogLoadingRegressionTests/CatalogLoadingRegressionTests.csproj -c Release
 dotnet run --project Tests/VodRegressionTests/VodRegressionTests.csproj -c Release
 ```
+
+See [dashboard architecture](docs/dashboard-architecture.md) for the page split and incremental view-model migration.
