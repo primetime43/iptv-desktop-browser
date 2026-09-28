@@ -9,6 +9,7 @@
   <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
@@ -27,9 +28,13 @@
                     <TextBlock Grid.Column="0" Text="Video on Demand" Style="{StaticResource HeaderTextStyle}" />
                     <Button Grid.Column="1" x:Name="MoviesViewBtn" Content="Movies" Margin="32,0,8,0" Padding="12,6" Background="#223247" Foreground="#FFDDE6F2" BorderThickness="0" Command="{Binding Catalog.ShowMoviesCommand}" />
                     <Button Grid.Column="2" x:Name="SeriesViewBtn" Content="TV Series" Margin="0,0,16,0" Padding="12,6" Background="Transparent" Foreground="#9DB2C7" BorderThickness="0" Command="{Binding Catalog.ShowSeriesCommand}" />
-                    <ComboBox Grid.Column="3" x:Name="VodCategoryCombo" Height="32" Margin="16,0,16,0" DisplayMemberPath="CategoryName" SelectedValuePath="CategoryId" ItemsSource="{Binding Catalog.MovieCategoriesView}" Tag="Select category..." SelectionChanged="VodCategoryCombo_SelectionChanged" />
+                    <ComboBox Grid.Column="3" x:Name="VodCategoryCombo" Height="32" Margin="16,0,16,0" DisplayMemberPath="CategoryName" SelectedValuePath="CategoryId" ItemsSource="{Binding Catalog.MovieCategoriesView}" Tag="Select category..." SelectedValue="{Binding Catalog.SelectedMovieCategoryId, Mode=TwoWay}" Visibility="{Binding Catalog.IsMovies, Converter={StaticResource BoolToVisibilityConverter}}" />
+                    <ComboBox Grid.Column="3" x:Name="SeriesCategoryCombo" Height="32" Margin="16,0,16,0"
+                              DisplayMemberPath="CategoryName" SelectedValuePath="CategoryId" ItemsSource="{Binding Catalog.SeriesCategoriesView}"
+                              SelectedValue="{Binding Catalog.SelectedSeriesCategoryId, Mode=TwoWay}"
+                              Visibility="{Binding Catalog.IsSeries, Converter={StaticResource BoolToVisibilityConverter}}"/>
                     <Grid Grid.Column="4" Margin="0,0,16,0">
-                        <TextBox x:Name="VodSearchBox" Height="32" Margin="0,0,0,0" Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D" Padding="8,6" VerticalContentAlignment="Center" Text="{Binding VodSearchQuery, UpdateSourceTrigger=PropertyChanged}" Tag="Search movies and series..." />
+                        <TextBox x:Name="VodSearchBox" Height="32" Margin="0,0,0,0" Background="#21262D" Foreground="#FFDDE6F2" BorderBrush="#30363D" Padding="8,6" VerticalContentAlignment="Center" Text="{Binding Catalog.SearchQuery, UpdateSourceTrigger=PropertyChanged}" Tag="Search movies and series..." />
                         <TextBlock Text="Search movies and series..." IsHitTestVisible="False" Foreground="#667788" Margin="8,0,0,0" VerticalAlignment="Center">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock">
@@ -62,8 +67,20 @@
                     </StackPanel>
                 </Grid>
 
+                <StackPanel Grid.Row="1" Margin="16,8,16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding Catalog.MovieCountText}" Foreground="#9DB2C7" VerticalAlignment="Center" Visibility="{Binding Catalog.IsMovies, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <TextBlock Text="{Binding Catalog.SeriesCountText}" Foreground="#9DB2C7" VerticalAlignment="Center" Visibility="{Binding Catalog.IsSeries, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                        <Button Content="Retry loading" Command="{Binding Catalog.RetryCommand}" Visibility="{Binding Catalog.HasError, Converter={StaticResource BoolToVisibilityConverter}}" Margin="12,0,0,0" Padding="8,4"/>
+                        <TextBlock Text="Loading categories…" Foreground="#9DB2C7" Margin="12,0,0,0" VerticalAlignment="Center"
+                                   Visibility="{Binding Catalog.IsLoadingCategories, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding Catalog.MovieCategoriesError}" Foreground="#F88166" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding Catalog.SeriesCategoriesError}" Foreground="#F88166" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding Catalog.ErrorMessage}" Foreground="#F88166" TextWrapping="Wrap"/>
+                </StackPanel>
                 <!-- Content Area with Right Panel -->
-                <Grid Grid.Row="1" Margin="16">
+                <Grid Grid.Row="2" Margin="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="320" />
@@ -138,7 +155,7 @@
                             </ItemsControl>
 
                         <!-- Movies Loading Overlay -->
-                        <Grid x:Name="MoviesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                        <Grid x:Name="MoviesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}" Visibility="{Binding Catalog.IsLoadingMovies, Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <Grid Width="40" Height="40">
                                     <Ellipse Width="32" Height="32" Stroke="#347DFF" StrokeThickness="3" StrokeDashArray="50.26" RenderTransformOrigin="0.5,0.5">
@@ -218,7 +235,7 @@
                             </ItemsControl>
 
                         <!-- Series Loading Overlay -->
-                        <Grid x:Name="SeriesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                        <Grid x:Name="SeriesLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}" Visibility="{Binding Catalog.IsLoadingSeries, Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <Grid Width="40" Height="40">
                                     <Ellipse Width="32" Height="32" Stroke="#347DFF" StrokeThickness="3" StrokeDashArray="50.26" RenderTransformOrigin="0.5,0.5">

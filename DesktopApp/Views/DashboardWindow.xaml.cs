@@ -27,7 +27,7 @@ namespace DesktopApp.Views
     public partial class DashboardWindow : Window, INotifyPropertyChanged
     {
         public DashboardNavigationViewModel Navigation { get; } = new();
-        public LiveTvPageViewModel LiveTv { get; } = new();
+        public LiveTvPageViewModel LiveTv { get; }
         public MoviesSeriesPageViewModel Catalog { get; }
         public SchedulerPageViewModel SchedulerPageModel { get; }
         public SettingsPageViewModel SettingsPageModel { get; }
@@ -39,267 +39,42 @@ namespace DesktopApp.Views
         private readonly IChannelService _channelService;
         private readonly IVodService _vodService;
         private readonly ICacheService _cacheService;
-        private BulkObservableCollection<Category> _categories => LiveTv.Categories; public ObservableCollection<Category> Categories => _categories;
         private BulkObservableCollection<Channel> _channels => LiveTv.Channels; public ObservableCollection<Channel> Channels => _channels;
         private BulkObservableCollection<EpgEntry> _upcomingEntries => LiveTv.UpcomingPrograms; public ObservableCollection<EpgEntry> UpcomingEntries => _upcomingEntries;
 
         // VOD collections
-        private BulkObservableCollection<VodCategory> _vodCategories => Catalog.MovieCategories; public ObservableCollection<VodCategory> VodCategories => _vodCategories;
-        private BulkObservableCollection<VodContent> _vodContent => Catalog.Movies; public ObservableCollection<VodContent> VodContent => _vodContent;
-        private bool _hasVodAccess = false;
-        public bool HasVodAccess
-        {
-            get => _hasVodAccess;
-            set
-            {
-                if (value != _hasVodAccess)
-                {
-                    _hasVodAccess = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private bool _isLoadingVodContent { get => Catalog.IsLoadingMovies; set => Catalog.IsLoadingMovies = value; }
-        public bool IsLoadingVodContent
-        {
-            get => _isLoadingVodContent;
-            set
-            {
-                if (value != _isLoadingVodContent)
-                {
-                    _isLoadingVodContent = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private bool _isLoadingSeriesContent { get => Catalog.IsLoadingSeries; set => Catalog.IsLoadingSeries = value; }
-        public bool IsLoadingSeriesContent
-        {
-            get => _isLoadingSeriesContent;
-            set
-            {
-                if (value != _isLoadingSeriesContent)
-                {
-                    _isLoadingSeriesContent = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
+        public bool IsLoadingVodContent => Catalog.IsLoadingMovies;
+        public bool IsLoadingSeriesContent => Catalog.IsLoadingSeries;
 
         // Recording state
         private Process? _recordProcess;
         private string? _currentRecordingFile;
         private bool _recordStopping;
 
-        // All channels index (for efficient global search)
-        private List<Channel>? _allChannelsIndex;
-        private bool _allChannelsIndexLoading;
-        private bool _allChannelsIndexLoaded => _allChannelsIndex != null;
-
-        public bool IsSearchLoading => _allChannelsIndexLoading;
-
-        public ICollectionView CategoriesCollectionView { get; }
-        public ICollectionView ChannelsCollectionView { get; }
-        public ICollectionView VodContentCollectionView { get; }
-        public ICollectionView VodCategoriesCollectionView { get; }
-        public ICollectionView SeriesContentCollectionView { get; }
-        public ICollectionView SeriesCategoriesCollectionView { get; }
 
         // Expose RecordingManager singleton for XAML binding
         public RecordingManager RecordingManager => RecordingManager.Instance;
 
-        // Search
-        private CancellationTokenSource? _searchDebounceCts;
-        private static readonly TimeSpan GlobalSearchDebounce = TimeSpan.FromSeconds(3);
-        private string _searchQuery { get => LiveTv.SearchQuery; set => LiveTv.SearchQuery = value; }
-        public string SearchQuery
-        {
-            get => _searchQuery;
-            set
-            {
-                if (value != _searchQuery)
-                {
-                    _searchQuery = value;
-                    OnPropertyChanged();
-                    OnSearchQueryChanged();
-                }
-            }
-        }
-        private bool _searchAllChannels { get => LiveTv.SearchAllChannels; set => LiveTv.SearchAllChannels = value; }
-        public bool SearchAllChannels
-        {
-            get => _searchAllChannels;
-            set
-            {
-                if (value != _searchAllChannels)
-                {
-                    _searchAllChannels = value;
-                    OnPropertyChanged();
-                    OnSearchAllToggle();
-                }
-            }
-        }
-
-        private string _vodSearchQuery = string.Empty;
-        public string VodSearchQuery
-        {
-            get => _vodSearchQuery;
-            set
-            {
-                if (value != _vodSearchQuery)
-                {
-                    _vodSearchQuery = value;
-                    OnPropertyChanged();
-                    VodContentCollectionView.Refresh();
-                }
-            }
-        }
-
-        // Selection / binding props
-        private string _selectedCategoryName = string.Empty;
-        public string SelectedCategoryName
-        {
-            get => _selectedCategoryName;
-            set
-            {
-                if (value != _selectedCategoryName)
-                {
-                    _selectedCategoryName = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private string _categoriesCountText = string.Empty;
-        public string CategoriesCountText
-        {
-            get => _categoriesCountText;
-            set
-            {
-                if (value != _categoriesCountText)
-                {
-                    _categoriesCountText = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private string _channelsCountText = "0 channels";
-        public string ChannelsCountText
-        {
-            get => _channelsCountText;
-            set
-            {
-                if (value != _channelsCountText)
-                {
-                    _channelsCountText = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private string _vodCountText = "0 movies";
-        public string VodCountText
-        {
-            get => _vodCountText;
-            set
-            {
-                if (value != _vodCountText)
-                {
-                    _vodCountText = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private string _seriesCountText = "0 series";
-        public string SeriesCountText
-        {
-            get => _seriesCountText;
-            set
-            {
-                if (value != _seriesCountText)
-                {
-                    _seriesCountText = value;
-                    OnPropertyChanged();
-                }
-            }
-        }
-
-        private string _selectedVodCategoryId { get => Catalog.SelectedMovieCategoryId; set => Catalog.SelectedMovieCategoryId = value; }
-        public string SelectedVodCategoryId
-        {
-            get => _selectedVodCategoryId;
-            set
-            {
-                if (value != _selectedVodCategoryId)
-                {
-                    _selectedVodCategoryId = value;
-                    OnPropertyChanged();
-                    OnVodCategoryChanged();
-                }
-            }
-        }
-
         public VodContent? SelectedVodContent => Catalog.SelectedMovie;
-
-        // Series collections
-        private BulkObservableCollection<SeriesCategory> _seriesCategories => Catalog.SeriesCategories; public ObservableCollection<SeriesCategory> SeriesCategories => _seriesCategories;
-        private BulkObservableCollection<SeriesContent> _seriesContent => Catalog.Series; public ObservableCollection<SeriesContent> SeriesContent => _seriesContent;
-
-        private string _selectedSeriesCategoryId { get => Catalog.SelectedSeriesCategoryId; set => Catalog.SelectedSeriesCategoryId = value; }
-        public string SelectedSeriesCategoryId
-        {
-            get => _selectedSeriesCategoryId;
-            set
-            {
-                if (value != _selectedSeriesCategoryId)
-                {
-                    _selectedSeriesCategoryId = value;
-                    OnPropertyChanged();
-                    OnSeriesCategoryChanged();
-                }
-            }
-        }
-
         public SeriesContent? SelectedSeriesContent => Catalog.SelectedSeries;
+        public Channel? SelectedChannel { get => LiveTv.SelectedChannel; set => LiveTv.SelectedChannel = value; }
 
-        private Channel? _selectedChannel { get => LiveTv.SelectedChannel; set => LiveTv.SelectedChannel = value; }
-        public Channel? SelectedChannel
+        private void OnLiveSelectionChanged()
         {
-            get => _selectedChannel;
-            set
+            OnPropertyChanged(nameof(SelectedChannel));
+            SelectedChannelName = SelectedChannel?.Name ?? string.Empty;
+            if (SelectedChannel is { } channel && Session.Mode == SessionMode.M3u)
             {
-                if (value == _selectedChannel)
-                    return;
-
-                _selectedChannel = value;
-                OnPropertyChanged();
-                SelectedChannelName = value?.Name ?? string.Empty;
-
-                if (value != null)
-                {
-                    if (Session.Mode == SessionMode.Xtream)
-                    {
-                        RefreshCatalogResources();
-                    }
-                    else
-                    {
-                        UpdateChannelEpgFromXmltv(value);
-                        LoadUpcomingFromXmltv(value);
-                    }
-                }
-                else
-                {
-                    _upcomingEntries.Clear();
-                    NowProgramText = string.Empty;
-                    RefreshCatalogResources();
-                }
+                UpdateChannelEpgFromXmltv(channel);
+                LoadUpcomingFromXmltv(channel);
             }
+            else if (SelectedChannel == null)
+            {
+                _upcomingEntries.Clear();
+                NowProgramText = string.Empty;
+            }
+            RefreshCatalogResources();
         }
-
         private string _selectedChannelName = string.Empty;
         public string SelectedChannelName
         {
@@ -332,10 +107,6 @@ namespace DesktopApp.Views
         private bool _logoutRequested;
         private bool _isClosing;
         private readonly CancellationTokenSource _cts = new();
-        private LatestRequestLoader _categoryLoader => LiveTv.CategoryRequests;
-        private LatestRequestLoader _globalSearchLoader => LiveTv.SearchRequests;
-        private LatestRequestLoader _vodCategoryLoader => Catalog.MovieRequests;
-        private LatestRequestLoader _seriesCategoryLoader => Catalog.SeriesRequests;
         private bool IsSeriesCatalog => Catalog.ContentType == CatalogContentType.Series;
 
         // Buffer for log messages during startup before UI is ready
@@ -524,6 +295,7 @@ namespace DesktopApp.Views
                     new Dashboard.RecordingFormInteraction(() => this)),
                 new RecordingManagementViewModel(new RecordingManagementService(_scheduler),
                     new Dashboard.RecordingManagementInteraction(() => this)));
+            LiveTv = new LiveTvPageViewModel(new LiveCatalogSource(_channelService, _http));
             Catalog = new MoviesSeriesPageViewModel(_vodService);
             Catalog.Details.MoviePlaybackRequested += TryLaunchVodInPlayer;
             Catalog.Details.EpisodePlaybackRequested += TryLaunchEpisodeInPlayer;
@@ -550,8 +322,21 @@ namespace DesktopApp.Views
                     return;
                 }
                 if (e.PropertyName != nameof(Catalog.ContentType)) return;
-                CancelVodRequests();
+
                 ApplyCatalogView();
+            };
+            LiveTv.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(LiveTv.SelectedChannel)) OnLiveSelectionChanged();
+            };
+            LiveTv.LoadFailed += error => Log($"ERROR loading live catalog: {error.Message}\n");
+            Catalog.LoadFailed += error => Log($"ERROR loading movie/series catalog: {error.Message}\n");
+            LiveTv.ResourceDemandChanged += RefreshCatalogResources;
+            Catalog.ResourceDemandChanged += RefreshCatalogResources;
+            LiveTv.ChannelsLoaded += () =>
+            {
+                if (Session.Mode == SessionMode.M3u) UpdateChannelsEpgFromXmltvBatch(LiveTv.Channels);
+                UpdateChannelRecordingStatus();
             };
             // User name display removed in new layout
 
@@ -562,16 +347,6 @@ namespace DesktopApp.Views
             _scheduler.EpgRefreshNeeded += OnEpgRefreshNeeded;
             _scheduler.RecordingFailed += OnScheduledRecordingFailed;
 
-            CategoriesCollectionView = LiveTv.CategoriesView;
-            ChannelsCollectionView = LiveTv.ChannelsView;
-            VodContentCollectionView = Catalog.MoviesView;
-            VodCategoriesCollectionView = Catalog.MovieCategoriesView;
-            SeriesContentCollectionView = Catalog.SeriesView;
-            SeriesCategoriesCollectionView = Catalog.SeriesCategoriesView;
-            CategoriesCollectionView.Filter = CategoriesFilter;
-            ChannelsCollectionView.Filter = ChannelsFilter;
-            VodContentCollectionView.Filter = VodContentFilter;
-            SeriesContentCollectionView.Filter = SeriesContentFilter;
 
             LastEpgUpdateText = Session.LastEpgUpdateUtc.HasValue
                 ? Session.LastEpgUpdateUtc.Value.ToLocalTime().ToString("g")
@@ -588,7 +363,7 @@ namespace DesktopApp.Views
             // Initialize tile size ComboBoxes with default selection
             SetTileSizeSelection(CurrentTileSize);
 
-            Loaded += async (_, __) =>
+            Loaded += (_, __) =>
             {
                 try
                 {
@@ -605,14 +380,10 @@ namespace DesktopApp.Views
                     {
                         _nextScheduledEpgRefreshUtc = DateTime.UtcNow + Session.EpgRefreshInterval;
                         _ = RunEpgSchedulerLoopAsync();
-                        await LoadCategoriesAsync();
+
                         // VOD and Series categories will be loaded on-demand when user navigates to those sections
                     }
-                    else
-                    {
-                        await LoadCategoriesFromPlaylistAsync();
-                        await BuildPlaylistAllChannelsIndexAsync();
-                    }
+
                 }
                 catch (Exception ex)
                 {
@@ -957,13 +728,13 @@ namespace DesktopApp.Views
         protected override void OnClosed(EventArgs e)
         {
             SchedulerPageModel.Dispose();
-            _globalSearchLoader.Cancel();
-            CancelVodRequests();
+            LiveTv.Dispose();
+            Catalog.Dispose();
             StopCatalogLoading();
             _scheduler.RecordingFailed -= OnScheduledRecordingFailed;
             _scheduler.EpgRefreshNeeded -= OnEpgRefreshNeeded;
             try { StopRecording(); } catch { }
-            CancelDebounce(); _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; Session.FavoritesChanged -= OnFavoritesChanged; RecordingManager.Instance.PropertyChanged -= OnRecordingManagerChanged; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
+            _isClosing = true; _cts.Cancel(); base.OnClosed(e); _cts.Dispose(); Session.EpgRefreshRequested -= OnEpgRefreshRequested; Session.M3uEpgUpdated -= OnM3uEpgUpdated; Session.FavoritesChanged -= OnFavoritesChanged; RecordingManager.Instance.PropertyChanged -= OnRecordingManagerChanged; if (!_logoutRequested) { if (Owner is MainWindow mw) { try { mw.Close(); } catch { } } Application.Current.Shutdown(); }
         }
 
         private void OnRecordingManagerChanged(object? sender, PropertyChangedEventArgs e)
@@ -999,16 +770,7 @@ namespace DesktopApp.Views
                 channel.IsRecording = (recordingChannelId.HasValue && channel.Id == recordingChannelId.Value);
             }
 
-            // Also update all channels index if loaded
-            if (_allChannelsIndex != null)
-            {
-                foreach (var channel in _allChannelsIndex)
-                {
-                    channel.IsRecording = (recordingChannelId.HasValue && channel.Id == recordingChannelId.Value);
-                }
-            }
         }
-
 
         internal void ChannelTile_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
@@ -1372,27 +1134,11 @@ namespace DesktopApp.Views
             LoadFavoritesPage();
         }
 
-        private async void NavigateToVod(object sender, RoutedEventArgs e)
+        private void NavigateToVod(object sender, RoutedEventArgs e)
         {
             ShowPage(DashboardPage.Vod);
             SetSelectedNavButton(sender as Button);
-
-            // Load VOD categories if not already loaded
-            if (_vodCategories.Count == 0 && Session.Mode == SessionMode.Xtream)
-            {
-                await LoadVodCategoriesAsync();
-                await LoadSeriesCategoriesAsync();
-            }
-
-            // Leaving the page cancels pending catalogs. Resume a still-selected category
-            // when returning, even if the picker did not raise another selection event.
-            if (_isClosing || _cts.IsCancellationRequested || Navigation.ActivePage != DashboardPage.Vod) return;
-            if (IsSeriesCatalog && !IsLoadingSeriesContent && _seriesContent.Count == 0 && !string.IsNullOrEmpty(SelectedSeriesCategoryId))
-                await LoadSeriesContentAsync(SelectedSeriesCategoryId);
-            else if (!IsSeriesCatalog && !IsLoadingVodContent && _vodContent.Count == 0 && !string.IsNullOrEmpty(SelectedVodCategoryId))
-                await LoadVodContentAsync(SelectedVodCategoryId);
         }
-
         private void NavigateToRecording(object sender, RoutedEventArgs e)
         {
             ShowPage(DashboardPage.Recording);
@@ -1463,7 +1209,10 @@ namespace DesktopApp.Views
             var page = Navigation.ActivePage;
             if (page == DashboardPage.Scheduler) InitializeScheduler();
             else SchedulerPageModel.NewRecording.Deactivate();
-            if (page != DashboardPage.Vod) CancelVodRequests();
+            if (page == DashboardPage.LiveTv) _ = LiveTv.ActivateAsync();
+            else LiveTv.Deactivate();
+            if (page == DashboardPage.Vod && Session.Mode == SessionMode.Xtream) _ = Catalog.ActivateAsync();
+            else Catalog.Deactivate();
 
             // Hide all pages
             if (FindDashboardElement("LiveTvPage") is FrameworkElement liveTvPage) liveTvPage.Visibility = Visibility.Collapsed;
@@ -1590,22 +1339,6 @@ namespace DesktopApp.Views
             }
         }
 
-        internal async void CategoryCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            if (sender is ComboBox combo && combo.SelectedItem is Category category)
-            {
-                await LoadChannelsForCategoryAsync(category);
-            }
-            else
-            {
-                CancelCategoryLoad();
-                _channels.Clear();
-                ChannelsCountText = "0 channels";
-                SelectedChannel = null;
-            }
-        }
-
-
         private void LoadFavoritesPage()
         {
             try
@@ -1693,18 +1426,7 @@ namespace DesktopApp.Views
             }
         }
 
-        private void UpdateChannelsFavoriteStatus()
-        {
-            // Optimize: Get all favorites once instead of reading file for each channel
-            var favoriteChannels = Session.GetFavoriteChannels();
-            var favoriteIds = favoriteChannels.Select(f => f.Id).ToHashSet();
-
-            // Update IsFavorite property for all loaded channels
-            foreach (var channel in _channels)
-            {
-                channel.IsFavorite = favoriteIds.Contains(channel.Id);
-            }
-        }
+        private void UpdateChannelsFavoriteStatus() => LiveTv.RefreshFavorites();
 
         private void OnFavoritesChanged()
         {

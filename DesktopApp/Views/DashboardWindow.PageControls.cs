@@ -14,7 +14,6 @@ public partial class DashboardWindow
     private ItemsControl MoviesListView => (ItemsControl)VodPage.FindName("MoviesListView");
     private ItemsControl SeriesGridView => (ItemsControl)VodPage.FindName("SeriesGridView");
     private ItemsControl SeriesListView => (ItemsControl)VodPage.FindName("SeriesListView");
-    private ComboBox CategoryCombo => (ComboBox)LiveTvPage.FindName("CategoryCombo");
     private ItemsControl ChannelsGridView => (ItemsControl)LiveTvPage.FindName("ChannelsGridView");
     private ItemsControl ChannelsListView => (ItemsControl)LiveTvPage.FindName("ChannelsListView");
 }

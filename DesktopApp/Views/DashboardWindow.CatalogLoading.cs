@@ -60,10 +60,18 @@ public partial class DashboardWindow
         };
         foreach (var name in controls)
         {
+            if (name.StartsWith("Channels") && LiveTv.IsLoadingChannels) continue;
             if ((name.StartsWith("Movies") && IsLoadingVodContent) || (name.StartsWith("Series") && IsLoadingSeriesContent)) continue;
-            if (FindDashboardElement(name) is ItemsControl control) items.AddRange(CatalogViewport.Read(control));
+            if (FindDashboardElement(name) is ItemsControl control)
+                items.AddRange(CatalogViewport.Read(control).Where(i => Navigation.ActivePage == DashboardPage.Favorites || i.Item switch
+                {
+                    Channel channel => LiveTv.ChannelsView.Contains(channel),
+                    VodContent movie => Catalog.MoviesView.Contains(movie),
+                    SeriesContent series => Catalog.SeriesView.Contains(series),
+                    _ => false
+                }));
         }
-        if (Navigation.ActivePage == DashboardPage.LiveTv && SelectedChannel != null)
+        if (Navigation.ActivePage == DashboardPage.LiveTv && !LiveTv.IsLoadingChannels && SelectedChannel != null)
             AddSelected(SelectedChannel);
         if (Navigation.ActivePage == DashboardPage.Vod && !IsSeriesCatalog && !IsLoadingVodContent && SelectedVodContent != null)
             AddSelected(SelectedVodContent);

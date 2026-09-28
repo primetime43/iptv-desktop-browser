@@ -9,13 +9,14 @@
   <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <!-- Page Header -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="16,16,16,0">
                     <TextBlock Text="Live TV" Style="{StaticResource HeaderTextStyle}" />
-                    <ComboBox x:Name="CategoryCombo" Width="200" Height="32" Margin="32,0,16,0" DisplayMemberPath="Name" SelectedValuePath="Id" ItemsSource="{Binding LiveTv.CategoriesView}" Tag="Select category..." SelectionChanged="CategoryCombo_SelectionChanged" Background="#21262D" BorderBrush="#30363D" />
+                    <ComboBox x:Name="CategoryCombo" Width="200" Height="32" Margin="32,0,16,0" DisplayMemberPath="Name" SelectedValuePath="Id" ItemsSource="{Binding LiveTv.CategoriesView}" Tag="Select category..." SelectedItem="{Binding LiveTv.SelectedCategory, Mode=TwoWay}" Background="#21262D" BorderBrush="#30363D" />
 
                     <!-- View Mode Toggle Buttons -->
                     <StackPanel Orientation="Horizontal" Margin="16,0,0,0">
@@ -35,8 +36,18 @@
                     </StackPanel>
                 </StackPanel>
 
+                <StackPanel Grid.Row="1" Margin="16,8,16,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding LiveTv.ChannelsCountText}" Foreground="#9DB2C7" VerticalAlignment="Center"/>
+                        <Button Content="Retry loading" Command="{Binding LiveTv.RetryCommand}" Visibility="{Binding LiveTv.HasError, Converter={StaticResource BoolToVisibilityConverter}}" Margin="12,0,0,0" Padding="8,4"/>
+                        <TextBlock Text="Loading categories…" Foreground="#9DB2C7" Margin="12,0,0,0" VerticalAlignment="Center"
+                                   Visibility="{Binding LiveTv.IsLoadingCategories, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding LiveTv.CategoriesError}" Foreground="#F88166" TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding LiveTv.ErrorMessage}" Foreground="#F88166" TextWrapping="Wrap"/>
+                </StackPanel>
                 <!-- Content Area -->
-                <Grid Grid.Row="1" Margin="16">
+                <Grid Grid.Row="2" Margin="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="320" />
@@ -274,7 +285,7 @@
                             </ItemsControl>
 
                         <!-- Channels Loading Overlay -->
-                        <Grid x:Name="ChannelsLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}">
+                        <Grid x:Name="ChannelsLoadingOverlay" Style="{StaticResource LoadingOverlayStyle}" Visibility="{Binding LiveTv.IsLoadingChannels, Converter={StaticResource BoolToVisibilityConverter}}">
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <Grid Width="40" Height="40">
                                     <Ellipse Width="32" Height="32" Stroke="#347DFF" StrokeThickness="3" StrokeDashArray="50.26" RenderTransformOrigin="0.5,0.5">
@@ -297,7 +308,7 @@
                                 <Border Background="#182433" CornerRadius="6" BorderBrush="#223247" BorderThickness="1" Padding="8" Margin="0,0,0,16">
                                     <StackPanel>
                                         <Grid>
-                                            <TextBox x:Name="ChannelSearchBox" Height="32" Margin="0,0,0,4" BorderThickness="0" Background="#0E1620" Foreground="#DDE6F2" Padding="6,4" VerticalContentAlignment="Center" Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search by channel number, name, or program title" />
+                                            <TextBox x:Name="ChannelSearchBox" Height="32" Margin="0,0,0,4" BorderThickness="0" Background="#0E1620" Foreground="#DDE6F2" Padding="6,4" VerticalContentAlignment="Center" Text="{Binding LiveTv.SearchQuery, UpdateSourceTrigger=PropertyChanged}" ToolTip="Search by channel number, name, or program title" />
                                             <TextBlock Text="Search by number or name..." IsHitTestVisible="False" Foreground="#667788" Margin="6,4,0,4" VerticalAlignment="Center">
                                                 <TextBlock.Style>
                                                     <Style TargetType="TextBlock">
@@ -317,7 +328,7 @@
                                                     <Style TargetType="StackPanel">
                                                         <Setter Property="Visibility" Value="Collapsed" />
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsSearchLoading}" Value="True">
+                                                            <DataTrigger Binding="{Binding LiveTv.IsSearchLoading}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible" />
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -340,7 +351,7 @@
                                                 <TextBlock Text="Searching..." FontSize="10" Foreground="#347DFF" Margin="6,0,0,0" VerticalAlignment="Center" />
                                             </StackPanel>
                                         </Grid>
-                                        <CheckBox Content="Search All Channels" Margin="0,8,0,0" VerticalAlignment="Center" Foreground="#DDE6F2" IsChecked="{Binding SearchAllChannels}" ToolTip="Search across all channels" />
+                                        <CheckBox Content="Search All Channels" Margin="0,8,0,0" VerticalAlignment="Center" Foreground="#DDE6F2" IsChecked="{Binding LiveTv.SearchAllChannels}" ToolTip="Search across all channels" />
                                     </StackPanel>
                                 </Border>
 

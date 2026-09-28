@@ -12,7 +12,7 @@ internal static partial class Program
 {
     private static void VerifyExtractedPages(Application app)
     {
-        var live = new LiveTvPageViewModel();
+        var live = new LiveTvPageViewModel(new CatalogLiveSource());
         var catalog = new MoviesSeriesPageViewModel(new DetailsVodService());
         var scheduler = CreateRecordingFixture().Page;
         var settings = CreateSettingsFixture().Model;
