@@ -11,6 +11,7 @@ internal static partial class Program
     private static void VerifyCatalogOrchestration()
     {
         VerifyLiveCatalogOrchestration();
+        VerifyFavoriteCatalogUpdates();
         VerifyVodCatalogOrchestration();
         VerifyCatalogPickerBindings();
         VerifyCatalogSource();
@@ -89,6 +90,77 @@ internal static partial class Program
         delayed.SearchQuery = "close";
         var closing = delayed.LoadTask; delayed.Dispose(); AwaitSettings(closing);
         Check(!delayed.IsSearchLoading && delayedSource.Indexes.Count == 0, "Disposal cancels pending search and blocks background index creation");
+    }
+
+    private static void VerifyFavoriteCatalogUpdates()
+    {
+        var source = new CatalogLiveSource();
+        using var live = new LiveTvPageViewModel(source, TimeSpan.Zero);
+        var favorites = new Category { Id = LiveCatalogSource.FavoritesId, Name = "Favorites" };
+        var one = new Channel { Id = 1, Number = 1, Name = "One" };
+        var two = new Channel { Id = 2, Number = 2, Name = "Two" };
+        source.Favorites.UnionWith([1, 2]);
+        AwaitSettings(live.ActivateAsync());
+        live.SelectedCategory = favorites;
+        source.Channels.Last().Complete([one, two]); AwaitSettings(live.LoadTask);
+        live.SelectedChannel = live.Channels[0];
+        live.UpcomingPrograms.Add(new EpgEntry { Title = "Selected guide" });
+
+        source.Favorites.Remove(1);
+        live.RefreshFavorites();
+        Check(source.Channels.Count == 2, "Removing a favorite reloads Favorites membership, not just its star");
+        Check(live.SelectedChannel == null && live.UpcomingPrograms.Count == 0,
+            "Removing the selected favorite clears its selection and guide");
+        source.Channels.Last().Complete([two]); AwaitSettings(live.LoadTask);
+        Check(live.Channels.Single().Id == 2 && live.ChannelsCountText == "1 favorite channels",
+            "Favorites rows and count reflect removals");
+
+        source.Favorites.Add(1);
+        live.RefreshFavorites();
+        var stale = source.Channels.Last(); var staleTask = live.LoadTask;
+        source.Favorites.Clear();
+        live.RefreshFavorites();
+        source.Channels.Last().Complete([]); AwaitSettings(live.LoadTask);
+        stale.Complete([one, two]); AwaitSettings(staleTask);
+        Check(stale.Token.IsCancellationRequested && live.Channels.Count == 0 && !live.IsLoadingChannels,
+            "Rapid favorite edits reject an older snapshot even when cancellation is ignored");
+
+        live.Deactivate();
+        var calls = source.Channels.Count;
+        source.Favorites.Add(1);
+        live.RefreshFavorites();
+        Check(source.Channels.Count == calls, "Favorites changes on another page do not start hidden catalog loads");
+        var returning = live.ActivateAsync();
+        Check(source.Channels.Count == calls + 1, "Returning reloads the invalidated Favorites category, including cached empty lists");
+        source.Channels.Last().Complete([one]); AwaitSettings(returning);
+        Check(live.Channels.Single().Id == 1, "Favorites added while away appear on return");
+
+        live.SearchAllChannels = true;
+        live.SearchQuery = "Two";
+        source.Indexes.Last().Complete([one, two]); AwaitSettings(live.LoadTask);
+        var searchRow = live.Channels.Single();
+        live.SelectedChannel = searchRow;
+        source.Favorites.Add(2);
+        calls = source.Channels.Count;
+        live.RefreshFavorites();
+        Check(source.Channels.Count == calls && source.Indexes.Count == 1 && searchRow.IsFavorite && live.SelectedChannel == searchRow,
+            "Editing favorites during global search updates stars without restarting search or replacing selection");
+        live.SearchQuery = "";
+        Check(source.Channels.Count == calls + 1, "Clearing global search reloads changed Favorites membership");
+        source.Channels.Last().Complete([one, two]); AwaitSettings(live.LoadTask);
+        Check(live.Channels.Select(c => c.Id).SequenceEqual([1, 2]), "Restored Favorites includes items added during global search");
+
+        live.SearchAllChannels = false;
+        live.SelectedCategory = new Category { Id = "ordinary" };
+        source.Channels.Last().Complete([one, two]); AwaitSettings(live.LoadTask);
+        calls = source.Channels.Count;
+        source.Favorites.Remove(2);
+        live.RefreshFavorites();
+        Check(source.Channels.Count == calls && live.Channels.Count == 2 && !live.Channels.Single(c => c.Id == 2).IsFavorite,
+            "Ordinary categories update stars without downloading or removing channels");
+        live.Dispose();
+        live.RefreshFavorites();
+        Check(source.Channels.Count == calls, "Late favorites notifications cannot restart a disposed page");
     }
 
     private static void VerifyVodCatalogOrchestration()

@@ -169,13 +169,30 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
         if (!Channels.SequenceEqual(channels)) { SelectedChannel = null; Channels.ReplaceAll(channels); }
         else ChannelsView.Refresh();
         if (SelectedChannel != null && !ChannelsView.Contains(SelectedChannel)) SelectedChannel = null;
-        RefreshFavorites();
+        UpdateFavoriteFlags();
         RefreshCount();
         ChannelsLoaded?.Invoke();
         ResourceDemandChanged?.Invoke();
     }
     private void RefreshCount() => OnPropertyChanged(nameof(ChannelsCountText));
     public void RefreshFavorites()
+    {
+        if (_disposed) return;
+        UpdateFavoriteFlags();
+
+        // Favorites is a dynamic catalog. A cached list (including an empty one)
+        // becomes obsolete when membership changes, even while another page or
+        // global search is visible. Other categories only need their stars updated.
+        if (_loadedCategory?.Id == LiveCatalogSource.FavoritesId)
+        {
+            _loadedCategory = null;
+            _categoryChannels = null;
+        }
+        if (IsActive && !IsGlobalSearchActive && SelectedCategory?.Id == LiveCatalogSource.FavoritesId)
+            LoadTask = LoadContentAsync(false, true);
+    }
+
+    private void UpdateFavoriteFlags()
     {
         var ids = _source.GetFavoriteIds();
         foreach (var channel in Channels) channel.IsFavorite = ids.Contains(channel.Id);
