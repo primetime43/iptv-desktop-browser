@@ -9,7 +9,7 @@ using DesktopApp.Models;
 using DesktopApp.Services;
 using Microsoft.Extensions.Logging.Abstractions;
 
-internal static class Program
+internal static partial class Program
 {
     private static int _passed;
     [STAThread]
@@ -113,6 +113,8 @@ internal static class Program
         }
 
         await VerifyResources();
+        await VerifySelectedDetails();
+        await VerifySelectedGuide();
         await VerifyBackoffAndAccounts();
         await VerifyMemoryImages();
     }

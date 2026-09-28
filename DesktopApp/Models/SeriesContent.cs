@@ -264,6 +264,17 @@ public class SeriesContent : IWatchableContent
         }
     }
 
+    public void ApplyDetails(SeriesContent details)
+    {
+        Plot = details.Plot ?? Plot;
+        Cast = details.Cast ?? Cast;
+        Director = details.Director ?? Director;
+        Genre = details.Genre ?? Genre;
+        Rating = details.Rating ?? Rating;
+        Seasons = details.Seasons;
+        DetailsLoaded = true;
+    }
+
     // Helper properties for display
     public string DisplayTitle => Name;
     public string DisplayGenre => Genre ?? "Unknown";

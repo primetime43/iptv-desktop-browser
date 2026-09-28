@@ -238,6 +238,30 @@ public class VodContent : IWatchableContent
         }
     }
 
+    public void ApplyDetails(VodContent details)
+    {
+        Name = string.IsNullOrEmpty(details.Name) ? Name : details.Name;
+        Plot = details.Plot ?? Plot;
+        Cast = details.Cast ?? Cast;
+        Director = details.Director ?? Director;
+        Genre = details.Genre ?? Genre;
+        ReleaseDate = details.ReleaseDate ?? ReleaseDate;
+        Rating = details.Rating ?? Rating;
+        Duration = details.Duration ?? Duration;
+        Country = details.Country ?? Country;
+        Backdrop = details.Backdrop;
+        Trailer = details.Trailer;
+        TmdbId = details.TmdbId;
+        ImdbId = details.ImdbId;
+        Language = details.Language;
+        BitRate = details.BitRate;
+        VideoCodec = details.VideoCodec;
+        AudioCodec = details.AudioCodec;
+        Played = details.Played ?? Played;
+        Views = details.Views ?? Views;
+        DetailsLoaded = true;
+    }
+
     // Helper properties for display
     public string DisplayTitle => Name;
     public string DisplayGenre => Genre ?? "Unknown";

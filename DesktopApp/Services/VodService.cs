@@ -52,39 +52,14 @@ public partial class VodService : IVodService
         var details = await LoadCachedAsync("get_vod_info", [("vod_id", content.Id.ToString())], TimeSpan.FromHours(2),
             root => ParseVodDetails(root, content.Id), cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        content.Name = string.IsNullOrEmpty(details.Name) ? content.Name : details.Name;
-        content.Plot = details.Plot ?? content.Plot;
-        content.Cast = details.Cast ?? content.Cast;
-        content.Director = details.Director ?? content.Director;
-        content.Genre = details.Genre ?? content.Genre;
-        content.ReleaseDate = details.ReleaseDate ?? content.ReleaseDate;
-        content.Rating = details.Rating ?? content.Rating;
-        content.Duration = details.Duration ?? content.Duration;
-        content.Country = details.Country ?? content.Country;
-        content.Backdrop = details.Backdrop;
-        content.Trailer = details.Trailer;
-        content.TmdbId = details.TmdbId;
-        content.ImdbId = details.ImdbId;
-        content.Language = details.Language;
-        content.BitRate = details.BitRate;
-        content.VideoCodec = details.VideoCodec;
-        content.AudioCodec = details.AudioCodec;
-        content.Played = details.Played ?? content.Played;
-        content.Views = details.Views ?? content.Views;
-        content.DetailsLoaded = true;
+        content.ApplyDetails(details);
     }
 
     public async Task LoadSeriesDetailsAsync(SeriesContent content, CancellationToken cancellationToken = default)
     {
         var details = await LoadSeriesInfoAsync(content.Id.ToString(), cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        content.Plot = details.Plot ?? content.Plot;
-        content.Cast = details.Cast ?? content.Cast;
-        content.Director = details.Director ?? content.Director;
-        content.Genre = details.Genre ?? content.Genre;
-        content.Rating = details.Rating ?? content.Rating;
-        content.Seasons = details.Seasons;
-        content.DetailsLoaded = true;
+        content.ApplyDetails(details);
     }
 
     public async Task<List<EpisodeContent>> LoadEpisodesAsync(string seriesId, CancellationToken cancellationToken = default) =>

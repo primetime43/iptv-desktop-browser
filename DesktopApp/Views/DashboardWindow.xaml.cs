@@ -244,6 +244,7 @@ namespace DesktopApp.Views
             {
                 if (value != _selectedVodContent)
                 {
+                    _detailsLoader.Cancel();
                     _selectedVodContent = value;
                     OnPropertyChanged();
                     if (value != null)
@@ -281,6 +282,7 @@ namespace DesktopApp.Views
             {
                 if (value != _selectedSeriesContent)
                 {
+                    _detailsLoader.Cancel();
                     _selectedSeriesContent = value;
                     OnPropertyChanged();
                     if (value != null)
@@ -320,6 +322,7 @@ namespace DesktopApp.Views
                 {
                     _upcomingEntries.Clear();
                     NowProgramText = string.Empty;
+                    RefreshCatalogResources();
                 }
             }
         }
@@ -359,6 +362,7 @@ namespace DesktopApp.Views
         private readonly LatestRequestLoader _categoryLoader = new();
         private readonly LatestRequestLoader _vodCategoryLoader = new();
         private readonly LatestRequestLoader _seriesCategoryLoader = new();
+        private readonly SelectedDetailsLoader _detailsLoader = new();
         private bool _showingSeriesCatalog;
 
         // Buffer for log messages during startup before UI is ready
@@ -1471,6 +1475,7 @@ namespace DesktopApp.Views
         // modify existing OnClosed (search and replace previous implementation) - keep rest of file intact
         protected override void OnClosed(EventArgs e)
         {
+            CancelVodRequests();
             StopCatalogLoading();
             _scheduler.RecordingFailed -= OnScheduledRecordingFailed;
             _scheduler.EpgRefreshNeeded -= OnEpgRefreshNeeded;
@@ -1721,6 +1726,18 @@ namespace DesktopApp.Views
             }
         }
 
+        private void CancelVodRequests()
+        {
+            _vodCategoryLoader.Cancel();
+            _seriesCategoryLoader.Cancel();
+            _detailsLoader.Cancel();
+            IsLoadingVodContent = false;
+            IsLoadingSeriesContent = false;
+            HideLoadingOverlay("MoviesLoadingOverlay");
+            HideLoadingOverlay("SeriesLoadingOverlay");
+            ClearVodDetailsPanel();
+        }
+
         private async Task LoadVodContentAsync(string categoryId)
         {
             if (Session.Mode != SessionMode.Xtream || string.IsNullOrEmpty(categoryId)) return;
@@ -1761,14 +1778,14 @@ namespace DesktopApp.Views
                 IsLoadingVodContent = false;
                 HideLoadingOverlay("MoviesLoadingOverlay");
                 ScheduleCatalogRefresh();
-            }, () => SelectedVodCategoryId == categoryId, _cts.Token);
+            }, () => !_showingSeriesCatalog && SelectedVodCategoryId == categoryId, _cts.Token);
         }
 
         private void OnVodCategoryChanged()
         {
             _vodCategoryLoader.Cancel();
             _vodContent.Clear();
-            SelectedVodContent = null;
+            ClearVodDetailsPanel();
             VodCountText = "0 movies";
             if (!string.IsNullOrEmpty(SelectedVodCategoryId))
             {
@@ -1787,7 +1804,7 @@ namespace DesktopApp.Views
         {
             _seriesCategoryLoader.Cancel();
             _seriesContent.Clear();
-            SelectedSeriesContent = null;
+            ClearVodDetailsPanel();
             SeriesCountText = "0 series";
             if (!string.IsNullOrEmpty(SelectedSeriesCategoryId))
             {
@@ -1836,29 +1853,18 @@ namespace DesktopApp.Views
             {
                 IsLoadingSeriesContent = false;
                 ScheduleCatalogRefresh();
-            }, () => SelectedSeriesCategoryId == categoryId, _cts.Token);
+            }, () => _showingSeriesCatalog && SelectedSeriesCategoryId == categoryId, _cts.Token);
         }
 
 
-        private async Task LoadSeriesDetailsAsync(SeriesContent series)
+        private Task LoadSeriesDetailsAsync(SeriesContent content)
         {
-            if (series.DetailsLoaded || series.DetailsLoading) return;
-
-            try
-            {
-                series.DetailsLoading = true;
-                await _vodService.LoadSeriesDetailsAsync(series, _cts.Token);
-            }
-
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                Log($"ERROR loading series details for {series.Name}: {ex.Message}\n");
-            }
-            finally
-            {
-                series.DetailsLoading = false;
-            }
+            if (Session.Mode != SessionMode.Xtream) return Task.CompletedTask;
+            return _detailsLoader.LoadAsync(content,
+                (snapshot, token) => _vodService.LoadSeriesDetailsAsync(snapshot, token),
+                (target, details) => target.ApplyDetails(details),
+                ex => Log($"ERROR loading details: {ex.Message}\n"),
+                () => _showingSeriesCatalog && ReferenceEquals(content, SelectedSeriesContent), _cts.Token);
         }
 
         private void VodCategory_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1901,26 +1907,14 @@ namespace DesktopApp.Views
             }
         }
 
-        private async Task LoadVodDetailsAsync(VodContent vod)
+        private Task LoadVodDetailsAsync(VodContent content)
         {
-            if (Session.Mode != SessionMode.Xtream || vod.DetailsLoaded || vod.DetailsLoading)
-                return;
-
-            vod.DetailsLoading = true;
-            try
-            {
-                await _vodService.LoadVodDetailsAsync(vod, _cts.Token);
-            }
-
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                Log($"ERROR loading VOD details: {ex.Message}\n");
-            }
-            finally
-            {
-                vod.DetailsLoading = false;
-            }
+            if (Session.Mode != SessionMode.Xtream) return Task.CompletedTask;
+            return _detailsLoader.LoadAsync(content,
+                (snapshot, token) => _vodService.LoadVodDetailsAsync(snapshot, token),
+                (target, details) => target.ApplyDetails(details),
+                ex => Log($"ERROR loading details: {ex.Message}\n"),
+                () => !_showingSeriesCatalog && ReferenceEquals(content, SelectedVodContent), _cts.Token);
         }
 
         private void TryLaunchVodInPlayer(VodContent vod)
@@ -2281,6 +2275,14 @@ namespace DesktopApp.Views
                 await LoadVodCategoriesAsync();
                 await LoadSeriesCategoriesAsync();
             }
+
+            // Leaving the page cancels pending catalogs. Resume a still-selected category
+            // when returning, even if the picker did not raise another selection event.
+            if (_isClosing || _cts.IsCancellationRequested || VodPage.Visibility != Visibility.Visible) return;
+            if (_showingSeriesCatalog && !IsLoadingSeriesContent && _seriesContent.Count == 0 && !string.IsNullOrEmpty(SelectedSeriesCategoryId))
+                await LoadSeriesContentAsync(SelectedSeriesCategoryId);
+            else if (!_showingSeriesCatalog && !IsLoadingVodContent && _vodContent.Count == 0 && !string.IsNullOrEmpty(SelectedVodCategoryId))
+                await LoadVodContentAsync(SelectedVodCategoryId);
         }
 
         private void NavigateToRecording(object sender, RoutedEventArgs e)
@@ -2347,6 +2349,7 @@ namespace DesktopApp.Views
 
         private void ShowPage(string pageName)
         {
+            if (pageName != "Vod") CancelVodRequests();
             // Hide all pages
             if (FindName("LiveTvPage") is Grid liveTvPage) liveTvPage.Visibility = Visibility.Collapsed;
             if (FindName("FavoritesPage") is Grid favoritesPage) favoritesPage.Visibility = Visibility.Collapsed;
@@ -2360,6 +2363,7 @@ namespace DesktopApp.Views
             // Show selected page
             if (FindName($"{pageName}Page") is Grid targetPage)
                 targetPage.Visibility = Visibility.Visible;
+            RefreshCatalogResources();
         }
 
         private void SetSelectedNavButton(Button? selectedButton)
@@ -2497,6 +2501,7 @@ namespace DesktopApp.Views
 
         private void ShowMoviesView_Click(object sender, RoutedEventArgs e)
         {
+            if (_showingSeriesCatalog) CancelVodRequests();
             _showingSeriesCatalog = false;
             // Show movies and hide series based on current view mode
             if (FindName("MoviesGridView") is ItemsControl moviesGridViewer)
@@ -2534,6 +2539,7 @@ namespace DesktopApp.Views
 
         private void ShowSeriesView_Click(object sender, RoutedEventArgs e)
         {
+            if (!_showingSeriesCatalog) CancelVodRequests();
             _showingSeriesCatalog = true;
             // Show series and hide movies based on current view mode
             if (FindName("MoviesGridView") is ItemsControl moviesGridViewer)
@@ -4337,6 +4343,8 @@ namespace DesktopApp.Views
 
         private void DisplayVodDetailsPanel(VodContent vod)
         {
+            if (_isClosing || _cts.IsCancellationRequested || _showingSeriesCatalog ||
+                !ReferenceEquals(vod, SelectedVodContent)) return;
             // Hide placeholder, show content
             if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
                 placeholder.Visibility = Visibility.Collapsed;
@@ -4453,6 +4461,8 @@ namespace DesktopApp.Views
 
         private void DisplaySeriesDetailsPanel(SeriesContent series)
         {
+            if (_isClosing || _cts.IsCancellationRequested || !_showingSeriesCatalog ||
+                !ReferenceEquals(series, SelectedSeriesContent)) return;
             // Hide placeholder, show content
             if (FindName("VodDetailsPlaceholder") is TextBlock placeholder)
                 placeholder.Visibility = Visibility.Collapsed;
