@@ -19,7 +19,8 @@ internal static partial class Program
         var httpThread = 0;
         var cacheThread = 0;
         var writeThread = 0;
-        var payload = JsonSerializer.Serialize(Enumerable.Range(1, 10000).Select(i => new { stream_id = i, name = "Channel " + i }));
+        var added = DateTimeOffset.UtcNow.AddDays(-1);
+        var payload = JsonSerializer.Serialize(Enumerable.Range(1, 10000).Select(i => new { stream_id = i, name = "Channel " + i, added = added.ToUnixTimeSeconds() }));
         ((FakeService)(object)http).Handler = (_, args) =>
         {
             httpThread = Environment.CurrentManagedThreadId;
@@ -50,6 +51,8 @@ internal static partial class Program
         var revisit = await service.LoadChannelsForCategoryAsync(new Category { Id = "1" });
         Check(!ReferenceEquals(revisit[0], result[0]) && notifications == 0,
             "Cache-hit preparation creates detached models without background changes to bound channels");
+        Check(result[0].AddedUtc?.ToUnixTimeSeconds() == added.ToUnixTimeSeconds() && revisit[0].AddedUtc == result[0].AddedUtc,
+            "Provider channel dates survive parsing and detached cache-hit preparation");
         var categories = await service.LoadCategoriesAsync();
         Check(categories.Single().Name == "News" && httpThread != uiThread && writeThread != uiThread,
             "Category parsing and cache persistence also run in background work");

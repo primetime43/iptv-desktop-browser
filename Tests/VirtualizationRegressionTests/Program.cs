@@ -39,6 +39,7 @@ internal static partial class Program
             Dispatcher.CurrentDispatcher.Invoke(VerifySeriesRecordingDialogs);
             Dispatcher.CurrentDispatcher.Invoke(VerifyCatalogOrchestration);
             Dispatcher.CurrentDispatcher.Invoke(VerifyPlaybackQuality);
+            Dispatcher.CurrentDispatcher.Invoke(VerifyRecentlyAddedChannels);
             Console.WriteLine($"Passed {_passed} virtualization regression checks.");
         }
         catch (Exception ex) { Console.Error.WriteLine(ex); Environment.ExitCode = 1; }

@@ -6,6 +6,46 @@ namespace DesktopApp.Models;
 
 public sealed class Channel : INotifyPropertyChanged
 {
+    // Provider metadata is cached; discovery dates belong to the account's history.
+    public DateTimeOffset? AddedUtc { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public DateTimeOffset? DiscoveredUtc { get; set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsRecentlyAdded { get; private set; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string RecentlyAddedText => AddedUtc is { } added
+        ? $"Added by provider {added.LocalDateTime:g}"
+        : DiscoveredUtc is { } discovered ? $"First discovered {discovered.LocalDateTime:g}" : string.Empty;
+
+    public bool IsRecentAt(DateTimeOffset now)
+    {
+        var date = AddedUtc ?? DiscoveredUtc;
+        return date.HasValue && date > now.AddDays(-7) && date <= now;
+    }
+
+    public bool RefreshRecentlyAdded(DateTimeOffset now)
+    {
+        var recent = IsRecentAt(now);
+        if (recent == IsRecentlyAdded) return false;
+        IsRecentlyAdded = recent;
+        OnPropertyChanged(nameof(IsRecentlyAdded));
+        OnPropertyChanged(nameof(RecentlyAddedText));
+        return true;
+    }
+
+    public static DateTimeOffset? ParseAddedDate(string? value)
+    {
+        if (long.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var timestamp))
+        {
+            if (timestamp <= 0) return null;
+            try { return timestamp >= 100_000_000_000 ? DateTimeOffset.FromUnixTimeMilliseconds(timestamp) : DateTimeOffset.FromUnixTimeSeconds(timestamp); }
+            catch (ArgumentOutOfRangeException) { return null; }
+        }
+        return DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out var date)
+            && date > DateTimeOffset.UnixEpoch ? date : null;
+    }
+
     private int _id;
     public int Id { get => _id; set { if (value != _id) { _id = value; OnPropertyChanged(); } } }
 

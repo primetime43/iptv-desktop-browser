@@ -4,6 +4,13 @@
             </ResourceDictionary.MergedDictionaries>
         <!-- Converters -->
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter" />
+        <Style x:Key="NewChannelBadge" TargetType="Border">
+            <Setter Property="Background" Value="#1F6F43" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Padding" Value="5,2" />
+            <Setter Property="ToolTip" Value="{Binding RecentlyAddedText}" />
+            <Setter Property="Visibility" Value="{Binding IsRecentlyAdded, Converter={StaticResource BoolToVisibilityConverter}}" />
+        </Style>
 
         <!-- Boolean to Color Converter for View Mode Buttons -->
         <Style x:Key="ViewModeButtonStyle" TargetType="Button">

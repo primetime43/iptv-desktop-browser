@@ -153,7 +153,7 @@ public partial class ChannelService : IChannelService
                     cachedChannels = cachedChannels.Select(channel => new Channel
                     {
                         Id = channel.Id, Name = channel.Name, Logo = channel.Logo,
-                        EpgChannelId = channel.EpgChannelId
+                        EpgChannelId = channel.EpgChannelId, AddedUtc = channel.AddedUtc
                     }).ToList();
                     cancellationToken.ThrowIfCancellationRequested();
                     var cacheHitMsg = $"📱 CACHE HIT: Loaded {cachedChannels.Count} channels from CACHE for category: {category.Name} (no API call needed)";
@@ -189,7 +189,8 @@ public partial class ChannelService : IChannelService
                         Id = item.GetProperty("stream_id").GetInt32(),
                         Name = item.GetProperty("name").GetString() ?? "",
                         Logo = item.TryGetProperty("stream_icon", out var logo) ? logo.GetString() : null,
-                        EpgChannelId = item.TryGetProperty("epg_channel_id", out var epgId) ? epgId.GetString() : null
+                        EpgChannelId = item.TryGetProperty("epg_channel_id", out var epgId) ? epgId.GetString() : null,
+                        AddedUtc = item.TryGetProperty("added", out var added) ? Channel.ParseAddedDate(added.ToString()) : null
                     };
                     channels.Add(channel);
                 }

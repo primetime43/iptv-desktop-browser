@@ -38,6 +38,7 @@ public static class Session
 
     // M3U playlist data (used when Mode == SessionMode.M3u)
     public static List<PlaylistEntry> PlaylistChannels { get; set; } = new();
+    public static string PlaylistSource { get; set; } = string.Empty;
 
     // VOD content data
     public static List<VodContent> VodContent { get; set; } = new();
@@ -54,6 +55,7 @@ public static class Session
 
     public static void ResetM3u()
     {
+        PlaylistSource = string.Empty;
         PlaylistChannels.Clear();
         M3uEpgByChannel.Clear();
         VodContent.Clear();

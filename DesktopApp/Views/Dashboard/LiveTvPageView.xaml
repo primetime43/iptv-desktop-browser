@@ -86,7 +86,12 @@
 
                                                 <!-- Channel Number Badge -->
                                                 <Border Grid.Row="0" Background="#347DFF" CornerRadius="0,0,8,0" HorizontalAlignment="Left" VerticalAlignment="Top" Padding="6,2" MinWidth="24">
-                                                    <TextBlock Text="{Binding Number}" FontSize="11" FontWeight="Bold" Foreground="White" TextAlignment="Center" />
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="{Binding Number}" FontSize="11" FontWeight="Bold" Foreground="White" TextAlignment="Center" VerticalAlignment="Center" />
+                                                        <Border Style="{StaticResource NewChannelBadge}" Margin="5,0,0,0">
+                                                            <TextBlock Text="NEW" FontSize="10" FontWeight="Bold" Foreground="White" />
+                                                        </Border>
+                                                    </StackPanel>
                                                 </Border>
 
                                                 <!-- Channel Logo/Name -->
@@ -218,7 +223,12 @@
 
                                                 <!-- Channel Info -->
                                                 <StackPanel Grid.Column="2" Margin="12,0,12,0" VerticalAlignment="Center">
-                                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold" Foreground="#FFDDE6F2" TextTrimming="CharacterEllipsis" />
+                                                    <DockPanel>
+                                                        <Border DockPanel.Dock="Right" Style="{StaticResource NewChannelBadge}" Margin="6,0,0,0">
+                                                            <TextBlock Text="NEW" FontSize="10" FontWeight="Bold" Foreground="White" />
+                                                        </Border>
+                                                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold" Foreground="#FFDDE6F2" TextTrimming="CharacterEllipsis" />
+                                                    </DockPanel>
                                                     <TextBlock Text="{Binding NowTitle}" FontSize="12" Foreground="#8BA1B9" TextTrimming="CharacterEllipsis" />
                                                     <TextBlock Text="{Binding NowTimeRange}" FontSize="11" Foreground="#6F7882" />
                                                 </StackPanel>
@@ -352,6 +362,9 @@
                                             </StackPanel>
                                         </Grid>
                                         <CheckBox Content="Search All Channels" Margin="0,8,0,0" VerticalAlignment="Center" Foreground="#DDE6F2" IsChecked="{Binding LiveTv.SearchAllChannels}" ToolTip="Search across all channels" />
+                                        <CheckBox x:Name="RecentlyAddedOnlyCheckBox" Content="Recently added only (7 days)" Margin="0,8,0,0" Foreground="#DDE6F2" IsChecked="{Binding LiveTv.ShowRecentlyAddedOnly}"
+                                                  ToolTip="Filter the selected category. Enable Search All Channels to check the full catalog, even without search text." />
+                                        <TextBlock Text="New uses provider dates, or additions discovered after your first visit." TextWrapping="Wrap" FontSize="11" Foreground="#9DB2C7" Margin="0,6,0,0" />
                                     </StackPanel>
                                 </Border>
 

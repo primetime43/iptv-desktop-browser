@@ -30,6 +30,7 @@ v1.06/v2.0.0
 - **Modern, fast UI**
   - Channel list with grouping (`group-title`)
   - **Favorites system** - save preferred channels per account/playlist
+  - **Recently added channels** - seven-day NEW badges and a filter in Live TV
   - Grid-style EPG with per-channel timelines
   - External player integration (VLC, MPC-HC, MPV, custom)
   - HLS playback quality selection using provider-advertised resolutions and bitrates
@@ -69,6 +70,14 @@ v1.06/v2.0.0
 2. Paste a playlist URL or select a `.m3u`/`.m3u8` file.
 3. (Optional) Add XMLTV URL or file for EPG.
 4. Click **Load Playlist**.
+
+### **Recently added channels**
+
+- Live TV grid cards and list rows show **NEW** for channels added within the last seven days. Hover over the badge to see the provider date or discovery date.
+- Check **Recently added only (7 days)** to filter the selected category. Combine it with **Search All Channels** to check the full catalog, even with no search text; text searches still work with the filter.
+- Provider `added` dates take priority. Without a usable provider date, the first successful load of each category establishes a baseline; later unseen channels are dated when discovered. Opening an existing category for the first time does not mark all its undated channels new. Loading the full catalog establishes a baseline across categories.
+- History persists separately for each Xtream account or playlist source, even when download caching is disabled. Only hashed identifiers and dates are stored. Playlist identity uses stream URLs rather than row numbers, so reordering does not make old entries new; changing a playlist source or stream URL establishes a different identity.
+- Detection uses catalogs as they are loaded, including the normal download cache; it does not poll the provider or download every category in the background. Badges and the filter expire automatically while Live TV is open. Favorites reuse known channel history without counting favorite additions as new provider content.
 
 ### **Playback quality**
 

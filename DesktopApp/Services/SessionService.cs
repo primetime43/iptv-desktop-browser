@@ -69,6 +69,7 @@ public class SessionService : ISessionService
 
     public void ResetM3u()
     {
+        Models.Session.PlaylistSource = string.Empty;
         PlaylistChannels.Clear();
         M3uEpgByChannel.Clear();
         VodContent.Clear();

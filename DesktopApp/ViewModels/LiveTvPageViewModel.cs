@@ -11,6 +11,8 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
 {
     private readonly ILiveCatalogSource _source;
     private readonly TimeSpan _debounce;
+    private readonly TimeProvider _clock;
+    private readonly System.Windows.Threading.DispatcherTimer _recentTimer;
     private readonly LatestRequestLoader _categoriesRequest = new();
     private readonly LatestRequestLoader _contentRequest = new();
     private CancellationTokenSource? _activation;
@@ -21,10 +23,13 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private bool _loadingGlobal;
 
-    public LiveTvPageViewModel(ILiveCatalogSource source, TimeSpan? searchDebounce = null)
+    public LiveTvPageViewModel(ILiveCatalogSource source, TimeSpan? searchDebounce = null, TimeProvider? clock = null)
     {
         _source = source;
         _debounce = searchDebounce ?? TimeSpan.FromSeconds(3);
+        _clock = clock ?? TimeProvider.System;
+        _recentTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMinutes(1) };
+        _recentTimer.Tick += (_, _) => RefreshRecentChannels();
         ChannelsView.Filter = MatchesChannel;
     }
 
@@ -39,7 +44,7 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
     public event Action? ChannelsLoaded;
     public event Action<Exception>? LoadFailed;
     public bool IsActive => _activation != null && !_disposed;
-    public bool IsGlobalSearchActive => SearchAllChannels && !string.IsNullOrWhiteSpace(SearchQuery);
+    public bool IsGlobalSearchActive => SearchAllChannels && (ShowRecentlyAddedOnly || !string.IsNullOrWhiteSpace(SearchQuery));
     public bool IsSearchLoading => IsGlobalSearchActive && IsLoadingChannels;
     public bool HasError => ErrorMessage.Length > 0 || CategoriesError.Length > 0;
     public string CategoriesCountText => $"{Categories.Count} categories";
@@ -48,6 +53,7 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
     [ObservableProperty] private Channel? _selectedChannel;
     [ObservableProperty] private string _searchQuery = string.Empty;
     [ObservableProperty] private bool _searchAllChannels;
+    [ObservableProperty] private bool _showRecentlyAddedOnly;
     [ObservableProperty] private bool _isLoadingCategories;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(IsSearchLoading))] private bool _isLoadingChannels;
     [ObservableProperty, NotifyPropertyChangedFor(nameof(HasError))] private string _errorMessage = string.Empty;
@@ -58,6 +64,7 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
         if (_disposed) return Task.CompletedTask;
         if (IsActive) return Task.WhenAll(CategoriesLoadTask, LoadTask);
         _activation = new CancellationTokenSource();
+        _recentTimer.Start();
         if (!_categoriesLoaded) CategoriesLoadTask = LoadCategoriesAsync();
         LoadTask = LoadContentAsync(false);
         return Task.WhenAll(CategoriesLoadTask, LoadTask);
@@ -65,6 +72,7 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
 
     public void Deactivate()
     {
+        _recentTimer.Stop();
         _categoriesRequest.Cancel(); _contentRequest.Cancel();
         _activation?.Cancel(); _activation?.Dispose(); _activation = null;
         if (_indexTask?.IsCompletedSuccessfully != true) _indexTask = null;
@@ -87,6 +95,7 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
     partial void OnSelectedCategoryChanged(Category? value) => LoadTask = LoadContentAsync(false);
     partial void OnSearchQueryChanged(string value) => SearchChanged();
     partial void OnSearchAllChannelsChanged(bool value) => SearchChanged();
+    partial void OnShowRecentlyAddedOnlyChanged(bool value) => SearchChanged();
     private void SearchChanged()
     {
         OnPropertyChanged(nameof(IsSearchLoading));
@@ -104,6 +113,8 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
         var category = SelectedCategory;
         var global = IsGlobalSearchActive;
         var query = SearchQuery.Trim();
+        var recentOnly = ShowRecentlyAddedOnly;
+        var now = _clock.GetUtcNow();
         if (!global && ReferenceEquals(_loadedCategory, category) && _categoryChannels != null && !force)
         {
             ApplyChannels(_categoryChannels);
@@ -132,6 +143,7 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
                     return index.Where(ch =>
                     {
                         token.ThrowIfCancellationRequested();
+                        if (recentOnly && !ch.IsRecentAt(now)) return false;
                         return numeric ? ch.Number == number : ch.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                             ch.NowTitle?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
                     }).Take(1000).ToList();
@@ -144,7 +156,8 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
                 token.ThrowIfCancellationRequested();
                 return new Channel { Id = ch.Id, Number = global ? ch.Number : i + 1, Name = ch.Name, Logo = ch.Logo,
                     EpgChannelId = ch.EpgChannelId, NowTitle = ch.NowTitle, NowDescription = ch.NowDescription,
-                    NowTimeRange = ch.NowTimeRange, EpgSchedule = ch.EpgSchedule, IsFavorite = favorites.Contains(ch.Id) };
+                    NowTimeRange = ch.NowTimeRange, EpgSchedule = ch.EpgSchedule, IsFavorite = favorites.Contains(ch.Id),
+                    AddedUtc = ch.AddedUtc, DiscoveredUtc = ch.DiscoveredUtc };
             }).ToList(), token);
         }, result =>
         {
@@ -152,12 +165,13 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
             ApplyChannels(result);
         }, error => { ErrorMessage = "Channels could not be loaded. Retry to try again."; LoadFailed?.Invoke(error); },
         () => { IsLoadingChannels = false; ResourceDemandChanged?.Invoke(); },
-        () => IsActive && global == IsGlobalSearchActive && (global ? SearchQuery.Trim() == query : ReferenceEquals(SelectedCategory, category)), _activation!.Token);
+        () => IsActive && global == IsGlobalSearchActive && (global ? SearchQuery.Trim() == query && recentOnly == ShowRecentlyAddedOnly : ReferenceEquals(SelectedCategory, category)), _activation!.Token);
     }
 
     private bool MatchesChannel(object value)
     {
         if (value is not Channel ch) return false;
+        if (ShowRecentlyAddedOnly && !ch.IsRecentAt(_clock.GetUtcNow())) return false;
         if (IsGlobalSearchActive || string.IsNullOrWhiteSpace(SearchQuery)) return true;
         return int.TryParse(SearchQuery.Trim(), out var number) && ch.Number == number ||
             ch.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase) ||
@@ -166,6 +180,7 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
 
     private void ApplyChannels(List<Channel> channels)
     {
+        foreach (var channel in channels) channel.RefreshRecentlyAdded(_clock.GetUtcNow());
         if (!Channels.SequenceEqual(channels)) { SelectedChannel = null; Channels.ReplaceAll(channels); }
         else ChannelsView.Refresh();
         if (SelectedChannel != null && !ChannelsView.Contains(SelectedChannel)) SelectedChannel = null;
@@ -175,6 +190,19 @@ public partial class LiveTvPageViewModel : ObservableObject, IDisposable
         ResourceDemandChanged?.Invoke();
     }
     private void RefreshCount() => OnPropertyChanged(nameof(ChannelsCountText));
+
+    public void RefreshRecentChannels()
+    {
+        if (!IsActive) return;
+        var now = _clock.GetUtcNow();
+        var changed = false;
+        foreach (var channel in Channels) changed |= channel.RefreshRecentlyAdded(now);
+        if (!changed) return;
+        ChannelsView.Refresh();
+        if (SelectedChannel != null && !ChannelsView.Contains(SelectedChannel)) SelectedChannel = null;
+        RefreshCount();
+        ResourceDemandChanged?.Invoke();
+    }
     public void RefreshFavorites()
     {
         if (_disposed) return;

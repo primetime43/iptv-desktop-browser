@@ -447,6 +447,7 @@ namespace DesktopApp
                 if (entries.Count == 0) { SetStatus("No channels found.", _brushError); return; }
                 Session.Mode = SessionMode.M3u;
                 Session.ResetM3u();
+                Session.PlaylistSource = File.Exists(playlistPath) ? Path.GetFullPath(playlistPath).ToUpperInvariant() : playlistPath;
                 Session.PlaylistChannels.AddRange(entries);
                 SetStatus($"Loaded {entries.Count} channels. Parsing EPG...", _brushSuccess);
                 if (!string.IsNullOrWhiteSpace(xmlPath))

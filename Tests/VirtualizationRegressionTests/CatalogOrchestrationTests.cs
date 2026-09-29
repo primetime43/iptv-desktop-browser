@@ -279,7 +279,8 @@ internal static partial class Program
         {
             using var http = new System.Net.Http.HttpClient(new CatalogHttpHandler());
             var channelService = new CatalogChannelService();
-            var source = new LiveCatalogSource(channelService, http);
+            using var history = new ChannelHistoryFixture();
+            var source = new LiveCatalogSource(channelService, http, history.Store);
             Session.Mode = SessionMode.M3u;
             Session.PlaylistChannels = [new PlaylistEntry { Id = 91, Name = "Playlist one", Category = " ", TvgId = "epg-1" },
                 new PlaylistEntry { Id = 27, Name = "Playlist two", Category = "Sports", TvgId = "epg-2" }];
