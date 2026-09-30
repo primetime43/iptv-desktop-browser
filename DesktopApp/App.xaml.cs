@@ -50,7 +50,7 @@ public partial class App : Application
                 .CreateLogger();
 
             Log.Information("=== Application Starting ===");
-            Log.Information("Version: {Version}", "2.1.1");
+            Log.Information("Version: {Version}", "2.2.0");
             Log.Information("OS: {OS}", Environment.OSVersion);
             Log.Information(".NET Version: {DotNetVersion}", Environment.Version);
 
